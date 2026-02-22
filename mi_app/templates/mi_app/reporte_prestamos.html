@@ -1,0 +1,573 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load static %}
+
+{% block title %}Reporte de Préstamos{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 report-page">
+    <!-- ESTADÍSTICAS GLOBALES -->
+    {% include 'mi_app/componentes/estadisticas_globales.html' %}
+
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="fas fa-handshake"></i> Reporte de Préstamos</h2>
+            <p class="text-muted">Seguimiento y estado financiero de todos los préstamos</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'exportar_prestamos' %}" class="btn btn-success btn-sm">
+                <i class="fas fa-download"></i> Exportar Excel
+            </a>
+        </div>
+    </div>
+
+    <!-- FILTROS Y BÚSQUEDA -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros Avanzados</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" id="filtrosForm" onsubmit="return false;">
+                <!-- FILA 1: SELECTOR DE CLIENTE ESPECÍFICO -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold mb-2">
+                            <i class="fas fa-user-check"></i> Seleccionar Cliente Específico (Opcional)
+                        </label>
+                        <select id="cliente_dropdown" class="form-select form-select-lg" onchange="aplicarFiltros()">
+                            <option value="">-- Todos los clientes --</option>
+                            {% for prestamo in prestamos %}
+                                <option value="{{ prestamo.cliente.id }}">{{ prestamo.cliente.nombre }} ({{ prestamo.cliente.cedula }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- FILA 2: BÚSQUEDA DINÁMICA -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold mb-2">
+                            <i class="fas fa-search"></i> Buscar Cliente (Opcional)
+                        </label>
+                        <div class="search-wrapper">
+                            <input 
+                                type="text" 
+                                id="cliente_search_reporte" 
+                                placeholder="Busca por nombre, cédula o celular..." 
+                                class="form-control form-control-lg"
+                                autocomplete="off"
+                            >
+                        </div>
+                        <input type="hidden" name="cliente_id" id="cliente_id_hidden" value="">
+                    </div>
+                </div>
+
+                <!-- FILA 3: FILTROS ADICIONALES -->
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Estado</label>
+                        <select name="estado" id="filtro_estado" class="form-select" onchange="aplicarFiltros()">
+                            <option value="">Todos</option>
+                            <option value="BORRADOR" {% if estado == 'BORRADOR' %}selected{% endif %}>Borradores</option>
+                            <option value="ACTIVO" {% if estado == 'ACTIVO' %}selected{% endif %}>Activos</option>
+                            <option value="COMPLETADO" {% if estado == 'COMPLETADO' %}selected{% endif %}>Completados</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Período</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <input type="date" name="fecha_desde" id="filtro_fecha_desde" class="form-control" value="{{ fecha_desde }}" onchange="aplicarFiltros()">
+                            </div>
+                            <div class="col-6">
+                                <input type="date" name="fecha_hasta" id="filtro_fecha_hasta" class="form-control" value="{{ fecha_hasta }}" onchange="aplicarFiltros()">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Rango de Monto ($)</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <input type="number" name="monto_desde" id="filtro_monto_desde" class="form-control" placeholder="Desde" step="0.01" value="{{ monto_desde }}" onchange="aplicarFiltros()">
+                            </div>
+                            <div class="col-6">
+                                <input type="number" name="monto_hasta" id="filtro_monto_hasta" class="form-control" placeholder="Hasta" step="0.01" value="{{ monto_hasta }}" onchange="aplicarFiltros()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FILA 4: BOTONES (alineados, misma línea) -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="filtros-acciones">
+                            <button type="button" class="btn btn-primary" onclick="aplicarFiltros()">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="limpiarFiltros()">
+                                <i class="fas fa-times"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TABLA DE PRÉSTAMOS -->
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 8%">#</th>
+                        <th style="width: 18%">Cliente</th>
+                        <th style="width: 12%">Original</th>
+                        <th style="width: 12%">Pagado</th>
+                        <th style="width: 12%">Pendiente</th>
+                        <th style="width: 8%">%</th>
+                        <th style="width: 12%">Estado</th>
+                        <th style="width: 10%">Cuotas</th>
+                        <th style="width: 10%" class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prestamo in prestamos %}
+                        <tr class="cliente-row" 
+                            data-cliente-id="{{ prestamo.cliente.id }}"
+                            data-nombre="{{ prestamo.cliente.nombre }}" 
+                            data-cedula="{{ prestamo.cliente.cedula }}" 
+                            data-celular="{{ prestamo.cliente.celular }}"
+                            data-estado="{{ prestamo.estado }}"
+                            data-monto="{{ prestamo.monto_total }}"
+                            data-fecha="{{ prestamo.fecha_inicio|date:"Y-m-d" }}">
+                            <td><strong>#{{ prestamo.id }}</strong></td>
+                            <td>
+                                <strong>{{ prestamo.cliente.nombre }}</strong>
+                                <br>
+                                <small class="text-muted">{{ prestamo.fecha_inicio|date:"d/m/Y" }}</small>
+                            </td>
+                            <td>
+                                <strong>{{ prestamo.total_credito|formato_moneda_co}}</strong>
+                                <br>
+                                <small class="text-muted">Tasa: {{ prestamo.interes_porcentaje }}%</small>
+                            </td>
+                            <td>
+                                <strong class="text-success">{{ prestamo.total_pagado|formato_moneda_co}}</strong>
+                            </td>
+                            <td>
+                                <strong class="text-warning">{{ prestamo.total_pendiente|formato_moneda_co}}</strong>
+                            </td>
+                            <td>
+                                {% widthratio prestamo.total_pagado prestamo.total_credito 100 as porcentaje_raw %}
+                                {% if porcentaje_raw > 100 %}
+                                    {% widthratio 100 1 1 as porcentaje %}
+                                {% else %}
+                                    {% widthratio prestamo.total_pagado prestamo.total_credito 100 as porcentaje %}
+                                {% endif %}
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: {% if porcentaje_raw > 100 %}100{% else %}{{ porcentaje }}{% endif %}%" aria-valuenow="{{ porcentaje }}" aria-valuemin="0" aria-valuemax="100">
+                                        <small>{% if porcentaje_raw > 100 %}100{% else %}{{ porcentaje }}{% endif %}%</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                {% if prestamo.estado == 'COMPLETADO' %}
+                                    <span class="badge bg-success">✓ Completado</span>
+                                {% elif prestamo.estado == 'ACTIVO' %}
+                                    <span class="badge bg-primary">◆ Activo</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">◇ Borrador</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>
+                                    <div>Total: {{ prestamo.cuota_set.count }}</div>
+                                    <div class="text-success">Pagadas: {{ prestamo.num_cuotas_pagadas }}</div>
+                                    <div class="text-danger">Vencidas: {{ prestamo.num_cuotas_vencidas }}</div>
+                                </small>
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'detalles_prestamo' prestamo.id %}" class="btn btn-sm btn-info">
+                                    <i class="fas fa-eye"></i> Ver
+                                </a>
+                                {% if prestamo.estado != 'COMPLETADO' %}
+                                    <a href="{% url 'detalles_prestamo' prestamo.id %}" class="btn btn-sm btn-success">
+                                        <i class="fas fa-dollar-sign"></i> Pagar
+                                    </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-4 text-muted">
+                                <i class="fas fa-search"></i> No se encontraron préstamos
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- RESUMEN GENERAL -->
+    <div class="row mt-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Total Préstamos</small>
+                    <h3 class="mb-0">{{ total }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Monto Total Desembolsado</small>
+                    <h3 class="mb-0">{{ total_monto|formato_moneda_co}}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Total Pagado</small>
+                    <h3 class="mb-0 text-success">{{ total_pagado|formato_moneda_co}}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Total Pendiente</small>
+                    <h3 class="mb-0 text-warning">{{ total_pendiente|formato_moneda_co}}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTONES DE ACCIÓN -->
+    <div class="row mt-4">
+        <div class="col">
+            <a href="{% url 'inicio' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+/* BÚSQUEDA */
+.search-wrapper {
+    width: 100%;
+    z-index: 1;
+}
+
+#cliente_search_reporte {
+    height: 48px;
+    font-size: 1rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 0.5rem;
+    padding: 10px 14px;
+    width: 100%;
+    transition: all 0.2s ease;
+}
+
+#cliente_search_reporte:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    outline: none;
+}
+
+#cliente_search_reporte::placeholder {
+    color: #999;
+}
+
+/* DROPDOWN - position: FIXED (NO absolute) */
+.dropdown-results {
+    position: fixed;
+    top: auto;
+    left: auto;
+    right: auto;
+    display: none;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    max-height: 450px;
+    overflow-y: auto;
+    z-index: 99999;
+    width: 300px;
+}
+
+.dropdown-results.show {
+    display: block;
+}
+
+.dropdown-results .list-group-item {
+    display: block;
+    width: 100%;
+    padding: 16px 18px;
+    border: none;
+    border-bottom: 1px solid #f5f5f5;
+    background: white;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+}
+
+.dropdown-results .list-group-item:first-child {
+    border-top-left-radius: 0.75rem;
+    border-top-right-radius: 0.75rem;
+}
+
+.dropdown-results .list-group-item:last-child {
+    border-bottom: none;
+    border-bottom-left-radius: 0.75rem;
+    border-bottom-right-radius: 0.75rem;
+}
+
+.dropdown-results .list-group-item:hover {
+    background: linear-gradient(135deg, #f7f8fc 0%, #f0f2f7 100%);
+    padding-left: 22px;
+    border-left: 3px solid #667eea;
+}
+
+.dropdown-results .list-group-item strong {
+    display: block;
+    color: #212529;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.dropdown-results .list-group-item small {
+    display: block;
+    color: #6c757d;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.dropdown-results .list-group-item small i {
+    color: #667eea;
+    margin-right: 4px;
+}
+
+</style>
+
+<script>
+// ✅ Cargar clientes desde servidor
+let clientesGlobales_reporte = [];
+
+async function cargarClientes_reporte() {
+    try {
+        const response = await fetch('{% url "lista_clientes_api" %}');
+        const data = await response.json();
+        clientesGlobales_reporte = data.clientes || [];
+        console.log('✅ Clientes cargados:', clientesGlobales_reporte.length);
+    } catch (error) {
+        console.error('❌ Error cargando clientes:', error);
+    }
+}
+
+// ✅ Búsqueda de clientes - LIMPIO Y FUNCIONAL
+document.addEventListener('DOMContentLoaded', function() {
+    cargarClientes_reporte();
+
+    const clienteSearch = document.getElementById('cliente_search_reporte');
+
+    if (!clienteSearch) {
+        console.error('❌ Elementos de búsqueda no encontrados');
+        return;
+    }
+
+    // ✅ CREAR el dropdown FUERA del document flow - al final del body
+    const clienteResultados = document.createElement('div');
+    clienteResultados.id = 'cliente_resultados_reporte';
+    clienteResultados.className = 'dropdown-results';
+    document.body.appendChild(clienteResultados);
+
+    console.log('✅ Sistema de búsqueda iniciado en reporte_prestamos');
+    console.log('✅ Dropdown creado al final del body (position: fixed)');
+
+    // ✅ Función para posicionar el dropdown correctamente
+    function posicionarDropdown() {
+        const rect = clienteSearch.getBoundingClientRect();
+        
+        // Para position: fixed, NO sumamos scrollY
+        clienteResultados.style.top = (rect.bottom + 5) + 'px';
+        clienteResultados.style.left = rect.left + 'px';
+        clienteResultados.style.width = rect.width + 'px';
+        clienteResultados.style.zIndex = '99999';
+        
+        console.log('📍 Dropdown posicionado en viewport:', {
+            top: rect.bottom + 5,
+            left: rect.left,
+            width: rect.width
+        });
+    }
+
+    // Mostrar resultados en tiempo real
+    clienteSearch.addEventListener('input', function() {
+        const query = this.value.trim().toLowerCase();
+
+        if (query.length < 1) {
+            clienteResultados.classList.remove('show');
+            return;
+        }
+
+        const resultados = clientesGlobales_reporte.filter(c => 
+            c.nombre.toLowerCase().includes(query) ||
+            (c.cedula && c.cedula.toLowerCase().includes(query)) ||
+            (c.celular && c.celular.toLowerCase().includes(query))
+        );
+
+        clienteResultados.innerHTML = '';
+
+        if (resultados.length === 0) {
+            clienteResultados.innerHTML = '<div class="list-group-item text-muted"><small>No encontrado</small></div>';
+            posicionarDropdown();
+            clienteResultados.classList.add('show');
+            return;
+        }
+
+        resultados.forEach(cliente => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'list-group-item list-group-item-action text-start';
+            btn.innerHTML = `
+                <strong>${cliente.nombre}</strong><br>
+                <small class="text-muted">
+                    <i class="fas fa-id-card"></i> ${cliente.cedula || '-'} | 
+                    <i class="fas fa-phone"></i> ${cliente.celular || '-'}
+                </small>
+            `;
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                clienteSearch.value = cliente.nombre;
+                document.getElementById('cliente_id_hidden').value = cliente.id;
+                clienteResultados.classList.remove('show');
+                
+                // Aplicar filtros
+                aplicarFiltros();
+            });
+            clienteResultados.appendChild(btn);
+        });
+
+        posicionarDropdown();
+        clienteResultados.classList.add('show');
+    });
+
+    // Cerrar dropdown al hacer click fuera
+    document.addEventListener('click', function(e) {
+        if (e.target !== clienteSearch && !clienteResultados.contains(e.target)) {
+            clienteResultados.classList.remove('show');
+        }
+    });
+
+    // ✅ Actualizar posición al scroll
+    window.addEventListener('scroll', function() {
+        if (clienteResultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    }, true);
+
+    // ✅ Actualizar posición al redimensionar ventana
+    window.addEventListener('resize', function() {
+        if (clienteResultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    });
+});
+
+function aplicarFiltros() {
+    const clienteId = document.getElementById('cliente_dropdown').value;
+    const clienteNombre = document.getElementById('cliente_search_reporte').value.toLowerCase().trim();
+    const estado = document.getElementById('filtro_estado').value;
+    const fechaDesde = document.getElementById('filtro_fecha_desde').value;
+    const fechaHasta = document.getElementById('filtro_fecha_hasta').value;
+    const montoDesde = parseFloat(document.getElementById('filtro_monto_desde').value) || 0;
+    const montoHasta = parseFloat(document.getElementById('filtro_monto_hasta').value) || Infinity;
+
+    const filas = document.querySelectorAll('tbody .cliente-row');
+    
+    filas.forEach(fila => {
+        let mostrar = true;
+
+        // Filtro por cliente_id (dropdown)
+        if (clienteId) {
+            const filaClienteId = fila.dataset.clienteId;
+            if (filaClienteId !== clienteId) {
+                mostrar = false;
+            }
+        }
+
+        // Filtro por nombre
+        if (clienteNombre && mostrar) {
+            const nombre = fila.dataset.nombre.toLowerCase();
+            if (!nombre.includes(clienteNombre)) {
+                mostrar = false;
+            }
+        }
+
+        // Filtro por estado
+        if (estado && mostrar) {
+            const filaEstado = fila.dataset.estado;
+            if (filaEstado !== estado) {
+                mostrar = false;
+            }
+        }
+
+        // Filtro por monto
+        if (mostrar && (montoDesde > 0 || montoHasta !== Infinity)) {
+            const filaMonto = parseFloat(fila.dataset.monto) || 0;
+            if (filaMonto < montoDesde || filaMonto > montoHasta) {
+                mostrar = false;
+            }
+        }
+
+        // Filtro por fecha
+        if (mostrar && (fechaDesde || fechaHasta)) {
+            const filaFecha = fila.dataset.fecha;
+            
+            if (fechaDesde && filaFecha < fechaDesde) {
+                mostrar = false;
+            }
+            if (fechaHasta && filaFecha > fechaHasta) {
+                mostrar = false;
+            }
+        }
+
+        // Aplicar resultado
+        fila.style.display = mostrar ? '' : 'none';
+    });
+}
+
+function limpiarFiltros() {
+    document.getElementById('cliente_dropdown').value = '';
+    document.getElementById('cliente_search_reporte').value = '';
+    document.getElementById('cliente_id_hidden').value = '';
+    document.getElementById('filtro_estado').value = '';
+    document.getElementById('filtro_fecha_desde').value = '';
+    document.getElementById('filtro_fecha_hasta').value = '';
+    document.getElementById('filtro_monto_desde').value = '';
+    document.getElementById('filtro_monto_hasta').value = '';
+        // Cerrar dropdown
+    const dropdown = document.getElementById('cliente_resultados_reporte');
+    if (dropdown) {
+        dropdown.classList.remove('show');
+    }
+        // Mostrar todas las filas
+    const filas = document.querySelectorAll('tbody .cliente-row');
+    filas.forEach(fila => {
+        fila.style.display = '';
+    });
+}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+{% endblock %}
+
+
+

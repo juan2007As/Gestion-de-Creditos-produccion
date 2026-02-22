@@ -1,0 +1,607 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load static %}
+{% load l10n %}
+
+{% block title %}Reporte de Préstamos Rápidos{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Search Wrapper */
+    .search-wrapper {
+        position: static;
+        width: 100%;
+    }
+
+    .search-wrapper input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+
+    .search-wrapper input:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+        outline: none;
+    }
+
+    /* Dropdown Results */
+    /* Nota: Los estilos del dropdown ahora vienen de dropdown-search.js */
+    /* Que es aplicado dinámicamente en base.html */
+
+    .cliente-row {
+        transition: all 0.2s ease;
+    }
+
+    .cliente-row:hover {
+        background-color: #f8f9fa;
+    }
+
+    .cliente-row.hidden {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 report-page">
+    <!-- ESTADÍSTICAS GLOBALES -->
+    {% include 'mi_app/componentes/estadisticas_globales.html' %}
+
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="fas fa-bolt"></i> Reporte de Préstamos Rápidos</h2>
+            <p class="text-muted">Seguimiento y estado financiero de todos los préstamos rápidos</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'exportar_prestamos_rapidos' %}" class="btn btn-success btn-sm">
+                <i class="fas fa-download"></i> Exportar Excel
+            </a>
+        </div>
+    </div>
+
+    <!-- ESTADÍSTICAS DE RESUMEN -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Total PRs</small>
+                    <h3 class="mb-0">{{ total }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Pendientes</small>
+                    <h3 class="mb-0 text-warning">{{ por_estado.PENDIENTE }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Parciales</small>
+                    <h3 class="mb-0 text-info">{{ por_estado.PARCIALMENTE_PAGADO }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Pagados</small>
+                    <h3 class="mb-0 text-success">{{ por_estado.PAGADO }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Monto Total</small>
+                    <h3 class="mb-0">{{ total_monto|formato_moneda_co }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">% Pagado</small>
+                    <h3 class="mb-0 text-success">{{ porcentaje_pago }}%</h3>
+                    <div class="progress mt-2" style="height: 5px;">
+                        <div class="progress-bar bg-success" style="width: {% localize off %}{{ porcentaje_pago }}{% endlocalize %}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FILTROS Y BÚSQUEDA -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros Avanzados</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" id="filtrosForm" onsubmit="return false;">
+                <!-- FILA 1: BÚSQUEDA DINÁMICA -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold mb-2">
+                            <i class="fas fa-search"></i> Buscar Cliente
+                        </label>
+                        <div class="search-wrapper">
+                            <input 
+                                type="text" 
+                                id="cliente_search_rapidos" 
+                                placeholder="Busca por nombre, cédula o celular..." 
+                                class="form-control cliente-search-input"
+                                autocomplete="off"
+                            >
+                        </div>
+                        <input type="hidden" name="cliente_id" id="cliente_id_hidden" value="">
+                    </div>
+                </div>
+
+                <!-- FILA 2: FILTROS DE ESTADO Y FECHA -->
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Estado</label>
+                        <select name="estado" id="filtro_estado" class="form-select" onchange="aplicarFiltros()">
+                            <option value="">Todos los estados</option>
+                            <option value="PENDIENTE" {% if estado == 'PENDIENTE' %}selected{% endif %}>Pendientes</option>
+                            <option value="PARCIALMENTE_PAGADO" {% if estado == 'PARCIALMENTE_PAGADO' %}selected{% endif %}>Parcialmente Pagados</option>
+                            <option value="PAGADO" {% if estado == 'PAGADO' %}selected{% endif %}>Pagados</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Desde Fecha</label>
+                        <input type="date" id="filtro_fecha_desde" class="form-control" onchange="aplicarFiltros()">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Hasta Fecha</label>
+                        <input type="date" id="filtro_fecha_hasta" class="form-control" onchange="aplicarFiltros()">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Monto Mín ($)</label>
+                        <input type="number" id="filtro_monto_min" class="form-control" placeholder="0" step="0.01" onchange="aplicarFiltros()">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Monto Máx ($)</label>
+                        <input type="number" id="filtro_monto_max" class="form-control" placeholder="0" step="0.01" onchange="aplicarFiltros()">
+                    </div>
+                </div>
+
+                <!-- FILA 3: BOTONES (alineados, misma línea) -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="filtros-acciones">
+                            <button type="button" class="btn btn-primary" onclick="aplicarFiltros()">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="limpiarFiltros()">
+                                <i class="fas fa-times"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TABLA DE PRÉSTAMOS RÁPIDOS -->
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 8%">#</th>
+                        <th style="width: 20%">Cliente</th>
+                        <th style="width: 12%">Monto</th>
+                        <th style="width: 12%">Pagado</th>
+                        <th style="width: 12%">Pendiente</th>
+                        <th style="width: 8%">%</th>
+                        <th style="width: 12%">Estado</th>
+                        <th style="width: 12%">Fecha</th>
+                        <th style="width: 10%" class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pr in prestamos_rapidos %}
+                    <tr class="cliente-row"
+                        data-nombre="{{ pr.cliente.nombre|lower }}"
+                        data-cedula="{{ pr.cliente.cedula }}"
+                        data-celular="{{ pr.cliente.celular }}"
+                        data-monto="{{ pr.saldo_pendiente }}"
+                        data-fecha="{{ pr.fecha_creacion|date:'Y-m-d' }}"
+                        data-estado="{% if pr.estado == 'PAGADO' %}pagado{% elif pr.estado == 'PARCIALMENTE_PAGADO' %}parcial{% else %}pendiente{% endif %}"
+                    >
+                        <td><strong>#{{ pr.id }}</strong></td>
+                        <td>
+                            <a href="{% url 'perfil_cliente' pr.cliente.id %}">
+                                {{ pr.cliente.nombre }}
+                            </a>
+                        </td>
+                        <td>{{ pr.monto|formato_moneda_co }}</td>
+                        <td class="text-success">{{ pr.monto_pagado|formato_moneda_co }}</td>
+                        <td class="text-danger">{{ pr.saldo_pendiente|formato_moneda_co }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <small>{{ pr.porcentaje_pagado|formato_porcentaje }}</small>
+                                <div class="progress" style="width: 50px; height: 6px;">
+                                    <div class="progress-bar" style="width: {% localize off %}{{ pr.porcentaje_pagado }}{% endlocalize %}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if pr.estado == 'PAGADO' %}
+                                <span class="badge bg-success"><i class="fas fa-check-circle"></i> Pagado</span>
+                            {% elif pr.estado == 'PARCIALMENTE_PAGADO' %}
+                                <span class="badge bg-info"><i class="fas fa-hourglass-half"></i> Parcial</span>
+                            {% else %}
+                                <span class="badge bg-warning"><i class="fas fa-clock"></i> Pendiente</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ pr.fecha_creacion|date:'d/m/Y' }}</td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'detalle_prestamo_rapido' pr.id %}" class="btn btn-info">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if pr.estado != 'PAGADO' %}
+                                <a href="{% url 'registrar_pago_rapido' pr.id %}" class="btn btn-success">
+                                    <i class="fas fa-plus"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-4">
+                            <i class="fas fa-inbox"></i> No hay préstamos rápidos registrados
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- RESUMEN DE TOTALES -->
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Total en Cartera</h6>
+                    <h3 class="mb-0 text-primary">{{ total_monto|formato_moneda_co }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Total Pagado</h6>
+                    <h3 class="mb-0 text-success">{{ total_pagado|formato_moneda_co }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Total Pendiente</h6>
+                    <h3 class="mb-0 text-danger">{{ total_pendiente|formato_moneda_co }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .badge {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.6rem;
+    }
+    
+    .progress {
+        background-color: #e9ecef;
+    }
+    
+    .progress-bar {
+        background-color: #28a745;
+    }
+    
+    table tr:hover {
+        background-color: #f8f9fa;
+    }
+</style>
+
+<script>
+// ✅ CSS ESTÁNDAR DROPDOWN
+const styleDropdown = document.createElement('style');
+styleDropdown.textContent = `
+    .cliente-search-input {
+        height: 48px;
+        font-size: 1rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 0.5rem;
+        padding: 10px 14px;
+        width: 100%;
+        transition: all 0.2s ease;
+    }
+
+    .cliente-search-input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+    }
+
+    .dropdown-results {
+        position: fixed;
+        display: none;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        max-height: 450px;
+        overflow-y: auto;
+        z-index: 99999;
+        width: 300px;
+    }
+
+    .dropdown-results.show {
+        display: block;
+    }
+
+    .dropdown-results .list-group-item {
+        display: block;
+        width: 100%;
+        padding: 16px 18px;
+        border: none;
+        border-bottom: 1px solid #f5f5f5;
+        background: white;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.15s ease;
+    }
+
+    .dropdown-results .list-group-item:first-child {
+        border-top-left-radius: 0.75rem;
+        border-top-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:last-child {
+        border-bottom: none;
+        border-bottom-left-radius: 0.75rem;
+        border-bottom-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:hover {
+        background: linear-gradient(135deg, #f7f8fc 0%, #f0f2f7 100%);
+        padding-left: 22px;
+        border-left: 3px solid #667eea;
+    }
+
+    .dropdown-results .list-group-item strong {
+        display: block;
+        color: #212529;
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .dropdown-results .list-group-item small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .dropdown-results .list-group-item small i {
+        color: #667eea;
+        margin-right: 4px;
+    }
+`;
+document.head.appendChild(styleDropdown);
+
+// ✅ Cargar clientes
+let clientesGlobales_rapidos = [];
+
+async function cargarClientes_rapidos() {
+    try {
+        const response = await fetch('{% url "lista_clientes_api" %}');
+        const data = await response.json();
+        clientesGlobales_rapidos = data.clientes || [];
+        console.log('✅ Clientes cargados:', clientesGlobales_rapidos.length);
+    } catch (error) {
+        console.error('❌ Error cargando clientes:', error);
+    }
+}
+
+// ✅ Inicializar dropdown
+document.addEventListener('DOMContentLoaded', function() {
+    cargarClientes_rapidos();
+
+    const input = document.getElementById('cliente_search_rapidos');
+
+    if (!input) {
+        console.error('❌ Input no encontrado');
+        return;
+    }
+
+    // Crear dropdown dinámicamente al final del body
+    const resultados = document.createElement('div');
+    resultados.id = 'cliente_resultados_rapidos';
+    resultados.className = 'dropdown-results';
+    document.body.appendChild(resultados);
+
+    console.log('✅ Sistema de búsqueda iniciado en reporte_prestamos_rapidos');
+
+    function posicionarDropdown() {
+        const rect = input.getBoundingClientRect();
+        resultados.style.top = (rect.bottom + 5) + 'px';
+        resultados.style.left = rect.left + 'px';
+        resultados.style.width = rect.width + 'px';
+        resultados.style.zIndex = '99999';
+    }
+
+    let debounceTimer;
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim().toLowerCase();
+
+        if (query.length < 1) {
+            resultados.classList.remove('show');
+            return;
+        }
+
+        debounceTimer = setTimeout(function() {
+            const filtered = clientesGlobales_rapidos.filter(c =>
+                c.nombre.toLowerCase().includes(query) ||
+                (c.cedula && c.cedula.toLowerCase().includes(query)) ||
+                (c.celular && c.celular.toLowerCase().includes(query))
+            );
+
+            resultados.innerHTML = '';
+
+            if (filtered.length === 0) {
+                resultados.innerHTML = '<div class="list-group-item text-muted">No encontrado</div>';
+                posicionarDropdown();
+                resultados.classList.add('show');
+                return;
+            }
+
+            filtered.forEach(cliente => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action text-start';
+                btn.innerHTML = `
+                    <strong>${cliente.nombre}</strong><br>
+                    <small class="text-muted">
+                        <i class="fas fa-id-card"></i> ${cliente.cedula || '-'} | 
+                        <i class="fas fa-phone"></i> ${cliente.celular || '-'}
+                    </small>
+                `;
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    input.value = cliente.nombre;
+                    document.getElementById('cliente_id_hidden').value = cliente.id;
+                    resultados.classList.remove('show');
+                    aplicarFiltros();
+                });
+                resultados.appendChild(btn);
+            });
+
+            posicionarDropdown();
+            resultados.classList.add('show');
+        }, 300);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target !== input && !resultados.contains(e.target)) {
+            resultados.classList.remove('show');
+        }
+    });
+
+    window.addEventListener('scroll', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    }, true);
+
+    window.addEventListener('resize', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    });
+
+    // Event listeners adicionales
+    document.getElementById('filtro_estado').addEventListener('change', aplicarFiltros);
+});
+
+// APLICAR FILTROS
+function aplicarFiltros() {
+    const estado = document.getElementById('filtro_estado').value;
+    const clienteNombre = document.getElementById('cliente_search_rapidos').value.toLowerCase().trim();
+    const fechaDesde = document.getElementById('filtro_fecha_desde').value;
+    const fechaHasta = document.getElementById('filtro_fecha_hasta').value;
+    const montoMin = parseFloat(document.getElementById('filtro_monto_min').value) || 0;
+    const montoMax = parseFloat(document.getElementById('filtro_monto_max').value) || Infinity;
+    
+    let filasVisibles = 0;
+    const rows = document.querySelectorAll('.cliente-row');
+
+    rows.forEach(row => {
+        let mostrar = true;
+
+        // Filtro por cliente
+        if (clienteNombre) {
+            const nombre = row.dataset.nombre || '';
+            const cedula = row.dataset.cedula || '';
+            const celular = row.dataset.celular || '';
+            
+            if (!nombre.includes(clienteNombre) && 
+                !cedula.includes(clienteNombre) && 
+                !celular.includes(clienteNombre)) {
+                mostrar = false;
+            }
+        }
+
+        // Filtro por estado
+        if (estado && mostrar) {
+            const rowEstado = row.dataset.estado || '';
+            const estadoMap = {
+                'PENDIENTE': 'pendiente',
+                'PARCIALMENTE_PAGADO': 'parcial',
+                'PAGADO': 'pagado'
+            };
+            if (rowEstado !== estadoMap[estado]) {
+                mostrar = false;
+            }
+        }
+
+        // Filtro por fecha
+        if ((fechaDesde || fechaHasta) && mostrar) {
+            const rowFecha = row.dataset.fecha || '';
+            if (fechaDesde && rowFecha < fechaDesde) mostrar = false;
+            if (fechaHasta && rowFecha > fechaHasta) mostrar = false;
+        }
+
+        // Filtro por monto
+        if ((montoMin > 0 || montoMax < Infinity) && mostrar) {
+            const rowMonto = parseFloat(row.dataset.monto) || 0;
+            if (rowMonto < montoMin || rowMonto > montoMax) mostrar = false;
+        }
+
+        if (mostrar) {
+            row.classList.remove('hidden');
+            filasVisibles++;
+        } else {
+            row.classList.add('hidden');
+        }
+    });
+}
+
+// LIMPIAR FILTROS
+function limpiarFiltros() {
+    document.getElementById('cliente_search_rapidos').value = '';
+    document.getElementById('cliente_id_hidden').value = '';
+    document.getElementById('filtro_estado').value = '';
+    document.getElementById('filtro_fecha_desde').value = '';
+    document.getElementById('filtro_fecha_hasta').value = '';
+    document.getElementById('filtro_monto_min').value = '';
+    document.getElementById('filtro_monto_max').value = '';
+    
+    const dropdown = document.getElementById('cliente_resultados_rapidos');
+    if (dropdown) {
+        dropdown.classList.remove('show');
+    }
+    
+    document.querySelectorAll('.cliente-row').forEach(row => {
+        row.classList.remove('hidden');
+    });
+}
+</script>
+
+{% endblock %}

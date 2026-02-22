@@ -1,0 +1,316 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load l10n %}
+
+{% block title %}Estadísticas del Sistema{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 report-page">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="fas fa-chart-bar"></i> Estadísticas del Sistema</h2>
+            <p class="text-muted">Dashboard con métricas clave del negocio</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'exportar_estadisticas' %}" class="btn btn-info btn-sm me-2">
+                <i class="fas fa-download"></i> Exportar Excel
+            </a>
+            <small class="text-muted">Actualizado: <strong>{{ "now"|date:"d/m/Y H:i" }}</strong></small>
+        </div>
+    </div>
+
+    <!-- FILA 1: CLIENTES -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <small class="text-muted d-block">Total de Clientes</small>
+                            <h2 class="mb-0">{{ total_clientes }}</h2>
+                        </div>
+                        <i class="fas fa-users fa-2x text-primary opacity-50"></i>
+                    </div>
+                    <hr class="my-2">
+                    <small class="text-success">✓ Activos: <strong>{{ clientes_activos }}</strong></small><br>
+                    <small class="text-danger">✗ Inactivos: <strong>{{ clientes_inactivos }}</strong></small>
+                </div>
+                <div class="progress" style="height: 4px; border-radius: 0 0 0.25rem 0.25rem;">
+                    <div class="progress-bar bg-success" style="width: {% localize off %}{{ porcentaje_activos }}{% endlocalize %}%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <small class="text-muted d-block">Calificación Promedio</small>
+                            <h2 class="mb-0">{{ rating_promedio|formato_porcentaje}}/5.0</h2>
+                        </div>
+                        <i class="fas fa-star fa-2x text-warning opacity-50"></i>
+                    </div>
+                    <hr class="my-2">
+                    <div class="text-warning">
+                        {% for i in "12345" %}
+                            {% if forloop.counter <= rating_promedio_estrella %}
+                                <i class="fas fa-star"></i>
+                            {% else %}
+                                <i class="far fa-star"></i>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <small class="text-muted d-block">Ingresos Registrados</small>
+                            <h4 class="mb-0">${{ ingresos_mes_actual }}</h4>
+                        </div>
+                        <i class="fas fa-cash-register fa-2x text-success opacity-50"></i>
+                    </div>
+                    <hr class="my-2">
+                    <small class="text-muted">Este mes</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <small class="text-muted d-block">Mora Acumulada</small>
+                            <h3 class="mb-0 text-danger">{{ mora_total|formato_moneda_co}}</h3>
+                        </div>
+                        <i class="fas fa-exclamation-circle fa-2x text-danger opacity-50"></i>
+                    </div>
+                    <hr class="my-2">
+                    <small class="text-danger">⚠ {{ cuotas_en_mora }} cuotas vencidas</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FILA 2: PRÉSTAMOS -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <small class="text-muted d-block">Total de Préstamos</small>
+                            <h2 class="mb-0">{{ total_prestamos }}</h2>
+                        </div>
+                        <i class="fas fa-handshake fa-2x text-info opacity-50"></i>
+                    </div>
+                    <hr class="my-2">
+                    <small class="text-info">🟦 Activos: <strong>{{ prestamos_activos }}</strong></small><br>
+                    <small class="text-success">✓ Completados: <strong>{{ prestamos_completados }}</strong></small><br>
+                    <small class="text-danger">✗ Vencidos: <strong>{{ prestamos_vencidos }}</strong></small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <small class="text-muted d-block">💰 Capital Prestado</small>
+                            <h3 class="mb-0">{{ capital_prestado|formato_moneda_co }}</h3>
+                        </div>
+                        <i class="fas fa-coins fa-2x text-success opacity-50"></i>
+                    </div>
+                    <hr class="my-2">
+                    <small class="text-muted">Monto solo de capital</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <small class="text-muted d-block">📈 Total Crédito</small>
+                            <h3 class="mb-0">{{ total_credito|formato_moneda_co }}</h3>
+                        </div>
+                        <i class="fas fa-money-bill-wave fa-2x text-info opacity-50"></i>
+                    </div>
+                    <hr class="my-2">
+                    <small class="text-muted">Capital + Interés estimado</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <small class="text-muted d-block">Monto Pagado</small>
+                            <h3 class="mb-0">{{ total_pagado|formato_moneda_co }}</h3>
+                        </div>
+                        <i class="fas fa-check-circle fa-2x text-success opacity-50"></i>
+                    </div>
+                    <hr class="my-2">
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-success" style="width: {% localize off %}{{ tasa_pago }}{% endlocalize %}%"></div>
+                    </div>
+                    <small class="text-success mt-2 d-block">{{ tasa_pago|formato_porcentaje}} del total</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <small class="text-muted d-block">Monto Pendiente</small>
+                            <h3 class="mb-0 text-warning">{{ total_pendiente|formato_moneda_co }}</h3>
+                        </div>
+                        <i class="fas fa-hourglass-half fa-2x text-warning opacity-50"></i>
+                    </div>
+                    <hr class="my-2">
+                    <small class="text-warning">Por recuperar</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FILA 3: CUOTAS -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <small class="text-muted d-block">Total de Cuotas</small>
+                            <h2 class="mb-0">{{ total_cuotas }}</h2>
+                        </div>
+                        <i class="fas fa-list-check fa-2x text-primary opacity-50"></i>
+                    </div>
+                    <hr class="my-2">
+                    <small class="text-success">✓ Pagadas: <strong>{{ cuotas_pagadas }}</strong></small><br>
+                    <small class="text-warning">⏳ Pendientes: <strong>{{ cuotas_pendientes }}</strong></small><br>
+                    <small class="text-danger">✗ Vencidas: <strong>{{ cuotas_vencidas }}</strong></small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <small class="text-muted d-block mb-2">Distribución de Cuotas</small>
+                    <div class="progress mb-2" style="height: 20px;">
+                        <div class="progress-bar bg-success" style="width: {% localize off %}{{ porcentaje_cuotas_pagadas }}{% endlocalize %}%; font-size: 12px; line-height: 20px;">
+                            {{ porcentaje_cuotas_pagadas|floatformat:0 }}%
+                        </div>
+                        <div class="progress-bar bg-warning" style="width: calc(100% - {% localize off %}{{ porcentaje_cuotas_pagadas }}{% endlocalize %}%);">
+                        </div>
+                    </div>
+                    <div class="row small">
+                        <div class="col-6">
+                            <span class="badge bg-success">Pagadas</span>
+                        </div>
+                        <div class="col-6 text-end">
+                            <span class="badge bg-warning">Pendientes</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <small class="text-muted d-block">Estado de Cobranza</small>
+                            <h4 class="mb-0">{{ cuotas_pendientes }} por cobrar</h4>
+                        </div>
+                        <i class="fas fa-chart-pie fa-2x text-info opacity-50"></i>
+                    </div>
+                    <hr class="my-2">
+                    <small class="text-info">Meta: Reducir a 0</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESUMEN GENERAL -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Resumen Ejecutivo</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <h6 class="text-muted">Efectividad de Cobranza</h6>
+                            <h4 class="text-primary">{{ tasa_pago|formato_porcentaje}}</h4>
+                            <small class="text-muted">De lo prestado, ya está pagado</small>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">Cartera Promedio por Cliente</h6>
+                            <h4 class="text-info">
+                                {{ cartera_promedio_por_cliente|formato_moneda_co }}
+                            </h4>
+                            <small class="text-muted">Monto promedio prestado</small>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">Tasa de Mora</h6>
+                            <h4 class="text-danger">
+                                {{ tasa_mora_porcentaje|formato_porcentaje}}
+                            </h4>
+                            <small class="text-muted">Cuotas vencidas del total</small>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">Salud del Negocio</h6>
+                            <h4 class="text-success">
+                                {% if rating_promedio >= 4.5 %}
+                                    Excelente
+                                {% elif rating_promedio >= 3.5 %}
+                                    Buena
+                                {% elif rating_promedio >= 2.5 %}
+                                    Regular
+                                {% else %}
+                                    Crítica
+                                {% endif %}
+                            </h4>
+                            <small class="text-muted">Basado en calificación de clientes</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.15) !important;
+    }
+    .opacity-50 {
+        opacity: 0.5;
+    }
+</style>
+{% endblock %}
+
+
+
+
+

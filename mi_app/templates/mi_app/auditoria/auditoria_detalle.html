@@ -1,0 +1,309 @@
+{% extends "mi_app/base.html" %}
+
+{% block title %}Detalle del Cambio - Auditoría{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detalle-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    
+    .header-detalle {
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .header-detalle h2 {
+        margin: 0;
+        color: #333;
+    }
+    
+    .card-detalle {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 30px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        margin-bottom: 20px;
+    }
+    
+    .fila-detalle {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        gap: 20px;
+        padding: 20px 0;
+        border-bottom: 1px solid #f0f0f0;
+        align-items: start;
+    }
+    
+    .fila-detalle:last-child {
+        border-bottom: none;
+    }
+    
+    .etiqueta {
+        font-weight: 600;
+        color: #333;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #999;
+    }
+    
+    .valor {
+        color: #333;
+        font-size: 15px;
+    }
+    
+    .valor.monospace {
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        word-break: break-all;
+    }
+    
+    .badge {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    
+    .badge-crear {
+        background: #c8e6c9;
+        color: #2e7d32;
+    }
+    
+    .badge-editar {
+        background: #bbdefb;
+        color: #1565c0;
+    }
+    
+    .badge-eliminar {
+        background: #ffccbc;
+        color: #d84315;
+    }
+    
+    .badge-condonar {
+        background: #ffe0b2;
+        color: #e65100;
+    }
+    
+    .badge-pagar {
+        background: #b2dfdb;
+        color: #00695c;
+    }
+    
+    .cambio-box {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+    }
+    
+    .cambio-campo {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 10px;
+        display: block;
+    }
+    
+    .cambio-antes {
+        color: #d32f2f;
+        font-family: monospace;
+        background: #ffebee;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        border-left: 3px solid #d32f2f;
+    }
+    
+    .cambio-despues {
+        color: #388e3c;
+        font-family: monospace;
+        background: #e8f5e9;
+        padding: 10px;
+        border-radius: 4px;
+        border-left: 3px solid #388e3c;
+    }
+    
+    .flecha {
+        text-align: center;
+        color: #999;
+        margin: 10px 0;
+        font-weight: bold;
+    }
+    
+    .usuario-info {
+        background: #e8eaf6;
+        padding: 15px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    
+    .usuario-info i {
+        font-size: 32px;
+        color: #3f51b5;
+    }
+    
+    .btn-volver {
+        background: #e9ecef;
+        color: #333;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        margin-top: 20px;
+    }
+    
+    .btn-volver:hover {
+        background: #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="detalle-container">
+    <!-- Header -->
+    <div class="header-detalle">
+        <h2>
+            <i class="fas fa-info-circle"></i>
+            Detalle del Cambio
+        </h2>
+    </div>
+    
+    <!-- Card Principal -->
+    <div class="card-detalle">
+        <!-- Acción -->
+        <div class="fila-detalle">
+            <span class="etiqueta">Tipo de Acción</span>
+            <span class="valor">
+                <span class="badge badge-{{ cambio.accion|lower }}">
+                    {{ cambio.get_accion_display }}
+                </span>
+            </span>
+        </div>
+        
+        <!-- Usuario -->
+        <div class="fila-detalle">
+            <span class="etiqueta">Usuario</span>
+            <div class="valor">
+                <div class="usuario-info">
+                    <i class="fas fa-user-circle"></i>
+                    <div>
+                        <strong>{{ cambio.usuario.get_full_name|default:cambio.usuario.username }}</strong>
+                        <div style="font-size: 12px; color: #666;">@{{ cambio.usuario.username }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Fecha y Hora -->
+        <div class="fila-detalle">
+            <span class="etiqueta">Fecha y Hora</span>
+            <span class="valor">
+                {{ cambio.fecha_cambio|date:"d/m/Y" }} a las {{ cambio.fecha_cambio|date:"H:i:s" }}
+            </span>
+        </div>
+        
+        <!-- IP Address -->
+        <div class="fila-detalle">
+            <span class="etiqueta">Dirección IP</span>
+            <span class="valor monospace">{{ cambio.ip_address|default:"No disponible" }}</span>
+        </div>
+    </div>
+    
+    <!-- Card Objeto Modificado -->
+    <div class="card-detalle">
+        <h3 style="margin-top: 0;">Objeto Modificado</h3>
+        
+        <div class="fila-detalle">
+            <span class="etiqueta">Tipo de Objeto</span>
+            <span class="valor">{{ cambio.modelo }}</span>
+        </div>
+        
+        <div class="fila-detalle">
+            <span class="etiqueta">ID del Objeto</span>
+            <span class="valor monospace">#{{ cambio.objeto_id }}</span>
+        </div>
+        
+        <div class="fila-detalle">
+            <span class="etiqueta">Descripción</span>
+            <span class="valor">{{ cambio.objeto_str }}</span>
+        </div>
+    </div>
+    
+    <!-- Card Cambios -->
+    {% if cambio.campo_modificado %}
+    <div class="card-detalle">
+        <h3 style="margin-top: 0;">Detalles del Cambio</h3>
+        
+        <div class="cambio-box">
+            <span class="cambio-campo">
+                <i class="fas fa-edit"></i> Campo: {{ cambio.campo_modificado }}
+            </span>
+            
+            <div style="margin-top: 15px;">
+                <div style="font-size: 12px; font-weight: 600; color: #999; margin-bottom: 5px;">VALOR ANTERIOR:</div>
+                <div class="cambio-antes">
+                    {% if cambio.valor_anterior %}
+                        {{ cambio.valor_anterior }}
+                    {% else %}
+                        (vacío)
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="flecha">
+                <i class="fas fa-arrow-down"></i>
+            </div>
+            
+            <div>
+                <div style="font-size: 12px; font-weight: 600; color: #999; margin-bottom: 5px;">VALOR NUEVO:</div>
+                <div class="cambio-despues">
+                    {% if cambio.valor_nuevo %}
+                        {{ cambio.valor_nuevo }}
+                    {% else %}
+                        (vacío)
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Card Justificación -->
+    {% if cambio.razon or cambio.notas %}
+    <div class="card-detalle">
+        <h3 style="margin-top: 0;">Información Adicional</h3>
+        
+        {% if cambio.razon %}
+        <div class="fila-detalle">
+            <span class="etiqueta">Razón del Cambio</span>
+            <span class="valor">{{ cambio.razon }}</span>
+        </div>
+        {% endif %}
+        
+        {% if cambio.notas %}
+        <div class="fila-detalle">
+            <span class="etiqueta">Notas</span>
+            <span class="valor">{{ cambio.notas }}</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <!-- Botón Volver -->
+    <a href="{% url 'auditoria_cambios' %}" class="btn-volver">
+        <i class="fas fa-arrow-left"></i> Volver a la Auditoría
+    </a>
+</div>
+{% endblock %}

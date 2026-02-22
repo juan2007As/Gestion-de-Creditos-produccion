@@ -1,0 +1,301 @@
+/**
+ * CSS: Atajos Rápidos - Botones en pagar_cuota_especifica.html
+ * Versión: 3.0 (ROBUSTO - Botones visibles)
+ * 
+ * Problema: Los botones estaban INVISIBLES
+ * Causa: Bootstrap + conflictos de especificidad CSS
+ * Solución: Selectores explícitos + !important en propiedades clave
+ */
+
+/* ============================================
+   UTILIDADES GLOBALES
+   ============================================ */
+
+.border-bottom-3 {
+    border-bottom: 3px solid;
+}
+
+.border-left {
+    border-left: 0.25rem solid;
+}
+
+/* ============================================
+   RESPONSIVE GLOBAL
+   ============================================ */
+
+@media (max-width: 991.98px) {
+    .order-lg-1 { 
+        order: 1;
+    }
+    .order-lg-2 { 
+        order: 2;
+    }
+}
+
+/* ============================================
+   CONTENEDOR: d-grid con botones
+   Asegurar que el contenedor ES un grid 100% visible
+   ============================================ */
+
+.d-grid {
+    display: grid !important;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    width: 100%;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.d-grid.gap-2 {
+    display: grid !important;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    width: 100%;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* ============================================
+   BOTONES: Propiedades BASE - MUY EXPLÍCITO
+   ============================================ */
+
+.btn {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    cursor: pointer;
+    position: relative;
+    z-index: auto;
+}
+
+/* Todos los botones en .d-grid */
+.d-grid .btn {
+    display: block !important;
+    width: 100% !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    cursor: pointer;
+    border-radius: 0.375rem;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    padding: 10px 16px;
+}
+
+/* ============================================
+   BOTÓN: btn-outline-success (VERDE)
+   ============================================ */
+
+.btn-outline-success {
+    background-color: transparent !important;
+    border: 2px solid #198754 !important;
+    color: #198754 !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.btn-outline-success:hover {
+    background-color: #198754 !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(25, 135, 84, 0.3) !important;
+    transform: translateY(-2px);
+}
+
+.btn-outline-success:active,
+.btn-outline-success:focus {
+    background-color: #157347 !important;
+    border-color: #157347 !important;
+    color: white !important;
+}
+
+/* ============================================
+   BOTÓN: btn-outline-secondary (GRIS)
+   ============================================ */
+
+.btn-outline-secondary {
+    background-color: transparent !important;
+    border: 2px solid #6c757d !important;
+    color: #6c757d !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.btn-outline-secondary:hover {
+    background-color: #6c757d !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3) !important;
+    transform: translateY(-2px);
+}
+
+.btn-outline-secondary:active,
+.btn-outline-secondary:focus {
+    background-color: #5c636a !important;
+    border-color: #5c636a !important;
+    color: white !important;
+}
+
+/* ============================================
+   ICONOS EN BOTONES
+   ============================================ */
+
+.btn i {
+    margin-right: 6px;
+    display: inline-block;
+}
+
+.btn .fas {
+    display: inline-block;
+}
+
+/* ============================================
+   ESTADOS ESPECIALES
+   ============================================ */
+
+.btn:disabled {
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+.btn:disabled:hover {
+    background-color: transparent !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* ============================================
+   RESPONSIVE: MÓVIL 320px - 600px
+   ============================================ */
+
+@media (max-width: 600px) {
+    .d-grid,
+    .d-grid.gap-2 {
+        grid-template-columns: 1fr;
+        gap: 0.375rem;
+    }
+
+    .d-grid .btn,
+    .d-grid.gap-2 .btn {
+        padding: 9px 14px !important;
+        font-size: 13px;
+        width: 100% !important;
+    }
+}
+
+/* ============================================
+   RESPONSIVE: TABLET 601px - 991px
+   ============================================ */
+
+@media (min-width: 601px) and (max-width: 991px) {
+    .d-grid,
+    .d-grid.gap-2 {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .d-grid .btn,
+    .d-grid.gap-2 .btn {
+        padding: 10px 15px !important;
+        font-size: 13px;
+        width: 100% !important;
+    }
+}
+
+/* ============================================
+   RESPONSIVE: DESKTOP 992px+
+   ============================================ */
+
+@media (min-width: 992px) {
+    .d-grid,
+    .d-grid.gap-2 {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+    }
+
+    .d-grid .btn,
+    .d-grid.gap-2 .btn {
+        padding: 11px 18px !important;
+        font-size: 14px;
+        width: auto;
+    }
+}
+
+/* ============================================
+   SÍMBOLO MONEDA: $ con alineación perfecta
+   ============================================ */
+
+.currency-symbol {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0.5rem 0.75rem !important;
+    background-color: #f8f9fa !important;
+    border: 1px solid #dee2e6 !important;
+    border-right: none !important;
+    border-radius: 0.375rem 0 0 0.375rem !important;
+    font-weight: 600 !important;
+    color: #1a1a1a !important;
+    font-size: 1rem !important;
+    min-width: 45px !important;
+    height: 2.375rem !important;
+    line-height: 1 !important;
+    vertical-align: middle !important;
+}
+
+/* ============================================
+   BOTONES LINK: "Máximo" bajo cada input
+   Estos botones estaban invisibles
+   ============================================ */
+
+.btn-link {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    text-decoration: none !important;
+    cursor: pointer !important;
+    padding: 0.375rem 0 !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    line-height: 1.5 !important;
+}
+
+.btn-link:hover {
+    text-decoration: underline !important;
+}
+
+.btn-link.text-primary {
+    color: #0d6efd !important;
+}
+
+.btn-link.text-primary:hover {
+    color: #0a58ca !important;
+}
+
+.btn-link.text-warning {
+    color: #ffc107 !important;
+}
+
+.btn-link.text-warning:hover {
+    color: #ffb700 !important;
+}
+
+.btn-link.text-info {
+    color: #0dcaf0 !important;
+}
+
+.btn-link.text-info:hover {
+    color: #31d5ff !important;
+}
+
+/* ============================================
+   PRINT
+   ============================================ */
+
+@media print {
+    .btn {
+        border: 1px solid #000 !important;
+        color: #000 !important;
+        background-color: transparent !important;
+    }
+}

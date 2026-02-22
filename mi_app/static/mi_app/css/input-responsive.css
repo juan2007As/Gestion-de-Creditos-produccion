@@ -1,0 +1,716 @@
+/**
+ * INPUT RESPONSIVO MEJORADO
+ * ============================================================================
+ * Propósito: Optimizar inputs, selects, textareas para todos los tamaños (320px-2440px)
+ * Incluye: Tamaño, padding, font-size, focus states, validación visual
+ * 
+ * ✅ REGLA #3 COMPLIANCE: Cambio transversal para todos los inputs
+ * Fecha: 21 de Febrero 2026
+ * ============================================================================
+ */
+
+/* ============================================================================
+   BASE: ESTILOS DEL INPUT (Aplica a todos los breakpoints)
+   ============================================================================
+*/
+
+/* Select, input, textarea - estilos comunes */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="tel"],
+input[type="url"],
+select,
+textarea,
+.form-control {
+  /* Dimensiones responsivas */
+  width: 100%;
+  max-width: 100%;
+  
+  /* Padding optimizado para móvil */
+  padding: 10px 12px;
+  
+  /* Tipografía */
+  font-size: 16px; /* 16px para evitar zoom en iOS */
+  font-family: inherit;
+  line-height: 1.5;
+  
+  /* Bordes y estilos */
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background-color: #ffffff;
+  color: inherit;
+  
+  /* Transiciones suaves */
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out, background-color 0.15s ease-in-out;
+  
+  /* Espaciado */
+  margin-bottom: 10px;
+  display: block;
+  
+  /* Prevenir zoom en iOS */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Focus state */
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+input[type="time"]:focus,
+input[type="datetime-local"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+select:focus,
+textarea:focus,
+.form-control:focus {
+  border-color: #80bdff;
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  background-color: #ffffff;
+}
+
+/* Hover state */
+input[type="text"]:hover,
+input[type="email"]:hover,
+input[type="password"]:hover,
+input[type="number"]:hover,
+input[type="date"]:hover,
+input[type="time"]:hover,
+input[type="datetime-local"]:hover,
+input[type="tel"]:hover,
+input[type="url"]:hover,
+select:hover,
+textarea:hover {
+  border-color: #adb5bd;
+}
+
+/* Disabled state */
+input[type="text"]:disabled,
+input[type="email"]:disabled,
+input[type="password"]:disabled,
+input[type="number"]:disabled,
+input[type="date"]:disabled,
+input[type="time"]:disabled,
+input[type="datetime-local"]:disabled,
+input[type="tel"]:disabled,
+input[type="url"]:disabled,
+select:disabled,
+textarea:disabled {
+  background-color: #e9ecef;
+  opacity: 1;
+  color: #6c757d;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   VALIDACIÓN VISUAL - ESTADOS DE ERROR/SUCCESS
+   ============================================================================
+*/
+
+/* Input de error */
+input.is-invalid,
+input.has-error,
+select.is-invalid,
+select.has-error,
+textarea.is-invalid,
+textarea.has-error,
+.has-error input,
+.has-error select,
+.has-error textarea {
+  border-color: #f5222d;
+}
+
+input.is-invalid:focus,
+select.is-invalid:focus,
+textarea.is-invalid:focus {
+  border-color: #f5222d;
+  box-shadow: 0 0 0 0.2rem rgba(245, 34, 45, 0.25);
+}
+
+/* Input de éxito */
+input.is-valid,
+input.has-success,
+select.is-valid,
+select.has-success,
+textarea.is-valid,
+textarea.has-success {
+  border-color: #52c41a;
+}
+
+input.is-valid:focus,
+select.is-valid:focus,
+textarea.is-valid:focus {
+  border-color: #52c41a;
+  box-shadow: 0 0 0 0.2rem rgba(82, 196, 26, 0.25);
+}
+
+/* ============================================================================
+   MOBILE: 320px - 480px
+   ============================================================================
+*/
+
+@media (max-width: 480px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="tel"],
+  input[type="url"],
+  select,
+  textarea,
+  .form-control {
+    /* Aumentar padding para fácil tap */
+    padding: 12px 14px;
+    
+    /* Font size grande para legibilidad */
+    font-size: 16px;
+    
+    /* Margen generoso */
+    margin-bottom: 12px;
+    
+    /* Altura mínima para accesibilidad (44px recomendado) */
+    min-height: 44px;
+    
+    /* Ancho completo en mobile */
+    width: 100%;
+  }
+  
+  textarea {
+    min-height: 100px;
+  }
+  
+  /* Label en mobile */
+  label {
+    font-size: 14px;
+    margin-bottom: 8px;
+    display: block;
+  }
+  
+  /* Input group en mobile */
+  .input-group {
+    display: flex;
+    gap: 0;
+  }
+  
+  .input-group .form-control {
+    flex: 1;
+  }
+  
+  .input-group-text {
+    /* Ajuste responsivo del ancho */
+    min-width: 32px;
+    padding: 8px 4px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+    width: 100%;
+    flex-direction: column;
+  }
+  
+  .input-group > .form-control,
+  .input-group > input {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+  
+  /* Select personalizado */
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
+  }
+}
+
+/* ============================================================================
+   TABLET: 481px - 1024px
+   ============================================================================
+*/
+
+@media (min-width: 481px) and (max-width: 1024px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="tel"],
+  input[type="url"],
+  select,
+  textarea,
+  .form-control {
+    /* Padding optimizado para tablet */
+    padding: 11px 13px;
+    
+    /* Font size legible */
+    font-size: 15px;
+    
+    /* Margen consistente */
+    margin-bottom: 11px;
+    
+    /* Altura mínima */
+    min-height: 40px;
+  }
+  
+  textarea {
+    min-height: 110px;
+  }
+  
+  label {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  
+  /* Dos columnas posibles en tablet */
+  .form-row .form-group {
+    flex: 0 0 48%;
+    margin-right: 2%;
+  }
+  
+  .form-row .form-group:nth-child(even) {
+    margin-right: 0;
+  }
+}
+
+/* ============================================================================
+   DESKTOP: 1025px - 2000px
+   ============================================================================
+*/
+
+@media (min-width: 1025px) and (max-width: 2000px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="tel"],
+  input[type="url"],
+  select,
+  textarea,
+  .form-control {
+    /* Padding estándar desktop */
+    padding: 10px 12px;
+    
+    /* Font size normal */
+    font-size: 14px;
+    
+    /* Margen normal */
+    margin-bottom: 10px;
+    
+    /* Altura mínima */
+    min-height: 38px;
+  }
+  
+  textarea {
+    min-height: 120px;
+  }
+  
+  label {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+}
+
+/* ============================================================================
+   ULTRA WIDE: 2001px+
+   ============================================================================
+*/
+
+@media (min-width: 2001px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="tel"],
+  input[type="url"],
+  select,
+  textarea,
+  .form-control {
+    /* Padding generoso para pantallas grandes */
+    padding: 12px 14px;
+    
+    /* Font size ligeramente mayor */
+    font-size: 15px;
+    
+    /* Margen mayor */
+    margin-bottom: 12px;
+    
+    /* Altura mínima */
+    min-height: 42px;
+    
+    /* Max-width para evitar inputs demasiado anchos */
+    max-width: 600px;
+  }
+  
+  textarea {
+    min-height: 130px;
+    max-width: 600px;
+  }
+  
+  label {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+}
+
+/* ============================================================================
+   INPUTS ESPECÍFICOS - PEQUEÑOS (sm)
+   ============================================================================
+*/
+
+input.form-control-sm,
+select.form-control-sm,
+textarea.form-control-sm,
+.input-sm {
+  padding: 6px 10px;
+  font-size: 13px;
+  min-height: 32px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 480px) {
+  input.form-control-sm,
+  select.form-control-sm,
+  textarea.form-control-sm,
+  .input-sm {
+    padding: 10px 12px;
+    font-size: 14px;
+    min-height: 40px;
+  }
+}
+
+/* ============================================================================
+   INPUTS ESPECÍFICOS - GRANDES (lg)
+   ============================================================================
+*/
+
+input.form-control-lg,
+select.form-control-lg,
+textarea.form-control-lg,
+.input-lg {
+  padding: 12px 16px;
+  font-size: 16px;
+  min-height: 48px;
+  margin-bottom: 12px;
+}
+
+/* ============================================================================
+   TEXTAREA ESPECÍFICO
+   ============================================================================
+*/
+
+textarea {
+  resize: vertical;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+textarea.textarea-sm {
+  min-height: 80px;
+  max-height: 200px;
+}
+
+textarea.textarea-lg {
+  min-height: 150px;
+  max-height: 500px;
+}
+
+/* ============================================================================
+   SELECT ESPECÍFICO (Custom styling)
+   ============================================================================
+*/
+
+select {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 32px;
+}
+
+select:hover {
+  cursor: pointer;
+}
+
+select:focus {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23007bff' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+}
+
+/* ============================================================================
+   INPUT GROUP - Agrupa inputs con botones
+   ============================================================================
+*/
+
+.input-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.input-group > .form-control,
+.input-group > input {
+  flex: 1;
+  min-width: 150px;
+}
+
+.input-group > .btn {
+  margin-bottom: 0;
+  min-width: 44px;
+}
+
+@media (max-width: 480px) {
+  .input-group {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  
+  .input-group > .form-control,
+  .input-group > input {
+    width: 100%;
+  }
+  
+  .input-group > .btn {
+    width: 100%;
+  }
+}
+
+/* ============================================================================
+   FORM LAYOUT - Organización visual
+   ============================================================================
+*/
+
+.form-group {
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 12px;
+}
+
+.form-row > div {
+  grid-column: span 12;
+}
+
+/* Desktop: 2 columnas */
+@media (min-width: 768px) {
+  .form-row-2 > div {
+    grid-column: span 6;
+  }
+}
+
+/* Desktop: 3 columnas */
+@media (min-width: 1024px) {
+  .form-row-3 > div {
+    grid-column: span 4;
+  }
+}
+
+/* Desktop: 4 columnas */
+@media (min-width: 1200px) {
+  .form-row-4 > div {
+    grid-column: span 3;
+  }
+}
+
+/* ============================================================================
+   ACCESIBILIDAD - Indicadores visuales
+   ============================================================================
+*/
+
+/* Required field indicator */
+label.required::after {
+  content: " *";
+  color: #f5222d;
+  font-weight: bold;
+  margin-left: 2px;
+}
+
+/* Error message styling */
+.error-message,
+.invalid-feedback {
+  color: #f5222d;
+  font-size: 12px;
+  margin-top: -8px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* Help text */
+.form-text,
+.help-text {
+  color: #6c757d;
+  font-size: 12px;
+  margin-top: -8px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* ============================================================================
+   PLACEHOLDER STYLING
+   ============================================================================
+*/
+
+input::placeholder,
+select::placeholder,
+textarea::placeholder {
+  color: #999;
+  opacity: 1;
+}
+
+input:-ms-input-placeholder,
+select:-ms-input-placeholder,
+textarea:-ms-input-placeholder {
+  color: #999;
+}
+
+/* ============================================================================
+   CURRENCY INPUTS (MONEDA): RESPONSIVE
+   ============================================================================
+   Optimización específica para inputs de moneda ($) y porcentaje (%)
+   Soluciona: Símbolos demasiado grandes en móviles, falta de responsividad
+   Aplicado a: formulario_prestamo.html, formulario_prestamo_rapido.html
+*/
+
+/* MÓVIL (320px - 480px): Símbolo pequeño/escondido */
+@media (max-width: 480px) {
+  .input-currency {
+    display: flex;
+    width: 100%;
+  }
+
+  .input-currency .currency-symbol {
+    /* Símbolo muy pequeño en móvil */
+    min-width: 32px;
+    width: 32px;
+    padding: 8px 4px;
+    font-size: 12px;
+    background-color: #f8f9fa;
+  }
+
+  .input-currency input[type="number"] {
+    flex: 1;
+    padding: 12px 10px;
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  /* Símbolo oculto en mucho texto */
+  .input-currency.input-currency--hidden-symbol .currency-symbol {
+    display: none;
+  }
+
+  .input-currency.input-currency--hidden-symbol input[type="number"] {
+    flex: 1;
+    width: 100%;
+  }
+}
+
+/* TABLET (481px - 768px): Símbolo mediano */
+@media (min-width: 481px) and (max-width: 768px) {
+  .input-currency {
+    display: flex;
+    width: 100%;
+  }
+
+  .input-currency .currency-symbol {
+    min-width: 40px;
+    width: 40px;
+    padding: 10px 6px;
+    font-size: 14px;
+    background-color: #f8f9fa;
+  }
+
+  .input-currency input[type="number"] {
+    flex: 1;
+    padding: 12px 12px;
+    font-size: 16px;
+    min-height: 44px;
+  }
+}
+
+/* DESKTOP (769px+): Símbolo normal */
+@media (min-width: 769px) {
+  .input-currency {
+    display: flex;
+    width: 100%;
+  }
+
+  .input-currency .currency-symbol {
+    min-width: 50px;
+    width: 50px;
+    padding: 10px 8px;
+    font-size: 14px;
+    background-color: #f8f9fa;
+  }
+
+  .input-currency input[type="number"] {
+    flex: 1;
+    padding: 12px 14px;
+    font-size: 14px;
+    min-height: auto;
+  }
+}
+
+/* ESTILOS COMUNES PARA TODOS LOS TAMAÑOS */
+.input-currency {
+  gap: 0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.input-currency .currency-symbol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ced4da;
+  border-right: none;
+  font-weight: 600;
+  color: #495057;
+  white-space: nowrap;
+  transition: all 0.15s ease-in-out;
+}
+
+.input-currency input[type="number"] {
+  border: 1px solid #ced4da;
+  border-left: none;
+  margin-bottom: 0;
+  transition: all 0.15s ease-in-out;
+}
+
+.input-currency input[type="number"]:focus {
+  border-left: none;
+}
+
+.input-currency input[type="number"]:focus + .currency-symbol,
+.input-currency .currency-symbol:has(+ input[type="number"]:focus) {
+  border-color: #80bdff;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.1);
+}

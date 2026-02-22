@@ -1,0 +1,328 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load static %}
+{% load l10n %}
+
+{% block title %}Detalle Préstamo Rápido{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Header -->
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3 class="mb-0">
+                            <i class="fas fa-bolt"></i>
+                            Préstamo Rápido #{{ prestamo.id }}
+                        </h3>
+                        <span class="badge {% if prestamo.estado == 'PAGADO' %}bg-success{% elif prestamo.estado == 'PARCIALMENTE_PAGADO' %}bg-info{% else %}bg-warning{% endif %} fs-6">
+                            {{ prestamo.get_estado_display }}
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Cliente:</strong></p>
+                            <a href="{% url 'perfil_cliente' prestamo.cliente.id %}" class="text-decoration-none">
+                                <h5>{{ prestamo.cliente.nombre }}</h5>
+                            </a>
+                            <p class="text-muted">
+                                <i class="fas fa-id-card"></i> {{ prestamo.cliente.cedula }}<br>
+                                <i class="fas fa-phone"></i> {{ prestamo.cliente.celular }}<br>
+                                <i class="fas fa-envelope"></i> {{ prestamo.cliente.email }}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Información del Préstamo:</strong></p>
+                            <p>
+                                <strong>Fecha Solicitud:</strong> {{ prestamo.fecha_solicitud|date:"d/m/Y H:i" }}<br>
+                                {% if prestamo.fecha_vencimiento %}
+                                <strong>Vencimiento:</strong> {{ prestamo.fecha_vencimiento|date:"d/m/Y" }}<br>
+                                {% endif %}
+                                {% if prestamo.fecha_pago_real %}
+                                <strong>Fecha Pago:</strong> {{ prestamo.fecha_pago_real|date:"d/m/Y" }}<br>
+                                {% endif %}
+                                <strong>Pagable con préstamo:</strong>
+                                {% if prestamo.pagable_con_prestamo %}
+                                <span class="badge bg-success">Sí</span>
+                                {% else %}
+                                <span class="badge bg-secondary">No (Externo)</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detalles Financieros -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Monto Original</h5>
+                        </div>
+                        <div class="card-body text-center">
+                            <h3 class="text-info">{{ prestamo.monto|formato_moneda_co}}</h3>
+                            <p class="text-muted mb-0">Interés: <strong>{{ prestamo.interes_porcentaje }}%</strong></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">Total a Pagar</h5>
+                        </div>
+                        <div class="card-body text-center">
+                            <h3 class="text-success">{{ prestamo.total_a_pagar|formato_moneda_co}}</h3>
+                            <p class="text-muted mb-0">Interés: <strong>{{ prestamo.calcular_interes_total|formato_moneda_co}}</strong></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progreso de Pago - MEJORADO -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Progreso de Pago</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Barra de progreso grande -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between mb-2 align-items-center">
+                            <strong style="font-size: 16px;">Progreso General</strong>
+                            <span style="font-size: 24px; font-weight: bold; color: {% if porcentaje_pagado == 100 %}#28a745{% elif porcentaje_pagado > 50 %}#17a2b8{% elif porcentaje_pagado > 0 %}#ffc107{% else %}#dc3545{% endif %}">
+                                {{ porcentaje_pagado|formato_porcentaje}}
+                            </span>
+                        </div>
+                        <div class="progress" style="height: 40px; background-color: #f0f0f0;">
+                            <div class="progress-bar {% if porcentaje_pagado == 100 %}bg-success{% elif porcentaje_pagado > 50 %}bg-info{% elif porcentaje_pagado > 0 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                 style="width: {% localize off %}{{ porcentaje_pagado }}{% endlocalize %}%; font-size: 16px; font-weight: bold; line-height: 40px; transition: width 0.3s ease;">
+                                {% if porcentaje_pagado > 10 %}{{ porcentaje_pagado|formato_porcentaje}}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Desglose visual con tarjetas -->
+                    <div class="row mt-4">
+                        <!-- Pagado -->
+                        <div class="col-md-6 mb-3">
+                            <div class="card border-success bg-light">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-check-circle text-success" style="font-size: 28px;"></i>
+                                    <p class="mb-1 mt-2" style="font-size: 12px; color: #666;">PAGADO</p>
+                                    <h4 class="text-success mb-0">{{ prestamo.monto_pagado|formato_moneda_co}}</h4>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pendiente -->
+                        <div class="col-md-6 mb-3">
+                            <div class="card {% if saldo_pendiente == 0 %}border-success bg-light{% else %}border-danger bg-light{% endif %}">
+                                <div class="card-body text-center">
+                                    <i class="fas {% if saldo_pendiente == 0 %}fa-smile-wink{% else %}fa-exclamation-circle{% endif %} text-{% if saldo_pendiente == 0 %}success{% else %}danger{% endif %}" style="font-size: 28px;"></i>
+                                    <p class="mb-1 mt-2" style="font-size: 12px; color: #666;">PENDIENTE</p>
+                                    <h4 class="text-{% if saldo_pendiente == 0 %}success{% else %}danger{% endif %} mb-0">{{ saldo_pendiente|formato_moneda_co}}</h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de detalles -->
+                    <table class="table table-hover mt-4 mb-0">
+                        <tr class="table-light">
+                            <td><strong><i class="fas fa-download text-success"></i> Pagado:</strong></td>
+                            <td class="text-end"><strong class="text-success" style="font-size: 16px;">{{ prestamo.monto_pagado|formato_moneda_co}}</strong></td>
+                        </tr>
+                        <tr class="table-light">
+                            <td><strong><i class="fas fa-hourglass-end text-danger"></i> Pendiente:</strong></td>
+                            <td class="text-end"><strong class="text-danger" style="font-size: 16px;">{{ saldo_pendiente|formato_moneda_co}}</strong></td>
+                        </tr>
+                        <tr class="table-secondary">
+                            <td><strong><i class="fas fa-calculator"></i> Total a Pagar:</strong></td>
+                            <td class="text-end"><strong style="font-size: 16px;">{{ total_a_pagar|formato_moneda_co}}</strong></td>
+                        </tr>
+                    </table>
+
+                    <!-- Estado destacado -->
+                    {% if prestamo.estado == 'PAGADO' %}
+                    <div class="alert alert-success mt-3 mb-0 text-center" style="font-size: 18px;">
+                        <i class="fas fa-trophy"></i> <strong>¡PRÉSTAMO COMPLETAMENTE PAGADO!</strong>
+                    </div>
+                    {% elif prestamo.estado == 'PARCIALMENTE_PAGADO' %}
+                    <div class="alert alert-info mt-3 mb-0 text-center" style="font-size: 16px;">
+                        <i class="fas fa-hourglass-half"></i> <strong>Pago Parcial Registrado - Faltan {{ saldo_pendiente|formato_moneda_co}} por pagar</strong>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Cuotas del Préstamo Rápido -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-list-ol"></i> Cuotas</h5>
+                        <div class="text-muted" style="font-size: 0.9rem;">
+                            Pagadas: {{ cuotas_pagadas }} | Pendientes: {{ cuotas_pendientes }} | Vencidas: {{ cuotas_vencidas }}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Vencimiento</th>
+                                    <th>Capital</th>
+                                    <th>Interés</th>
+                                    <th>Total Pendiente</th>
+                                    <th>Estado</th>
+                                    <th class="text-end">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cuota in cuotas %}
+                                <tr>
+                                    <td>{{ cuota.numero_cuota }}</td>
+                                    <td>
+                                        {% if cuota.fecha_pago_esperada %}
+                                            {{ cuota.fecha_pago_esperada|date:"d/m/Y" }}
+                                        {% else %}
+                                            <span class="text-muted">Sin fecha</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ cuota.monto_pendiente|formato_moneda_co }}</td>
+                                    <td>{{ cuota.monto_pendiente_interes|formato_moneda_co }}</td>
+                                    <td>{{ cuota.total_a_pagar|formato_moneda_co }}</td>
+                                    <td>
+                                        <span class="badge
+                                            {% if cuota.estado == 'PAGADA' %}bg-success
+                                            {% elif cuota.estado == 'PARCIALMENTE_PAGADA' %}bg-info
+                                            {% elif cuota.estado == 'VENCIDA' or cuota.estado == 'VENCIDA_PARCIAL' %}bg-danger
+                                            {% else %}bg-secondary{% endif %}
+                                        ">
+                                            {{ cuota.get_estado_display }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        {% if not cuota.pagado %}
+                                            <a href="{% url 'registrar_pago_cuota_rapida' cuota.id %}" class="btn btn-sm btn-success">
+                                                <i class="fas fa-money-bill-wave"></i> Pagar
+                                            </a>
+                                        {% else %}
+                                            <span class="text-success"><i class="fas fa-check"></i></span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-3">
+                                        No hay cuotas generadas para este préstamo rápido.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notas -->
+            {% if prestamo.notas %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-sticky-note"></i> Notas</h5>
+                </div>
+                <div class="card-body">
+                    <p>{{ prestamo.notas }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Botones de Acción -->
+            <div class="d-grid gap-2 d-md-flex justify-content-md-between mb-4">
+                {% if prestamo.estado != 'PAGADO' %}
+                <a href="{% url 'registrar_pago_rapido' prestamo.id %}" class="btn btn-success btn-lg">
+                    <i class="fas fa-money-bill-wave"></i> {% if tiene_cuotas %}Pagar Próxima Cuota{% else %}Registrar Pago{% endif %}
+                </a>
+                {% endif %}
+                <a href="{% url 'listar_prestamos_rapidos' %}" class="btn btn-secondary btn-lg">
+                    <i class="fas fa-arrow-left"></i> Volver
+                </a>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Historial de Pagos - MEJORADO -->
+            <div class="card" style="position: sticky; top: 20px;">
+                <div class="card-header {% if pagos %}bg-success text-white{% else %}bg-secondary text-white{% endif %}">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history"></i> Historial de Pagos
+                        {% if pagos %}
+                        <span class="badge bg-light text-dark">{{ pagos.count }}</span>
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    {% if pagos %}
+                        <!-- Resumen rápido -->
+                        <div class="alert alert-success mb-3 p-2" style="font-size: 14px;">
+                            <strong><i class="fas fa-check"></i> Total Pagado:</strong><br>
+                            {{ prestamo.monto_pagado|formato_moneda_co}}
+                        </div>
+
+                        <!-- Listado de pagos -->
+                        {% for pago in pagos %}
+                        <div class="card mb-2 border-left border-4 border-success">
+                            <div class="card-body p-2">
+                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                    <div>
+                                        <strong style="font-size: 14px; color: #28a745;">
+                                            <i class="fas fa-arrow-down"></i> {{ pago.monto_pagado|formato_moneda_co}}
+                                        </strong>
+                                    </div>
+                                    <span class="badge bg-success"><i class="fas fa-check"></i></span>
+                                </div>
+                                <small class="text-muted d-block">
+                                    <i class="far fa-calendar"></i> {{ pago.fecha_pago|date:"d/m/Y H:i" }}
+                                </small>
+                                {% if pago.referencia %}
+                                <small class="text-muted d-block">
+                                    <i class="fas fa-barcode"></i> {{ pago.referencia }}
+                                </small>
+                                {% endif %}
+                                {% if pago.usuario_registra %}
+                                <small class="text-muted d-block">
+                                    <i class="fas fa-user"></i> {{ pago.usuario_registra }}
+                                </small>
+                                {% endif %}
+                                {% if pago.notas %}
+                                <small class="text-muted d-block mt-1">
+                                    <i class="fas fa-sticky-note"></i> {{ pago.notas }}
+                                </small>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <div class="alert alert-warning text-center">
+                        <i class="fas fa-inbox"></i><br>
+                        <small><strong>Aún no hay pagos registrados</strong></small><br>
+                        <small class="text-muted">El cliente aún no ha efectuado ningún pago.</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+
+
+

@@ -1,0 +1,280 @@
+{% extends 'mi_app/base.html' %}
+{% load static %}
+
+{% block title %}Registrar Pago - Gestión de Préstamos{% endblock %}
+
+{% block content %}
+    <h1>💳 Registrar Pago</h1>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="GET" class="form-group" id="searchForm">
+                <div style="display: flex; gap: 10px;">
+                    <div class="search-container" style="flex: 1;">
+                        <input 
+                            type="text" 
+                            id="cliente_search_pago"
+                            name="q" 
+                            placeholder="Buscar cliente por nombre, celular o cédula..." 
+                            value="{{ busqueda }}"
+                            class="cliente-search-input"
+                            autocomplete="off"
+                        >
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="searchBtn">🔍 Buscar</button>
+                    {% if busqueda %}
+                        <a href="{% url 'buscar_cliente_pago' %}" class="btn btn-secondary">✕ Limpiar</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if busqueda %}
+        <p style="color: #666; margin: 20px 0;">
+            Resultados de búsqueda para: <strong>"{{ busqueda }}"</strong> ({{ cantidad }} cliente{{ cantidad|pluralize }})
+        </p>
+    {% endif %}
+
+    {% if clientes %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Cédula</th>
+                    <th>Celular</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cliente in clientes %}
+                <tr>
+                    <td>#{{ cliente.id }}</td>
+                    <td>{{ cliente.nombre }}</td>
+                    <td>{{ cliente.cedula|default:"—" }}</td>
+                    <td>{{ cliente.celular }}</td>
+                    <td>
+                        <a href="{% url 'cuotas_pendientes' cliente.id %}" class="btn btn-success btn-sm">Ver Cuotas Pendientes</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        {% if busqueda %}
+            <div class="no-data">
+                <p>No se encontraron clientes con esa búsqueda.</p>
+            </div>
+        {% else %}
+            <div class="no-data">
+                <p>No hay clientes con préstamos pendientes.</p>
+            </div>
+        {% endif %}
+    {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ✅ CSS ESTÁNDAR DROPDOWN
+const styleDropdown = document.createElement('style');
+styleDropdown.textContent = `
+    .cliente-search-input {
+        height: 48px;
+        font-size: 1rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 0.5rem;
+        padding: 10px 14px;
+        width: 100%;
+        transition: all 0.2s ease;
+    }
+
+    .cliente-search-input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+    }
+
+    .dropdown-results {
+        position: fixed;
+        top: auto;
+        left: auto;
+        right: auto;
+        display: none;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        max-height: 450px;
+        overflow-y: auto;
+        z-index: 99999;
+        width: 300px;
+    }
+
+    .dropdown-results.show {
+        display: block;
+    }
+
+    .dropdown-results .list-group-item {
+        display: block;
+        width: 100%;
+        padding: 16px 18px;
+        border: none;
+        border-bottom: 1px solid #f5f5f5;
+        background: white;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.15s ease;
+    }
+
+    .dropdown-results .list-group-item:first-child {
+        border-top-left-radius: 0.75rem;
+        border-top-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:last-child {
+        border-bottom: none;
+        border-bottom-left-radius: 0.75rem;
+        border-bottom-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:hover {
+        background: linear-gradient(135deg, #f7f8fc 0%, #f0f2f7 100%);
+        padding-left: 22px;
+        border-left: 3px solid #667eea;
+    }
+
+    .dropdown-results .list-group-item strong {
+        display: block;
+        color: #212529;
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .dropdown-results .list-group-item small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .dropdown-results .list-group-item small i {
+        color: #667eea;
+        margin-right: 4px;
+    }
+`;
+document.head.appendChild(styleDropdown);
+
+// ✅ Cargar clientes
+let clientesGlobales_pago = [];
+
+async function cargarClientes_pago() {
+    try {
+        const response = await fetch('{% url "lista_clientes_api" %}');
+        const data = await response.json();
+        clientesGlobales_pago = data.clientes || [];
+        console.log('✅ Clientes cargados:', clientesGlobales_pago.length);
+    } catch (error) {
+        console.error('❌ Error cargando clientes:', error);
+    }
+}
+
+// ✅ Inicializar dropdown
+document.addEventListener('DOMContentLoaded', function() {
+    cargarClientes_pago();
+
+    const input = document.getElementById('cliente_search_pago');
+
+    if (!input) {
+        console.error('❌ Input no encontrado');
+        return;
+    }
+
+    // Crear dropdown dinámicamente al final del body
+    const resultados = document.createElement('div');
+    resultados.id = 'cliente_resultados_pago';
+    resultados.className = 'dropdown-results';
+    document.body.appendChild(resultados);
+
+    console.log('✅ Sistema de búsqueda iniciado en buscar_cliente_pago');
+
+    function posicionarDropdown() {
+        const rect = input.getBoundingClientRect();
+        resultados.style.top = (rect.bottom + 5) + 'px';
+        resultados.style.left = rect.left + 'px';
+        resultados.style.width = rect.width + 'px';
+        resultados.style.zIndex = '99999';
+    }
+
+    let debounceTimer;
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim().toLowerCase();
+
+        if (query.length < 1) {
+            resultados.classList.remove('show');
+            return;
+        }
+
+        debounceTimer = setTimeout(function() {
+            const filtered = clientesGlobales_pago.filter(c =>
+                c.nombre.toLowerCase().includes(query) ||
+                (c.cedula && c.cedula.toLowerCase().includes(query)) ||
+                (c.celular && c.celular.toLowerCase().includes(query))
+            );
+
+            resultados.innerHTML = '';
+
+            if (filtered.length === 0) {
+                resultados.innerHTML = '<div class="list-group-item text-muted">No encontrado</div>';
+                posicionarDropdown();
+                resultados.classList.add('show');
+                return;
+            }
+
+            filtered.forEach(cliente => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action text-start';
+                btn.innerHTML = `
+                    <strong>${cliente.nombre}</strong><br>
+                    <small class="text-muted">
+                        <i class="fas fa-id-card"></i> ${cliente.cedula || '-'} | 
+                        <i class="fas fa-phone"></i> ${cliente.celular || '-'}
+                    </small>
+                `;
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    input.value = cliente.nombre;
+                    document.getElementById('searchForm').submit();
+                });
+                resultados.appendChild(btn);
+            });
+
+            posicionarDropdown();
+            resultados.classList.add('show');
+        }, 300);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target !== input && !resultados.contains(e.target)) {
+            resultados.classList.remove('show');
+        }
+    });
+
+    window.addEventListener('scroll', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    }, true);
+
+    window.addEventListener('resize', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    });
+});
+</script>
+
+{% endblock %}

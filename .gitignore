@@ -1,0 +1,86 @@
+# ==================== PYTHON ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==================== DJANGO ====================
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+/media
+/staticfiles
+/static_root
+
+# ==================== ENTORNO ====================
+.env
+.env.local
+.env.*.local
+
+# ==================== IDE ====================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# ==================== OS ====================
+.DS_Store
+Thumbs.db
+*.ini
+*.cfg
+
+# ==================== COMPILACIÓN ====================
+/build/
+/dist/
+Gestion\ Prestamos.exe
+Gestion\ Prestamos.spec
+
+# ==================== BACKUPS ====================
+*.bak
+*_old.html
+*_old.py
+*_BACKUP*
+*.tmp
+backups/*.zip
+backups/*.db
+backups/*.db.gz
+
+# ==================== OUTPUT DE TESTS ====================
+tests/output/
+tests/*_result.txt
+
+# ==================== BASURA ====================
+h.json
+.pytest_cache/
+.coverage
+htmlcov/
+# Google Drive Credentials
+config/google_drive_credentials.json
+config/*.json

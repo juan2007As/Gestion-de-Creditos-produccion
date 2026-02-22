@@ -1,0 +1,11 @@
+Django==4.2.11
+openpyxl
+gunicorn
+whitenoise
+python-decouple
+pillow
+pandas
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+django-ratelimit==4.1.0tabulate

@@ -1,0 +1,215 @@
+{% extends "mi_app/base.html" %}
+
+{% block title %}Detalles del Backup{% endblock %}
+
+{% block extra_css %}
+<style>
+    .backup-detail-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .detail-header {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .detail-header i {
+        font-size: 48px;
+        color: #667eea;
+    }
+    
+    .detail-header h2 {
+        margin: 0;
+        color: #333;
+    }
+    
+    .detail-header p {
+        margin: 5px 0 0 0;
+        color: #999;
+    }
+    
+    .detail-card {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 25px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+    
+    .detail-label {
+        font-weight: 600;
+        color: #333;
+        min-width: 200px;
+    }
+    
+    .detail-value {
+        color: #666;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        word-break: break-all;
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        flex: 1;
+    }
+    
+    .detail-value.large {
+        font-family: inherit;
+    }
+    
+    .btn-group {
+        display: flex;
+        gap: 10px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 2px solid #dee2e6;
+    }
+    
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .btn-primary {
+        background: #667eea;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background: #5568d3;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+        background: #e9ecef;
+        color: #333;
+    }
+    
+    .btn-secondary:hover {
+        background: #dee2e6;
+    }
+    
+    .info-box {
+        background: #e8f5e9;
+        border-left: 4px solid #4caf50;
+        padding: 15px;
+        border-radius: 4px;
+        color: #2e7d32;
+        margin-top: 20px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .info-box i {
+        flex-shrink: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="backup-detail-container">
+    <!-- Header -->
+    <div class="detail-header">
+        <i class="fas fa-cloud-check"></i>
+        <div>
+            <h2>Detalles del Backup</h2>
+            <p>Información detallada de tu copia de seguridad</p>
+        </div>
+    </div>
+    
+    <!-- Detail Card -->
+    <div class="detail-card">
+        <!-- Nombre -->
+        <div class="detail-row">
+            <span class="detail-label">
+                <i class="fas fa-file-database"></i> Nombre del archivo
+            </span>
+            <span class="detail-value">{{ backup.name }}</span>
+        </div>
+        
+        <!-- Tamaño -->
+        <div class="detail-row">
+            <span class="detail-label">
+                <i class="fas fa-database"></i> Tamaño
+            </span>
+            <span class="detail-value large">
+                <strong>{{ backup.size }} MB</strong> ({{ backup.size_bytes }} bytes)
+            </span>
+        </div>
+        
+        <!-- Fecha -->
+        <div class="detail-row">
+            <span class="detail-label">
+                <i class="fas fa-calendar"></i> Fecha
+            </span>
+            <span class="detail-value large">{{ backup.date }}</span>
+        </div>
+        
+        <!-- Hora -->
+        <div class="detail-row">
+            <span class="detail-label">
+                <i class="fas fa-clock"></i> Hora
+            </span>
+            <span class="detail-value large">{{ backup.time }}</span>
+        </div>
+        
+        <!-- Timestamp completo -->
+        <div class="detail-row">
+            <span class="detail-label">
+                <i class="fas fa-info-circle"></i> Timestamp
+            </span>
+            <span class="detail-value">{{ backup.created }}</span>
+        </div>
+        
+        <!-- ID de Google Drive -->
+        <div class="detail-row">
+            <span class="detail-label">
+                <i class="fas fa-key"></i> ID Google Drive
+            </span>
+            <span class="detail-value">{{ backup.id }}</span>
+        </div>
+        
+        <!-- Info Box -->
+        <div class="info-box">
+            <i class="fas fa-shield-alt"></i>
+            <div>
+                <strong>Tu backup está seguro</strong><br>
+                Almacenado de forma encriptada en Google Drive y respaldado automáticamente por Google
+            </div>
+        </div>
+        
+        <!-- Buttons -->
+        <div class="btn-group">
+            <a href="{% url 'backups_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver a la lista
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

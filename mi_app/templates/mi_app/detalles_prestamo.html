@@ -1,0 +1,192 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+
+{% block title %}Detalles del Préstamo #{{ prestamo.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Préstamo #{{ prestamo.id }}</h2>
+            <p class="text-muted">Cliente: <strong>{{ prestamo.cliente.nombre }}</strong></p>
+        </div>
+        <div class="col-auto">
+            {% if prestamo.estado == 'ACTIVO' %}
+                <span class="badge bg-info px-3 py-2">ACTIVO</span>
+            {% elif prestamo.estado == 'COMPLETADO' %}
+                <span class="badge bg-success px-3 py-2">✓ COMPLETADO</span>
+            {% else %}
+                <span class="badge bg-secondary px-3 py-2">BORRADOR</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- RESUMEN FINANCIERO DESGLOSADO -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">INFORMACIÓN FINANCIERA DEL PRÉSTAMO</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-3 border-end">
+                            <p class="text-muted small mb-2">Monto Original</p>
+                            <h5 class="text-primary">{{ resumen.monto_original|formato_moneda_co}}</h5>
+                            <p class="text-muted small mb-2 mt-3">Tasa Interés</p>
+                            <h6 class="mb-0">15% mensual<br><small>(7.5% quincena)</small></h6>
+                        </div>
+                        <div class="col-md-3 border-end">
+                            <p class="text-muted small mb-2">Interés Total a Pagar</p>
+                            <h5 class="text-warning">{{ resumen.total_pendiente_interes|formato_moneda_co}}</h5>
+                            <p class="text-muted small mb-2 mt-3">Total Crédito</p>
+                            <h6 class="mb-0 text-dark"><strong>{{ resumen.total_credito|formato_moneda_co}}</strong></h6>
+                        </div>
+                        <div class="col-md-3 border-end">
+                            <p class="text-muted small mb-2">Total Pagado</p>
+                            <h5 class="text-success">{% with total_todo=resumen.total_pagado_principal|add:resumen.total_pagado_interes|add:resumen.total_mora_acumulada %}{{ total_todo|formato_moneda_co}}{% endwith %}</h5>
+                            <p class="text-muted small mb-2 mt-3">Total Pendiente</p>
+                            <h6 class="mb-0 text-danger"><strong>{% with pendiente_todo=resumen.total_pendiente_principal|add:resumen.total_pendiente_interes %}{{ pendiente_todo|formato_moneda_co}}{% endwith %}</strong></h6>
+                        </div>
+                        <div class="col-md-3">
+                            <p class="text-muted small mb-2">Mora Acumulada</p>
+                            <h5 class="{% if resumen.total_mora_acumulada > 0 %}text-danger{% else %}text-success{% endif %}">
+                                {{ resumen.total_mora_acumulada|formato_moneda_co}}
+                            </h5>
+                            <p class="text-muted small mb-2 mt-3">Progreso</p>
+                            <h6 class="mb-0">{{ progreso|formato_porcentaje}}</h6>
+                        </div>
+                    </div>
+
+                    <!-- BARRA DE PROGRESO -->
+                    <div class="progress" style="height: 30px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ progreso }}%;" aria-valuenow="{{ progreso }}" aria-valuemin="0" aria-valuemax="100">
+                            <strong>{{ progreso|formato_porcentaje}} Completado</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- INFORMACIÓN DE CUOTAS -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-2">Total Cuotas</h6>
+                    <h3 class="text-primary">{{ cuotas_data|length }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-2">Pagadas ✓</h6>
+                    <h3 class="text-success">{{ num_pagadas }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-2">Pendientes ⏳</h6>
+                    <h3 class="text-warning">{{ num_pendientes }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-2">Vencidas ⚠</h6>
+                    <h3 class="{% if num_vencidas > 0 %}text-danger{% else %}text-success{% endif %}">{{ num_vencidas }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TABLA DE CUOTAS -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">TABLA DE CUOTAS</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Vencimiento</th>
+                        <th>Estado</th>
+                        <th>Monto Original</th>
+                        <th>Pendiente</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in cuotas_data %}
+                        <tr>
+                            <td><strong>{{ item.cuota.numero_cuota }}</strong></td>
+                            <td>
+                                {{ item.cuota.fecha_pago_esperada|date:"d/m/Y" }}
+                                {% if item.detalles.dias_para_vencer %}
+                                    <br>
+                                    {% if item.detalles.dias_para_vencer < 0 %}
+                                        <small class="text-danger">Vencida hace {{ item.detalles.dias_vencidos_positivo }} días</small>
+                                    {% elif item.detalles.dias_para_vencer == 0 %}
+                                        <small class="text-danger">Vence hoy</small>
+                                    {% else %}
+                                        <small class="text-warning">Vence en {{ item.detalles.dias_para_vencer }} días</small>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="{% if item.estado_visual.clase %}{{ item.estado_visual.clase }}{% else %}badge bg-secondary{% endif %}">
+                                    {{ item.estado_visual.icono }} {{ item.estado_visual.estado }}
+                                </span>
+                            </td>
+                            <td>{{ item.detalles.original_total|formato_moneda_co}}</td>
+                            <td class="text-danger"><strong>{{ item.detalles.pendiente_total|formato_moneda_co}}</strong></td>
+                            <td>
+                                <a href="{% url 'pagar_cuota_especifica' item.cuota.id %}" class="btn btn-sm {% if item.cuota.pagado %}btn-secondary{% else %}btn-success{% endif %}">
+                                    {% if item.cuota.pagado %}
+                                        <i class="fas fa-eye"></i> Ver
+                                    {% else %}
+                                        <i class="fas fa-money-bill-wave"></i> Pagar
+                                    {% endif %}
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- BOTONES -->
+    <div class="row">
+        <div class="col">
+            <a href="{% url 'mis_prestamos' prestamo.cliente.id %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Volver a Mis Préstamos
+            </a>
+        </div>
+    </div>
+    
+    <!-- INSTRUCCIÓN -->
+    {% if prestamo.estado == 'ACTIVO' %}
+    <div class="alert alert-info mt-3" role="alert">
+        <strong>💡 Tip:</strong> Haz clic en el botón <strong>"Pagar"</strong> en cada cuota de la tabla para registrar un pago. Verás todos los detalles y opciones de pago en la misma pantalla.
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .table-hover tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}
+
+
+
+
+

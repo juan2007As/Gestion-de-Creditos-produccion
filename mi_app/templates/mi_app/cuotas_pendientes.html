@@ -1,0 +1,91 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load numeros_colombianos %}
+
+{% block title %}Cuotas - Gestión de Préstamos{% endblock %}
+
+{% block content %}
+    <h1>📋 Cuotas de {{ cliente.nombre }}</h1>
+
+    <div class="btn-group">
+        <a href="{% url 'buscar_cliente_pago' %}" class="btn btn-secondary">← Volver</a>
+        <a href="{% url 'detalle_cliente' cliente.id %}" class="btn btn-primary">👤 Ver Perfil</a>
+    </div>
+
+    {% if cuotas %}
+        <div style="margin: 20px 0; padding: 10px; background-color: #f0f0f0; border-radius: 4px;">
+            <p style="margin: 0;">
+                <strong>📊 Resumen:</strong> 
+                {{ cantidad_pagadas }} pagada{{ cantidad_pagadas|pluralize }} - 
+                {{ cantidad_pendientes }} pendiente{{ cantidad_pendientes|pluralize }}
+            </p>
+        </div>
+
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Préstamo</th>
+                        <th>Cuota</th>
+                        <th>Monto Original</th>
+                        <th>Monto Pendiente</th>
+                        <th>Interés Normal</th>
+                        <th>Mora Actual</th>
+                        <th>Total a Pagar</th>
+                        <th>Vencimiento</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cuota in cuotas %}
+                    <tr style="{% if cuota.pagado %}background-color: #e8f5e9;{% endif %}">
+                        <td>#{{ cuota.prestamo.id }}</td>
+                        <td>#{{ cuota.numero_cuota }}/6</td>
+                        <td>{{ cuota.monto_original|formato_colombiano }}</td>
+                        <td style="{% if cuota.pagado %}color: #28a745; text-decoration: line-through;{% endif %}">
+                            {{ cuota.monto_pendiente|formato_colombiano }}
+                        </td>
+                        <td>{{ cuota.interes_normal|formato_colombiano }}</td>
+                        <td style="color: {% if cuota.calcular_mora_diaria > 0 %}#dc3545{% else %}#28a745{% endif %};">
+                            {{ cuota.calcular_mora_diaria|formato_colombiano }}
+                        </td>
+                        <td style="font-weight: bold; color: {% if cuota.pagado %}#28a745{% else %}#dc3545{% endif %};">
+                            {{ cuota.total_a_pagar|formato_colombiano }}
+                        </td>
+                        <td>{{ cuota.fecha_pago_esperada|date:"d/m/Y" }}</td>
+                        <td>
+                            {% if cuota.pagado %}
+                                <span style="background-color: #28a745; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.85em;">
+                                    ✔️ Pagada
+                                </span>
+                                <br>
+                                <small style="color: #666;">{{ cuota.fecha_pago_real|date:"d/m/Y" }}</small>
+                            {% else %}
+                                <span style="background-color: #ffc107; color: #333; padding: 5px 10px; border-radius: 4px; font-size: 0.85em;">
+                                    ⏳ Pendiente
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if cuota.pagado %}
+                                <button class="btn btn-secondary btn-sm" disabled>Registrar Pago</button>
+                            {% else %}
+                                <a href="{% url 'registrar_pago' cuota.id %}" class="btn btn-success btn-sm">Registrar Pago</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="no-data">
+            <p>Este cliente no tiene cuotas registradas.</p>
+            <a href="{% url 'buscar_cliente_pago' %}" class="btn btn-primary">← Volver</a>
+        </div>
+    {% endif %}
+{% endblock %}
+
+
+

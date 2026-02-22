@@ -1,0 +1,383 @@
+{% extends 'mi_app/base.html' %}
+{% load static %}
+
+{% block title %}Lista de Clientes - Gestión de Préstamos{% endblock %}
+
+{% block content %}
+    <div class="container-fluid py-4" id="clientes-container">
+        <!-- ESTADÍSTICAS GLOBALES -->
+        {% include 'mi_app/componentes/estadisticas_globales.html' %}
+
+        <div class="row mb-4">
+            <div class="col">
+                <h1><i class="fas fa-users"></i> Lista de Clientes</h1>
+            </div>
+            <div class="col-auto">
+                <a href="{% url 'exportar_lista_negra' %}" class="btn btn-danger" title="Descargar lista negra en Excel">
+                    <i class="fas fa-download"></i> Descargar Lista Negra
+                </a>
+                <a href="{% url 'crear_cliente' %}" class="btn btn-success">
+                    <i class="fas fa-plus"></i> Agregar Cliente
+                </a>
+            </div>
+        </div>
+
+        <!-- BÚSQUEDA - ESTRUCTURA LIMPIA -->
+        <div class="busqueda-container mb-4">
+            <label class="form-label fw-bold mb-2">
+                <i class="fas fa-search"></i> Buscar Cliente
+            </label>
+            <input 
+                type="text" 
+                id="cliente_search_lista" 
+                placeholder="Busca por nombre, celular o cédula..." 
+                class="cliente-search-input"
+                autocomplete="off"
+            >
+        </div>
+
+        {% if busqueda %}
+            <div class="alert alert-info mb-4">
+                <i class="fas fa-info-circle"></i>
+                Resultados para: <strong>"{{ busqueda }}"</strong> ({{ cantidad }} cliente{{ cantidad|pluralize }})
+            </div>
+        {% endif %}
+
+        {% if clientes %}
+        <div class="card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 10%">ID</th>
+                            <th style="width: 25%">Nombre</th>
+                            <th style="width: 20%">Cédula</th>
+                            <th style="width: 20%">Celular</th>
+                            <th style="width: 15%">Email</th>
+                            <th style="width: 10%" class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in clientes %}
+                        {% with cliente=item.cliente en_lista_negra=item.en_lista_negra %}
+                        <tr class="cliente-row" data-nombre="{{ cliente.nombre|lower }}" data-cedula="{{ cliente.cedula|default:''|lower }}" data-celular="{{ cliente.celular|lower }}">
+                            <td><strong>#{{ cliente.id }}</strong></td>
+                            <td>
+                                <strong>{{ cliente.nombre }}</strong>
+                                <!-- ETIQUETA DE CLASIFICACIÓN -->
+                                {% if not en_lista_negra and cliente.etiqueta_cliente == 'BUENO' %}
+                                    <span class="badge bg-success ms-2" title="Cliente Bueno: 95%+ cumplimiento, <5 días mora">
+                                        <i class="fas fa-star"></i> BUENO
+                                    </span>
+                                {% elif not en_lista_negra and cliente.etiqueta_cliente == 'MEDIO' %}
+                                    <span class="badge bg-warning text-dark ms-2" title="Cliente Medio: 70-94% cumplimiento, 5-15 días mora">
+                                        <i class="fas fa-triangle-exclamation"></i> MEDIO
+                                    </span>
+                                {% elif not en_lista_negra and cliente.etiqueta_cliente == 'MALO' %}
+                                    <span class="badge bg-danger ms-2" title="Cliente Malo: <70% cumplimiento, >15 días mora">
+                                        <i class="fas fa-exclamation"></i> MALO
+                                    </span>
+                                {% elif not en_lista_negra and cliente.etiqueta_cliente == 'SIN_HISTORIAL' %}
+                                    <span class="badge bg-secondary ms-2" title="Cliente sin historial de pagos">
+                                        <i class="fas fa-circle-question"></i> SIN HISTORIAL
+                                    </span>
+                                {% endif %}
+                                <!-- LISTA NEGRA -->
+                                {% if en_lista_negra %}
+                                    <span class="badge bg-dark ms-2" title="Cliente en lista negra">
+                                        <i class="fas fa-ban"></i> LISTA NEGRA
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>{{ cliente.cedula|default:"Sin registrar" }}</td>
+                            <td>
+                                <i class="fas fa-phone text-primary"></i>
+                                {{ cliente.celular }}
+                            </td>
+                            <td>
+                                <i class="fas fa-envelope text-info"></i>
+                                {{ cliente.email|default:"Sin registrar" }}
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'perfil_cliente' cliente.id %}" class="btn btn-info btn-sm" title="Ver Perfil">
+                                    <i class="fas fa-user"></i>
+                                </a>
+                                <a href="{% url 'editar_cliente' cliente.id %}" class="btn btn-warning btn-sm" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endwith %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+            <div class="alert alert-info text-center py-4">
+                <i class="fas fa-inbox" style="font-size: 2em;"></i><br>
+                {% if busqueda %}
+                    <strong>No se encontraron clientes con "{{ busqueda }}"</strong><br>
+                    <a href="{% url 'lista_clientes' %}" class="btn btn-secondary btn-sm mt-2">
+                        <i class="fas fa-times"></i> Limpiar búsqueda
+                    </a>
+                {% else %}
+                    <strong>No hay clientes registrados</strong><br>
+                    <a href="{% url 'crear_cliente' %}" class="btn btn-success btn-sm mt-2">
+                        <i class="fas fa-plus"></i> Crear el primer cliente
+                    </a>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+
+<style>
+    /* ESTILOS PRINCIPALES */
+    #clientes-container {
+        background-color: #f8f9fa;
+        padding: 1.5rem;
+    }
+
+    /* BÚSQUEDA - Bonito y limpio */
+    .busqueda-container {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 1.5rem;
+    }
+
+    .search-wrapper {
+        position: relative;
+        z-index: 100;
+    }
+
+    #cliente_search {
+        height: 48px;
+        font-size: 1rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 0.5rem;
+        padding: 10px 14px;
+        width: 100%;
+        transition: all 0.2s ease;
+    }
+
+    #cliente_search:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+    }
+
+    .cliente-search-input {
+        height: 48px;
+        font-size: 1rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 0.5rem;
+        padding: 10px 14px;
+        width: 100%;
+        transition: all 0.2s ease;
+    }
+
+    .cliente-search-input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+    }
+
+    /* DROPDOWN - Bonito y profesional */
+    .dropdown-results {
+        position: fixed;
+        top: auto;
+        left: auto;
+        right: auto;
+        display: none;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        max-height: 450px;
+        overflow-y: auto;
+        z-index: 99999;
+        width: 300px;
+    }
+
+    .dropdown-results.show {
+        display: block;
+    }
+
+    .dropdown-results .list-group-item {
+        display: block;
+        width: 100%;
+        padding: 16px 18px;
+        border: none;
+        border-bottom: 1px solid #f5f5f5;
+        background: white;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.15s ease;
+    }
+
+    .dropdown-results .list-group-item:first-child {
+        border-top-left-radius: 0.75rem;
+        border-top-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:last-child {
+        border-bottom: none;
+        border-bottom-left-radius: 0.75rem;
+        border-bottom-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:hover {
+        background: linear-gradient(135deg, #f7f8fc 0%, #f0f2f7 100%);
+        padding-left: 22px;
+        border-left: 3px solid #667eea;
+    }
+
+    .dropdown-results .list-group-item strong {
+        display: block;
+        color: #212529;
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .dropdown-results .list-group-item small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .dropdown-results .list-group-item small i {
+        color: #667eea;
+        margin-right: 4px;
+    }
+</style>
+
+<script>
+// ✅ Cargar clientes desde servidor
+let clientesGlobales_lista = [];
+
+async function cargarClientes_lista() {
+    try {
+        const response = await fetch('{% url "lista_clientes_api" %}');
+        const data = await response.json();
+        clientesGlobales_lista = data.clientes || [];
+        console.log('✅ Clientes cargados:', clientesGlobales_lista.length);
+    } catch (error) {
+        console.error('❌ Error cargando clientes:', error);
+    }
+}
+
+// ✅ Búsqueda de clientes - DINÁMICA CON DROPDOWN FIXED
+document.addEventListener('DOMContentLoaded', function() {
+    cargarClientes_lista();
+
+    const input = document.getElementById('cliente_search_lista');
+
+    if (!input) return;
+
+    // Crear dropdown dinámicamente
+    const resultados = document.createElement('div');
+    resultados.id = 'cliente_resultados_lista';
+    resultados.className = 'dropdown-results';
+    document.body.appendChild(resultados);
+
+    function posicionarDropdown() {
+        const rect = input.getBoundingClientRect();
+        resultados.style.top = (rect.bottom + 5) + 'px';
+        resultados.style.left = rect.left + 'px';
+        resultados.style.width = rect.width + 'px';
+        resultados.style.zIndex = '99999';
+    }
+
+    // Mostrar resultados en tiempo real CON DEBOUNCE
+    let debounceTimer;
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim().toLowerCase();
+
+        if (query.length < 1) {
+            resultados.classList.remove('show');
+            return;
+        }
+
+        debounceTimer = setTimeout(function() {
+            const filtered = clientesGlobales_lista.filter(c =>
+                c.nombre.toLowerCase().includes(query) ||
+                (c.cedula && c.cedula.toLowerCase().includes(query)) ||
+                (c.celular && c.celular.toLowerCase().includes(query))
+            );
+
+            resultados.innerHTML = '';
+
+            if (filtered.length === 0) {
+                resultados.innerHTML = '<div class="list-group-item text-muted">No encontrado</div>';
+                posicionarDropdown();
+                resultados.classList.add('show');
+                return;
+            }
+
+            filtered.forEach(cliente => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action text-start';
+                btn.innerHTML = `
+                    <strong>${cliente.nombre}</strong><br>
+                    <small class="text-muted">
+                        <i class="fas fa-id-card"></i> ${cliente.cedula || '-'} | 
+                        <i class="fas fa-phone"></i> ${cliente.celular || '-'}
+                    </small>
+                `;
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    input.value = cliente.nombre;
+                    resultados.classList.remove('show');
+                    filtrarTablaClientes(cliente.nombre.toLowerCase());
+                });
+                resultados.appendChild(btn);
+            });
+
+            posicionarDropdown();
+            resultados.classList.add('show');
+        }, 300);
+    });
+
+    // Cerrar dropdown al hacer click fuera
+    document.addEventListener('click', function(e) {
+        if (e.target !== input && !resultados.contains(e.target)) {
+            resultados.classList.remove('show');
+        }
+    });
+
+    // Reposicionar al scroll/resize
+    window.addEventListener('scroll', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    }, true);
+
+    window.addEventListener('resize', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    });
+});
+
+// ✅ Función para filtrar la tabla de clientes
+function filtrarTablaClientes(query) {
+    const filas = document.querySelectorAll('tbody .cliente-row');
+    
+    filas.forEach(fila => {
+        const nombre = fila.dataset.nombre || '';
+        const cedula = fila.dataset.cedula || '';
+        const celular = fila.dataset.celular || '';
+        
+        const coincide = nombre.includes(query) || cedula.includes(query) || celular.includes(query);
+        fila.style.display = coincide ? '' : 'none';
+    });
+}
+</script>
+
+{% endblock %}

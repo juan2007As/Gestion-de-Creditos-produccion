@@ -1,0 +1,170 @@
+{% extends 'mi_app/base.html' %}
+{% load static %}
+
+{% block title %}Auto-Tagging Lista Negra{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-robot"></i> Auto-Tagging Lista Negra
+                    </h3>
+                </div>
+
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    {% if exito %}
+                        <!-- Resultados -->
+                        <div class="alert {% if not fue_dry_run %}alert-success{% else %}alert-info{% endif %}" role="alert">
+                            <h4 class="alert-heading">
+                                {% if not fue_dry_run %}
+                                    ✅ Auto-Tagging Completado
+                                {% else %}
+                                    📋 Vista Previa
+                                {% endif %}
+                            </h4>
+                            <p>
+                                {% if not fue_dry_run %}
+                                    Se marcó/desmarcó automáticamente clientes con mora mayor a <strong>{{ dias_mora }}</strong> días.
+                                {% else %}
+                                    Esta es una simulación de lo que se marcaría/desmarcaría para mora > <strong>{{ dias_mora }}</strong> días.
+                                {% endif %}
+                            </p>
+                        </div>
+
+                        <!-- Resumen del sistema -->
+                        <div class="mt-4">
+                            <h5>📊 Resumen:</h5>
+                            <p class="text-muted mb-2">Clientes procesados: <strong>{{ total_clientes }}</strong></p>
+                            <details open>
+                                <summary class="text-secondary fw-bold" style="cursor: pointer;">
+                                    <i class="fas fa-list"></i> Ver detalle de cambios
+                                </summary>
+                                <div class="bg-light p-3 rounded mt-2" style="max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.9rem;">
+                                    {{ output|linebreaks }}
+                                </div>
+                            </details>
+                        </div>
+
+                        <div class="mt-4">
+                            <a href="{% url 'auto_tagging_lista_negra' %}" class="btn btn-primary">
+                                <i class="fas fa-redo"></i> Ejecutar Nuevamente
+                            </a>
+                            <a href="{% url 'lista_clientes' %}" class="btn btn-secondary">
+                                <i class="fas fa-users"></i> Ver Lista de Clientes
+                            </a>
+                            <a href="{% url 'auditoria_cambios' %}" class="btn btn-secondary">
+                                <i class="fas fa-file-alt"></i> Ver Auditoría
+                            </a>
+                        </div>
+
+                    {% else %}
+                        <!-- Formulario Auto-Tagging -->
+                        <div class="alert alert-info" role="alert">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>¿Qué hace esta función?</strong> Marca/desmarcar automáticamente clientes en lista negra según su comportamiento de pago.
+                            <ul class="mb-0 mt-2 ms-3">
+                                <li><strong>Marca:</strong> Si tiene cuotas vencidas por más de X días</li>
+                                <li><strong>Desmarcar:</strong> Si regularizó todos sus pagos</li>
+                            </ul>
+                        </div>
+
+                        <form method="POST" class="mt-4">
+                            {% csrf_token %}
+
+                            <div class="form-group mb-3">
+                                <label for="dias_mora" class="form-label">
+                                    <strong>Días de mora para considerar en lista negra:</strong>
+                                </label>
+                                <input type="number" id="dias_mora" name="dias_mora" class="form-control" 
+                                       value="{{ dias_default }}" min="1" max="365" required>
+                                <small class="form-text text-muted">
+                                    Recomendado: 30 días (clientes con más de 1 mes de atraso van a lista negra).
+                                </small>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label for="razon" class="form-label">
+                                    <strong>Nota (opcional):</strong>
+                                </label>
+                                <textarea id="razon" name="razon" class="form-control" rows="3" 
+                                          placeholder="Ej: auto-tagging automático de mantenimiento"></textarea>
+                                <small class="form-text text-muted">
+                                    Esta nota queda guardada en el historial del sistema.
+                                </small>
+                            </div>
+
+                            <div class="alert alert-light border" role="alert">
+                                <strong>Total de clientes a procesar:</strong> <span class="badge bg-info">{{ total_clientes }}</span>
+                            </div>
+
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <button type="submit" name="dry_run" value="yes" class="btn btn-warning w-100">
+                                        <i class="fas fa-eye"></i> Vista previa (sin cambios)
+                                    </button>
+                                </div>
+                                <div class="col-md-6">
+                                    <button type="submit" name="dry_run" value="no" 
+                                            class="btn btn-danger w-100"
+                                            onclick="return confirm('⚠️ ¿Aplicar auto-tagging ahora?\n\nEsto marcará/desmarcará clientes en lista negra automáticamente.');">
+                                        <i class="fas fa-check"></i> Aplicar cambios
+                                    </button>
+                                </div>
+                            </div>
+
+                            <hr class="my-4" />
+
+                            <div class="alert alert-secondary small" role="alert">
+                                <strong>ℹ️ Información técnica:</strong>
+                                <ul class="mb-0 ms-3">
+                                    <li>Cada cliente se considera para marcar solo si tiene cuotas VENCIDAS sin pagar</li>
+                                    <li>La razón registrada es: <strong>MOROSO</strong></li>
+                                    <li>Se registra un comentario con los detalles (cantidad de cuotas, días de atraso)</li>
+                                    <li>Todos los cambios quedan registrados en auditoría</li>
+                                </ul>
+                            </div>
+
+                        </form>
+
+                    {% endif %}
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        border: none;
+        padding: 1.25rem;
+        font-weight: 600;
+    }
+
+    .btn {
+        margin-top: 0.5rem;
+    }
+
+    details summary::-webkit-details-marker {
+        color: #6c757d;
+    }
+</style>
+
+{% endblock %}

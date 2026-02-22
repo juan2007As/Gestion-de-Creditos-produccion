@@ -1,0 +1,562 @@
+{% extends 'mi_app/base.html' %}
+{% load static %}
+
+{% block title %}Reporte de Interés Mensual{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        position: relative;
+        height: 400px;
+        margin-bottom: 30px;
+    }
+    
+    .cuadro-resumen {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        text-align: center;
+    }
+    
+    .cuadro-resumen .label {
+        font-size: 12px;
+        opacity: 0.9;
+        text-transform: uppercase;
+    }
+    
+    .cuadro-resumen .valor {
+        font-size: 24px;
+        font-weight: bold;
+        margin-top: 8px;
+    }
+    
+    .cuadro-proyeccion {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+    
+    .cuadro-comparativa {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+    
+    .tab-content {
+        display: none;
+        padding: 20px;
+    }
+    
+    .tab-content.active {
+        display: block;
+    }
+    
+    .btn-export {
+        margin-top: 20px;
+    }
+    
+    .stats-cards {
+        margin-bottom: 30px;
+    }
+    
+    .badge-valor {
+        display: inline-block;
+        background-color: #e9ecef;
+        padding: 8px 12px;
+        border-radius: 5px;
+        margin-top: 10px;
+        font-size: 14px;
+    }
+    
+    .badge-valor.positivo {
+        color: #28a745;
+        border-left: 4px solid #28a745;
+    }
+    
+    .badge-valor.negativo {
+        color: #dc3545;
+        border-left: 4px solid #dc3545;
+    }
+    
+    .tab-navigation {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #e0e0e0;
+    }
+    
+    .tab-btn {
+        padding: 12px 24px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        color: #666;
+        border-bottom: 3px solid transparent;
+        transition: all 0.3s;
+    }
+    
+    .tab-btn.active {
+        color: #667eea;
+        border-bottom-color: #667eea;
+    }
+    
+    .tab-btn:hover {
+        color: #667eea;
+    }
+    
+    .header-resumen {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 40px;
+        border-radius: 8px;
+        margin-bottom: 30px;
+        text-align: center;
+    }
+    
+    .header-resumen h1 {
+        margin: 0;
+        font-size: 28px;
+    }
+    
+    .header-resumen .fecha {
+        margin-top: 10px;
+        opacity: 0.9;
+        font-size: 14px;
+    }
+    
+    .desglose-container {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+        margin-top: 20px;
+    }
+    
+    .desglose-item {
+        background: white;
+        padding: 15px;
+        border-radius: 5px;
+        text-align: center;
+        border-left: 4px solid #667eea;
+    }
+    
+    .desglose-item .titulo {
+        font-size: 12px;
+        color: #999;
+        text-transform: uppercase;
+    }
+    
+    .desglose-item .valor {
+        font-size: 20px;
+        font-weight: bold;
+        color: #667eea;
+        margin-top: 8px;
+    }
+    
+    @media (max-width: 768px) {
+        .desglose-container {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header de Bienvenida -->
+    <div class="header-resumen">
+        <h1>📊 Reporte de Interés Mensual</h1>
+        <div class="fecha">
+            {% now "d \d\e F \d\e Y" %}
+        </div>
+    </div>
+
+    <!-- Navegación de Pestañas -->
+    <div class="tab-navigation">
+        <button class="tab-btn active" onclick="activarTab('tab-1mes')">
+            <i class="fas fa-calendar"></i> Último Mes
+        </button>
+        <button class="tab-btn" onclick="activarTab('tab-3meses')">
+            <i class="fas fa-calendar-alt"></i> Últimos 3 Meses
+        </button>
+        <button class="tab-btn" onclick="activarTab('tab-12meses')">
+            <i class="fas fa-calendar-week"></i> Últimos 12 Meses
+        </button>
+    </div>
+
+    <!-- TAB: 1 MES -->
+    <div class="tab-content active" id="tab-1mes">
+        <div class="row">
+            <!-- Resumen Semanal -->
+            <div class="col-md-12 mb-4">
+                <h3 class="mb-3">
+                    <i class="fas fa-chart-bar"></i> Interés Recaudado en Últimos 30 Días
+                </h3>
+                <div class="chart-container">
+                    <canvas id="chart1mes"></canvas>
+                </div>
+            </div>
+
+            <!-- Estadísticas en Tarjetas -->
+            <div class="col-md-6 mb-3">
+                <div class="cuadro-resumen">
+                    <div class="label">💰 Préstamos Normales</div>
+                    <div class="valor">${{ resumen.periodo_1_mes.normal|floatformat:2 }}</div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="cuadro-resumen cuadro-proyeccion">
+                    <div class="label">⚡ Préstamos Rápidos</div>
+                    <div class="valor">${{ resumen.periodo_1_mes.rapido|floatformat:2 }}</div>
+                </div>
+            </div>
+            <div class="col-md-12 mb-3">
+                <div class="cuadro-resumen cuadro-comparativa">
+                    <div class="label">📈 Total Interés Recaudado</div>
+                    <div class="valor">${{ resumen.periodo_1_mes.total|floatformat:2 }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB: 3 MESES -->
+    <div class="tab-content" id="tab-3meses">
+        <div class="row">
+            <div class="col-md-12 mb-4">
+                <h3 class="mb-3">
+                    <i class="fas fa-chart-line"></i> Interés Recaudado en Últimos 3 Meses
+                </h3>
+                <div class="chart-container">
+                    <canvas id="chart3meses"></canvas>
+                </div>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <div class="cuadro-resumen">
+                    <div class="label">💰 Préstamos Normales</div>
+                    <div class="valor">${{ resumen.periodo_3_meses.normal|floatformat:2 }}</div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="cuadro-resumen cuadro-proyeccion">
+                    <div class="label">⚡ Préstamos Rápidos</div>
+                    <div class="valor">${{ resumen.periodo_3_meses.rapido|floatformat:2 }}</div>
+                </div>
+            </div>
+            <div class="col-md-12 mb-3">
+                <div class="cuadro-resumen cuadro-comparativa">
+                    <div class="label">📈 Total Interés Recaudado</div>
+                    <div class="valor">${{ resumen.periodo_3_meses.total|floatformat:2 }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB: 12 MESES -->
+    <div class="tab-content" id="tab-12meses">
+        <div class="row">
+            <div class="col-md-12 mb-4">
+                <h3 class="mb-3">
+                    <i class="fas fa-chart-area"></i> Interés Recaudado en Últimos 12 Meses
+                </h3>
+                <div class="chart-container">
+                    <canvas id="chart12meses"></canvas>
+                </div>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <div class="cuadro-resumen">
+                    <div class="label">💰 Préstamos Normales</div>
+                    <div class="valor">${{ resumen.periodo_12_meses.normal|floatformat:2 }}</div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="cuadro-resumen cuadro-proyeccion">
+                    <div class="label">⚡ Préstamos Rápidos</div>
+                    <div class="valor">${{ resumen.periodo_12_meses.rapido|floatformat:2 }}</div>
+                </div>
+            </div>
+            <div class="col-md-12 mb-3">
+                <div class="cuadro-resumen cuadro-comparativa">
+                    <div class="label">📈 Total Interés Recaudado</div>
+                    <div class="valor">${{ resumen.periodo_12_meses.total|floatformat:2 }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN: PROYECCIÓN MES ACTUAL -->
+    <div class="row mt-5 pt-4 border-top">
+        <div class="col-md-12 mb-3">
+            <h3 class="mb-4">
+                <i class="fas fa-rocket"></i> Proyección Mes Actual
+            </h3>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-muted">Interés Recaudado</h6>
+                            <h4 class="card-title">${{ proyeccion.interes_actual_total|floatformat:2 }}</h4>
+                            <small class="text-muted">({{ proyeccion.dias_transcurridos }} de {{ proyeccion.dias_totales }} días)</small>
+                        </div>
+                        <div class="text-right">
+                            <i class="fas fa-dollar-sign text-success" style="font-size: 32px; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-muted">Proyección Fin de Mes</h6>
+                            <h4 class="card-title">${{ proyeccion.interes_proyectado_total|floatformat:2 }}</h4>
+                            <small class="text-muted">Estimado al último día del mes</small>
+                        </div>
+                        <div class="text-right">
+                            <i class="fas fa-chart-line text-info" style="font-size: 32px; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-12">
+            <div class="alert alert-info" role="alert">
+                <i class="fas fa-info-circle"></i>
+                <strong>Proyección calculada:</strong> Se utilizó la regla de tres considerando los {{ proyeccion.dias_transcurridos }} días transcurridos del mes actual.
+                El sistema estima que al final del mes se recolectarán aproximadamente <strong>${{ proyeccion.interes_proyectado_total|floatformat:2 }}</strong> en intereses.
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN: COMPARATIVA MES ANTERIOR -->
+    {% if comparativa.mes_anterior %}
+    <div class="row mt-5 pt-4 border-top">
+        <div class="col-md-12 mb-3">
+            <h3 class="mb-4">
+                <i class="fas fa-chart-pie"></i> Comparativa con Mes Anterior
+            </h3>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">{{ comparativa.mes_anterior.mes }}</h6>
+                    <h4 class="card-title">${{ comparativa.mes_anterior.interes_total|floatformat:2 }}</h4>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">{{ comparativa.mes_actual.mes }}</h6>
+                    <h4 class="card-title">${{ comparativa.mes_actual.interes_total|floatformat:2 }}</h4>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-12 mb-3">
+            {% if comparativa.es_positivo %}
+                <div class="alert alert-success">
+                    <i class="fas fa-arrow-up"></i>
+                    <strong>Variación: +{{ comparativa.variacion|floatformat:2 }} ({{ comparativa.variacion_pct|floatformat:1 }}%)</strong>
+                    <br>El mes actual ha mejorado respecto al anterior. ¡Excelente tendencia!
+                </div>
+            {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-arrow-down"></i>
+                    <strong>Variación: -{{ comparativa.variacion|floatformat:2 }} ({{ comparativa.variacion_pct|floatformat:1 }}%)</strong>
+                    <br>El mes actual muestra una disminución respecto al anterior. Revisar causas.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- BOTÓN DE EXPORTACIÓN -->
+    <div class="row mt-5 pt-4 border-top">
+        <div class="col-md-12">
+            <a href="{% url 'exportar_reporte_interes' %}" class="btn btn-lg btn-primary btn-export">
+                <i class="fas fa-file-excel"></i> Exportar a Excel
+            </a>
+            <a href="{% url 'centro_exportaciones' %}" class="btn btn-lg btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Volver al Centro de Exportaciones
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts para gráficos -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+    // Función para cambiar de pestaña
+    function activarTab(tabId) {
+        // Ocultar todos los tabs
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        // Desactivar todos los botones
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Mostrar tab seleccionado
+        document.getElementById(tabId).classList.add('active');
+        
+        // Activar botón seleccionado
+        event.target.classList.add('active');
+        
+        // Redibujar gráficos
+        setTimeout(() => {
+            if (tabId === 'tab-1mes' && chart1mes) chart1mes.resize();
+            if (tabId === 'tab-3meses' && chart3meses) chart3meses.resize();
+            if (tabId === 'tab-12meses' && chart12meses) chart12meses.resize();
+        }, 100);
+    }
+
+    // Datos para gráficos
+    const labels1mes = {{ labels_1mes|safe }};
+    const valores_normal_1mes = {{ valores_normal_1mes|safe }};
+    const valores_rapido_1mes = {{ valores_rapido_1mes|safe }};
+    
+    const labels3meses = {{ labels_3meses|safe }};
+    const valores_normal_3meses = {{ valores_normal_3meses|safe }};
+    const valores_rapido_3meses = {{ valores_rapido_3meses|safe }};
+    
+    const labels12meses = {{ labels_12meses|safe }};
+    const valores_normal_12meses = {{ valores_normal_12meses|safe }};
+    const valores_rapido_12meses = {{ valores_rapido_12meses|safe }};
+
+    // Gráfico 1 Mes
+    const ctx1mes = document.getElementById('chart1mes').getContext('2d');
+    const chart1mes = new Chart(ctx1mes, {
+        type: 'bar',
+        data: {
+            labels: labels1mes,
+            datasets: [
+                {
+                    label: 'Préstamos Normales',
+                    data: valores_normal_1mes,
+                    backgroundColor: '#667eea',
+                    borderColor: '#667eea',
+                    borderWidth: 1,
+                },
+                {
+                    label: 'Préstamos Rápidos',
+                    data: valores_rapido_1mes,
+                    backgroundColor: '#f093fb',
+                    borderColor: '#f093fb',
+                    borderWidth: 1,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Interés ($)'
+                    }
+                }
+            }
+        }
+    });
+
+    // Gráfico 3 Meses
+    const ctx3meses = document.getElementById('chart3meses').getContext('2d');
+    const chart3meses = new Chart(ctx3meses, {
+        type: 'line',
+        data: {
+            labels: labels3meses,
+            datasets: [
+                {
+                    label: 'Préstamos Normales',
+                    data: valores_normal_3meses,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                },
+                {
+                    label: 'Préstamos Rápidos',
+                    data: valores_rapido_3meses,
+                    borderColor: '#f093fb',
+                    backgroundColor: 'rgba(240, 147, 251, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                }
+            }
+        }
+    });
+
+    // Gráfico 12 Meses
+    const ctx12meses = document.getElementById('chart12meses').getContext('2d');
+    const chart12meses = new Chart(ctx12meses, {
+        type: 'line',
+        data: {
+            labels: labels12meses,
+            datasets: [
+                {
+                    label: 'Préstamos Normales',
+                    data: valores_normal_12meses,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                },
+                {
+                    label: 'Préstamos Rápidos',
+                    data: valores_rapido_12meses,
+                    borderColor: '#f093fb',
+                    backgroundColor: 'rgba(240, 147, 251, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

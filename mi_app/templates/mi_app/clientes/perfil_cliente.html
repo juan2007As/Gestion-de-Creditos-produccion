@@ -1,0 +1,527 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load l10n %}
+
+{% block title %}Perfil de {{ cliente.nombre }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- HEADER PERFIL -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div class="avatar-circle bg-primary text-white" style="width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px;">
+                                {{ cliente.nombre|first }}
+                            </div>
+                        </div>
+                        <div class="col">
+                            <h2 class="card-title mb-1">{{ cliente.nombre }}</h2>
+                            <p class="text-muted mb-0">Cédula: <strong>{{ cliente.cedula }}</strong></p>
+                            <p class="text-muted mb-0">Teléfono: <strong>{{ cliente.celular }}</strong></p>
+                            <p class="text-muted mb-0">Email: <strong>{{ cliente.email|default:"No registrado" }}</strong></p>
+                        </div>
+                        <div class="col-auto text-end">
+                            <div class="mb-2">
+                                {% if esta_en_lista_negra %}
+                                    <span class="badge bg-dark px-3 py-2"><i class="fas fa-ban"></i> LISTA NEGRA</span>
+                                {% elif rating_actual >= 4 %}
+                                    <span class="badge bg-success px-3 py-2">⭐⭐⭐⭐⭐ Excelente</span>
+                                {% elif rating_actual >= 3 %}
+                                    <span class="badge bg-info px-3 py-2">⭐⭐⭐ Bueno</span>
+                                {% elif rating_actual >= 2 %}
+                                    <span class="badge bg-warning px-3 py-2">⭐⭐ Regular</span>
+                                {% else %}
+                                    <span class="badge bg-danger px-3 py-2">⭐ Riesgo</span>
+                                {% endif %}
+                            </div>
+                            <div>
+                                {% if cliente.estado == 'ACTIVO' %}
+                                    <span class="badge bg-success">ACTIVO</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">INACTIVO</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== ERROR #5: ALERTA LISTA NEGRA ===== -->
+    {% if esta_en_lista_negra and lista_negra %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-danger border-3 border-danger bg-danger bg-opacity-10" role="alert">
+                <div class="d-flex align-items-center">
+                    <div>
+                        <h5 class="mb-2 text-danger">
+                            <i class="fas fa-exclamation-triangle"></i> CLIENTE EN LISTA NEGRA
+                        </h5>
+                        <p class="mb-1"><strong>Razón:</strong> {{ lista_negra.get_razon_display }}</p>
+                        {% if lista_negra.descripcion %}
+                            <p class="mb-1"><strong>Descripción:</strong> {{ lista_negra.descripcion }}</p>
+                        {% endif %}
+                        <p class="mb-0"><strong>Desde:</strong> {{ lista_negra.fecha_desde|date:"d/m/Y" }}
+                            {% if lista_negra.fecha_hasta %}
+                                <strong>Hasta:</strong> {{ lista_negra.fecha_hasta|date:"d/m/Y" }}
+                            {% else %}
+                                <span class="badge bg-danger">Indefinido</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- RESUMEN FINANCIERO -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-2">Total Prestado (Histórico)</h6>
+                    <h3 class="text-primary">{{ cliente.total_prestado|formato_moneda_co}}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-2">Total Pagado (Histórico)</h6>
+                    <h3 class="text-success">{{ cliente.total_pagado|formato_moneda_co}}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-2">En Circulación</h6>
+                    <h3 class="text-warning">{{ total_en_circulacion|formato_moneda_co}}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-2">Cuotas Vencidas</h6>
+                    <h3 class="{% if cantidad_vencidas > 0 %}text-danger{% else %}text-success{% endif %}">
+                        {{ cantidad_vencidas }}
+                    </h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ANÁLISIS Y SCORING (Paso 12 pruebas humanas) -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm border-start border-primary border-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="fas fa-chart-line text-primary"></i> Análisis y Scoring</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Etiqueta</small>
+                            <strong class="{% if cliente.etiqueta_cliente == 'BUENO' %}text-success{% elif cliente.etiqueta_cliente == 'MEDIO' %}text-warning{% elif cliente.etiqueta_cliente == 'MALO' %}text-danger{% else %}text-secondary{% endif %}">
+                                {{ cliente.etiqueta_cliente|default:"SIN_HISTORIAL" }}
+                            </strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Tasa de Cumplimiento</small>
+                            <strong>{{ cliente.tasa_cumplimiento|floatformat:1 }}%</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Días mora promedio</small>
+                            <strong>{{ cliente.dias_mora_promedio|floatformat:1 }} días</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Scoring (rating 0–5)</small>
+                            <strong>{{ rating_actual|floatformat:1 }}/5.0</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BUG #5: RESUMEN PRÉSTAMOS RÁPIDOS -->
+    {% if total_rapidos > 0 %}
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm border-left border-info border-4">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="text-muted mb-1"><i class="fas fa-bolt text-info"></i> Préstamos Rápidos Activos</h6>
+                            <h4 class="text-info mb-0">{{ prestamos_rapidos_activos|length }}/{{ total_rapidos }}</h4>
+                        </div>
+                        <div class="text-end">
+                            <p class="mb-0 text-muted small">Pendiente:</p>
+                            <h5 class="text-danger mb-0">{{ total_rapidos_pendiente|formato_moneda_co }}</h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm border-left border-success border-4">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="text-muted mb-1"><i class="fas fa-check-circle text-success"></i> Préstamos Rápidos Pagados</h6>
+                            <h4 class="text-success mb-0">{{ prestamos_rapidos_pagados|length }}</h4>
+                        </div>
+                        <div class="text-end">
+                            <a href="#prestamos_rapidos" class="btn btn-sm btn-outline-info" data-bs-toggle="tab">Ver</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- BUG #8: RESUMEN DE PAGOS MEJORADO -->
+    {% if ultimo_pago %}
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm border-left border-success border-4">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2"><i class="fas fa-calendar-check text-success"></i> Pagos Este Mes</h6>
+                    <h4 class="text-success mb-1">{{ total_pagos_mes|formato_moneda_co }}</h4>
+                    <small class="text-muted">{{ pagos_este_mes|length }} pagos registrados</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm border-left border-info border-4">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2"><i class="fas fa-chart-line text-info"></i> Promedio Mensual</h6>
+                    <h4 class="text-info mb-1">{{ promedio_mensual|formato_moneda_co }}</h4>
+                    <small class="text-muted">Últimos 6 meses</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm border-left border-primary border-4">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2"><i class="fas fa-arrow-down text-primary"></i> Último Pago</h6>
+                    <h5 class="text-primary mb-1">{{ ultimo_pago.monto_pagado|formato_moneda_co }}</h5>
+                    <small class="text-muted">{{ ultimo_pago.fecha_pago|date:'d/m/Y H:i' }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- TABS -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-light border-bottom">
+            <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" data-bs-toggle="tab" data-bs-target="#prestamos" role="tab">
+                        <i class="fas fa-file-contract"></i> Mis Préstamos
+                    </a>
+                </li>
+                {% if total_rapidos > 0 %}
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" data-bs-target="#prestamos_rapidos" role="tab">
+                        <i class="fas fa-bolt"></i> Préstamos Rápidos ({{ total_rapidos }})
+                    </a>
+                </li>
+                {% endif %}
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" data-bs-target="#historial" role="tab">
+                        <i class="fas fa-history"></i> Historial de Pagos
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" data-bs-target="#contacto" role="tab">
+                        <i class="fas fa-address-card"></i> Datos de Contacto
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card-body">
+            <div class="tab-content">
+                <!-- TAB 1: MIS PRÉSTAMOS -->
+                <div class="tab-pane fade show active" id="prestamos" role="tabpanel">
+                    <div class="mb-3">
+                        <a href="{% url 'crear_prestamo_cliente' cliente.id %}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Crear Nuevo Préstamo
+                        </a>
+                        <a href="{% url 'mis_prestamos' cliente.id %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-list"></i> Ver Todos
+                        </a>
+                    </div>
+
+                    {% if prestamos_activos %}
+                        <h5 class="mb-3"><span class="badge bg-info">{{ prestamos_activos.count }}</span> Préstamos Activos</h5>
+                        {% for prestamo in prestamos_activos %}
+                            <div class="card mb-3 border-left border-primary">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col">
+                                            <h6 class="mb-1">Préstamo #{{ prestamo.id }}</h6>
+                                            <p class="text-muted small mb-0">
+                                                Inicio: {{ prestamo.fecha_inicio|date:"d/m/Y" }} | 
+                                                Fin: {{ prestamo.fecha_fin_estimada|date:"d/m/Y" }}
+                                            </p>
+                                        </div>
+                                        <div class="col-auto text-end">
+                                            <h5 class="mb-1">{{ prestamo.monto_total|formato_moneda_co}}</h5>
+                                            <small class="text-muted">{{ prestamo.num_cuotas_pagadas }}/{{ prestamo.cuotas.count }} cuotas pagadas</small>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <div class="progress" style="height: 20px;">
+                                            {% widthratio prestamo.total_pagado prestamo.total_credito 100 as progreso_raw %}
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: {% if progreso_raw > 100 %}100{% else %}{{ progreso_raw }}{% endif %}%" aria-valuenow="{% if progreso_raw > 100 %}100{% else %}{{ progreso_raw }}{% endif %}" aria-valuemin="0" aria-valuemax="100">
+                                                {% if progreso_raw > 100 %}100{% else %}{{ progreso_raw }}{% endif %}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <a href="{% url 'detalles_prestamo' prestamo.id %}" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-eye"></i> Ver Detalles
+                                        </a>
+                                        <a href="{% url 'detalles_prestamo' prestamo.id %}" class="btn btn-sm btn-success">
+                                            <i class="fas fa-money-bill-wave"></i> Pagar Cuota
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-info mb-0">
+                            <i class="fas fa-info-circle"></i> No hay préstamos activos
+                        </div>
+                    {% endif %}
+
+                    {% if prestamos_completados %}
+                        <h5 class="mt-4 mb-3"><span class="badge bg-success">{{ prestamos_completados.count }}</span> Préstamos Completados</h5>
+                        {% for prestamo in prestamos_completados %}
+                            <div class="card mb-2 border-left border-success opacity-75">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col">
+                                            <h6 class="mb-1">Préstamo #{{ prestamo.id }} <span class="badge bg-success">✓ COMPLETADO</span></h6>
+                                        </div>
+                                        <div class="col-auto text-end">
+                                            <h5 class="mb-0">{{ prestamo.total_credito|formato_moneda_co}}</h5>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <!-- BUG #5: TAB - PRÉSTAMOS RÁPIDOS -->
+                {% if total_rapidos > 0 %}
+                <div class="tab-pane fade" id="prestamos_rapidos" role="tabpanel">
+                    <!-- ACTIVOS -->
+                    {% if prestamos_rapidos_activos %}
+                        <h5 class="mb-3"><span class="badge bg-info">{{ prestamos_rapidos_activos|length }}</span> Préstamos Activos</h5>
+                        {% for pr in prestamos_rapidos_activos %}
+                            <div class="card mb-3 border-left border-info">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col">
+                                            <h6 class="mb-1">Préstamo Rápido #{{ pr.id }}<br>
+                                                <small class="text-muted">Solicitado: {{ pr.fecha_solicitud|date:"d/m/Y" }}</small>
+                                            </h6>
+                                        </div>
+                                        <div class="col-md-3 text-center">
+                                            <small class="text-muted d-block">Monto Original</small>
+                                            <h6 class="mb-0">{{ pr.monto|formato_moneda_co }}</h6>
+                                        </div>
+                                        <div class="col-md-3 text-center">
+                                            <small class="text-muted d-block">Total a Pagar</small>
+                                            <h6 class="mb-0">{{ pr.total_a_pagar|formato_moneda_co }}</h6>
+                                        </div>
+                                        <div class="col-md-2 text-center">
+                                            <small class="text-muted d-block">Pendiente</small>
+                                            <h6 class="text-danger mb-0">{{ pr.saldo_pendiente|formato_moneda_co }}</h6>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <a href="{% url 'detalle_prestamo_rapido' pr.id %}" class="btn btn-sm btn-outline-info">
+                                                <i class="fas fa-eye"></i> Ver
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <!-- BARRA DE PROGRESO -->
+                                    <div class="mt-2">
+                                        <div class="progress" style="height: 12px;">
+                                            <div class="progress-bar bg-info" style="width: {% localize off %}{{ pr.porcentaje_pagado }}{% endlocalize %}%; transition: width 0.3s ease;"></div>
+                                        </div>
+                                        <small class="text-muted">{{ pr.porcentaje_pagado|floatformat:1 }}% pagado</small>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <!-- PAGADOS -->
+                    {% if prestamos_rapidos_pagados %}
+                        <h5 class="mt-4 mb-3"><span class="badge bg-success">{{ prestamos_rapidos_pagados|length }}</span> Préstamos Pagados</h5>
+                        {% for pr in prestamos_rapidos_pagados %}
+                            <div class="card mb-2 border-left border-success opacity-75">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col">
+                                            <h6 class="mb-0">
+                                                <i class="fas fa-check-circle text-success"></i> 
+                                                Préstamo Rápido #{{ pr.id }}
+                                                <small class="text-muted">({{ pr.fecha_pago_real|date:"d/m/Y" }})</small>
+                                            </h6>
+                                        </div>
+                                        <div class="col-auto text-end">
+                                            <h6 class="text-success mb-0">✓ {{ pr.total_a_pagar|formato_moneda_co }}</h6>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- TAB - HISTORIAL DE PAGOS (BUG #8) -->
+                <div class="tab-pane fade" id="historial" role="tabpanel">
+                    {% if pagos_cliente %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 15%">Fecha</th>
+                                    <th style="width: 15%">Cuota</th>
+                                    <th style="width: 15%">Principal</th>
+                                    <th style="width: 15%">Interés</th>
+                                    <th style="width: 15%">Mora</th>
+                                    <th style="width: 15%">Total</th>
+                                    <th style="width: 10%" class="text-end">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for pago in pagos_cliente %}
+                                <tr>
+                                    <td>
+                                        <small>{{ pago.fecha_pago|date:'d/m/Y H:i' }}</small>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'detalles_cuota' pago.cuota.id %}">
+                                            Cuota #{{ pago.cuota.numero_cuota }}
+                                        </a>
+                                    </td>
+                                    <td class="text-primary">{{ pago.monto_principal|formato_moneda_co }}</td>
+                                    <td class="text-info">{{ pago.monto_interes|formato_moneda_co }}</td>
+                                    <td class="text-danger">{{ pago.monto_mora|formato_moneda_co }}</td>
+                                    <td class="text-success"><strong>{{ pago.monto_pagado|formato_moneda_co }}</strong></td>
+                                    <td class="text-end">
+                                        <a href="{% url 'detalles_cuota' pago.cuota.id %}" class="btn btn-sm btn-outline-info">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-3 text-end">
+                        <small class="text-muted">Mostrando últimos 20 pagos | Total registrado: {{ total_pagos_cliente }}</small>
+                        <br>
+                        <a href="{% url 'historico_pagos' %}" class="btn btn-sm btn-outline-primary mt-2">
+                            <i class="fas fa-arrow-right"></i> Ver reporte completo
+                        </a>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info" role="alert">
+                        <i class="fas fa-info-circle"></i> No hay pagos registrados para este cliente
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- TAB 3: DATOS DE CONTACTO -->
+                <div class="tab-pane fade" id="contacto" role="tabpanel">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label"><strong>Cédula:</strong></label>
+                                <p>{{ cliente.cedula }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><strong>Nombre:</strong></label>
+                                <p>{{ cliente.nombre }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><strong>Teléfono:</strong></label>
+                                <p>{{ cliente.celular }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><strong>Email:</strong></label>
+                                <p>{{ cliente.email }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><strong>Notas:</strong></label>
+                                <p>{{ cliente.notas|default:"Sin notas" }}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-info">
+                                <strong>Última modificación:</strong> {{ cliente.fecha_ultima_modificacion|date:"d/m/Y H:i" }}<br>
+                                <strong>Creado:</strong> {{ cliente.fecha_creacion|date:"d/m/Y H:i" }}
+                            </div>
+                            <a href="{% url 'editar_cliente' cliente.id %}" class="btn btn-warning">
+                                <i class="fas fa-edit"></i> Editar Datos
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .border-left {
+        border-left: 4px solid !important;
+    }
+    .border-primary {
+        border-left-color: #0d6efd !important;
+    }
+    .border-success {
+        border-left-color: #198754 !important;
+    }
+    
+    /* Tabs visibility - Solo aplica a los tabs dentro del card, no al navbar */
+    .card-header-tabs .nav-link {
+        color: #495057 !important;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+    }
+    
+    .card-header-tabs .nav-link:hover {
+        color: #0d6efd !important;
+        border-bottom-color: #0d6efd !important;
+    }
+    
+    .card-header-tabs .nav-link.active {
+        color: #0d6efd !important;
+        background-color: transparent;
+        border-bottom: 3px solid #0d6efd !important;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+
+
+

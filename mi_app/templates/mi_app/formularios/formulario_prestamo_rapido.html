@@ -1,0 +1,452 @@
+{% extends 'mi_app/base.html' %}
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}Crear Préstamo Rápido{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Header -->
+            <div class="mb-4">
+                <h1 class="h2 mb-2">
+                    <i class="fas fa-bolt text-warning"></i>
+                    Crear Préstamo Rápido
+                </h1>
+                <p class="text-muted">Solicite dinero extra rápidamente. Se aplica de forma independiente a sus préstamos regulares.</p>
+            </div>
+
+            {% if error %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <strong><i class="fas fa-exclamation-triangle"></i> Error:</strong> {{ error }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endif %}
+
+            {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            <!-- Formulario -->
+            <form method="POST" class="needs-validation">
+                {% csrf_token %}
+
+                <!-- Seleccionar Cliente -->
+                <div class="card mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-user"></i> Datos del Cliente</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="search_input" class="form-label">Cliente *</label>
+                            <input type="hidden" id="cliente_id" name="cliente_id" value="">
+                            <input 
+                                type="text" 
+                                class="cliente-search-input" 
+                                id="cliente_search_rapido" 
+                                placeholder="Buscar por nombre, cédula o teléfono..."
+                                autocomplete="off"
+                            >
+                            <small class="text-muted">Comience a escribir el nombre del cliente</small>
+                        </div>
+
+                        <!-- Cliente seleccionado -->
+                        <div id="cliente_seleccionado" style="display: none;">
+                            <div class="alert alert-light border">
+                                <strong>Cliente:</strong> <span id="cliente_nombre_display"></span><br>
+                                <strong>Cédula:</strong> <span id="cliente_cedula_display"></span><br>
+                                <strong>Teléfono:</strong> <span id="cliente_celular_display"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Datos del Préstamo Rápido -->
+                <div class="card mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="fas fa-money-bill"></i> Detalles del Préstamo</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.monto.id_for_label }}" class="form-label">
+                                        Monto *
+                                        <i class="fas fa-info-circle text-info" title="Cantidad de dinero a prestar"></i>
+                                    </label>
+                                    {{ form.monto }}
+                                    {% if form.monto.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.monto.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.interes_porcentaje.id_for_label }}" class="form-label">
+                                        Tasa de Interés (%) *
+                                        <i class="fas fa-info-circle text-info" title="Se aplica automáticamente"></i>
+                                    </label>
+                                    {{ form.interes_porcentaje }}
+                                    {% if form.interes_porcentaje.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.interes_porcentaje.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.fecha_vencimiento.id_for_label }}" class="form-label">
+                                Fecha de Vencimiento
+                                <i class="fas fa-info-circle text-info" title="Opcional - dejar en blanco si no aplica"></i>
+                            </label>
+                            {{ form.fecha_vencimiento }}
+                            {% if form.fecha_vencimiento.errors %}
+                            <div class="invalid-feedback d-block">{{ form.fecha_vencimiento.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="card border-0 bg-light mb-3">
+                            <div class="card-body">
+                                <div class="form-check mb-2">
+                                    {{ form.usar_cuotas }}
+                                    <label class="form-check-label" for="{{ form.usar_cuotas.id_for_label }}">
+                                        {{ form.usar_cuotas.label }}
+                                    </label>
+                                </div>
+                                <small class="text-muted d-block mb-2">Si activas cuotas, se aplica la misma lógica existente de fechas y mora.</small>
+
+                                <div id="num_cuotas_container" style="display: none;">
+                                    <label for="{{ form.num_cuotas.id_for_label }}" class="form-label mb-1">
+                                        {{ form.num_cuotas.label }}
+                                    </label>
+                                    {{ form.num_cuotas }}
+                                    {% if form.num_cuotas.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.num_cuotas.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resumen de cálculo -->
+                        <div id="resumen_prestamo" class="alert alert-light" style="display: none;">
+                            <h6><strong>Resumen</strong></h6>
+                            <table class="table table-sm mb-0">
+                                <tr>
+                                    <td>Monto:</td>
+                                    <td class="text-end"><strong id="resumen_monto">$0.00</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Interés:</td>
+                                    <td class="text-end"><strong id="resumen_interes">$0.00</strong></td>
+                                </tr>
+                                <tr class="border-top">
+                                    <td><strong>Total a Pagar:</strong></td>
+                                    <td class="text-end"><strong id="resumen_total" style="font-size: 1.2em;">$0.00</strong></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notas -->
+                <div class="card mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-sticky-note"></i> Notas Adicionales</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="{{ form.notas.id_for_label }}" class="form-label">Notas (Opcional)</label>
+                            {{ form.notas }}
+                            {% if form.notas.errors %}
+                            <div class="invalid-feedback d-block">{{ form.notas.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botones -->
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-warning btn-lg" id="btn_crear">
+                        <i class="fas fa-bolt"></i> Crear Préstamo Rápido
+                    </button>
+                    <a href="{% url 'listar_prestamos_rapidos' %}" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Dropdown de búsqueda de cliente -->
+<script>
+// ✅ CSS ESTÁNDAR DROPDOWN
+const styleDropdown = document.createElement('style');
+styleDropdown.textContent = `
+    .cliente-search-input {
+        height: 48px;
+        font-size: 1rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 0.5rem;
+        padding: 10px 14px;
+        width: 100%;
+        transition: all 0.2s ease;
+    }
+
+    .cliente-search-input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+    }
+
+    .dropdown-results {
+        position: fixed;
+        top: auto;
+        left: auto;
+        right: auto;
+        display: none;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        max-height: 450px;
+        overflow-y: auto;
+        z-index: 99999;
+        width: 300px;
+    }
+
+    .dropdown-results.show {
+        display: block;
+    }
+
+    .dropdown-results .list-group-item {
+        display: block;
+        width: 100%;
+        padding: 16px 18px;
+        border: none;
+        border-bottom: 1px solid #f5f5f5;
+        background: white;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.15s ease;
+    }
+
+    .dropdown-results .list-group-item:first-child {
+        border-top-left-radius: 0.75rem;
+        border-top-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:last-child {
+        border-bottom: none;
+        border-bottom-left-radius: 0.75rem;
+        border-bottom-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:hover {
+        background: linear-gradient(135deg, #f7f8fc 0%, #f0f2f7 100%);
+        padding-left: 22px;
+        border-left: 3px solid #667eea;
+    }
+
+    .dropdown-results .list-group-item strong {
+        display: block;
+        color: #212529;
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .dropdown-results .list-group-item small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .dropdown-results .list-group-item small i {
+        color: #667eea;
+        margin-right: 4px;
+    }
+`;
+document.head.appendChild(styleDropdown);
+
+// ✅ Cargar clientes
+let clientesGlobales_rapido = [];
+
+async function cargarClientes_rapido() {
+    try {
+        const response = await fetch('{% url "lista_clientes_api" %}');
+        const data = await response.json();
+        clientesGlobales_rapido = data.clientes || [];
+        console.log('✅ Clientes cargados:', clientesGlobales_rapido.length);
+    } catch (error) {
+        console.error('❌ Error cargando clientes:', error);
+    }
+}
+
+// ✅ Inicializar dropdown
+document.addEventListener('DOMContentLoaded', function() {
+    cargarClientes_rapido();
+
+    const input = document.getElementById('cliente_search_rapido');
+
+    if (!input) {
+        console.error('❌ Input no encontrado');
+        return;
+    }
+
+    // Crear dropdown dinámicamente al final del body
+    const resultados = document.createElement('div');
+    resultados.id = 'cliente_resultados_rapido';
+    resultados.className = 'dropdown-results';
+    document.body.appendChild(resultados);
+
+    console.log('✅ Sistema de búsqueda iniciado en prestamo_rapido');
+
+    function posicionarDropdown() {
+        const rect = input.getBoundingClientRect();
+        resultados.style.top = (rect.bottom + 5) + 'px';
+        resultados.style.left = rect.left + 'px';
+        resultados.style.width = rect.width + 'px';
+        resultados.style.zIndex = '99999';
+    }
+
+    let debounceTimer;
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim().toLowerCase();
+
+        if (query.length < 1) {
+            resultados.classList.remove('show');
+            return;
+        }
+
+        debounceTimer = setTimeout(function() {
+            const filtered = clientesGlobales_rapido.filter(c =>
+                c.nombre.toLowerCase().includes(query) ||
+                (c.cedula && c.cedula.toLowerCase().includes(query)) ||
+                (c.celular && c.celular.toLowerCase().includes(query))
+            );
+
+            resultados.innerHTML = '';
+
+            if (filtered.length === 0) {
+                resultados.innerHTML = '<div class="list-group-item text-muted">No encontrado</div>';
+                posicionarDropdown();
+                resultados.classList.add('show');
+                return;
+            }
+
+            filtered.forEach(cliente => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action text-start';
+                btn.innerHTML = `
+                    <strong>${cliente.nombre}</strong><br>
+                    <small class="text-muted">
+                        <i class="fas fa-id-card"></i> ${cliente.cedula || '-'} | 
+                        <i class="fas fa-phone"></i> ${cliente.celular || '-'}
+                    </small>
+                `;
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    input.value = cliente.nombre;
+                    document.getElementById('cliente_id').value = cliente.id;
+                    resultados.classList.remove('show');
+                    
+                    // Mostrar datos del cliente
+                    document.getElementById('cliente_nombre_display').textContent = cliente.nombre;
+                    document.getElementById('cliente_cedula_display').textContent = cliente.cedula || 'N/A';
+                    document.getElementById('cliente_celular_display').textContent = cliente.celular || 'N/A';
+                    document.getElementById('cliente_seleccionado').style.display = 'block';
+                });
+                resultados.appendChild(btn);
+            });
+
+            posicionarDropdown();
+            resultados.classList.add('show');
+        }, 300);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target !== input && !resultados.contains(e.target)) {
+            resultados.classList.remove('show');
+        }
+    });
+
+    window.addEventListener('scroll', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    }, true);
+
+    window.addEventListener('resize', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    });
+
+    // Prevenir envío sin cliente
+    document.querySelector('form').addEventListener('submit', function(e) {
+        if (!document.getElementById('cliente_id').value) {
+            e.preventDefault();
+            alert('Debe seleccionar un cliente');
+            input.focus();
+        }
+    });
+
+    // Actualizar resumen
+    const montoInput = document.getElementById('id_monto');
+    const interesInput = document.getElementById('id_interes_porcentaje');
+    const usarCuotasInput = document.getElementById('id_usar_cuotas');
+    const numCuotasContainer = document.getElementById('num_cuotas_container');
+
+    function actualizarResumen() {
+        const monto = parseFloat(montoInput.value) || 0;
+        const interes = parseFloat(interesInput.value) || 0;
+        
+        if (monto > 0 && interes >= 0) {
+            const interesTotal = (monto * interes) / 100;
+            const total = monto + interesTotal;
+            
+            document.getElementById('resumen_monto').textContent = formatearMonedaColombia(monto);
+            document.getElementById('resumen_interes').textContent = formatearMonedaColombia(interesTotal);
+            document.getElementById('resumen_total').textContent = formatearMonedaColombia(total);
+            document.getElementById('resumen_prestamo').style.display = 'block';
+        } else {
+            document.getElementById('resumen_prestamo').style.display = 'none';
+        }
+    }
+
+    if (montoInput) montoInput.addEventListener('input', actualizarResumen);
+    if (interesInput) interesInput.addEventListener('input', actualizarResumen);
+
+    function actualizarVisibilidadCuotas() {
+        if (!usarCuotasInput || !numCuotasContainer) return;
+        numCuotasContainer.style.display = usarCuotasInput.checked ? 'block' : 'none';
+    }
+
+    if (usarCuotasInput) {
+        usarCuotasInput.addEventListener('change', actualizarVisibilidadCuotas);
+        actualizarVisibilidadCuotas();
+    }
+});
+
+function formatearMonedaColombia(valor) {
+    return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(valor || 0);
+}
+</script>
+
+{% endblock %}

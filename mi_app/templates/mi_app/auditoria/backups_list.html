@@ -1,0 +1,344 @@
+{% extends "mi_app/base.html" %}
+
+{% block title %}Administración de Backups{% endblock %}
+
+{% block extra_css %}
+<style>
+    .backup-container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+    
+    .backup-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .backup-header h2 {
+        margin: 0;
+        color: #333;
+    }
+    
+    .btn-backup-now {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .btn-backup-now:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-backup-now:active {
+        transform: translateY(0);
+    }
+    
+    .btn-backup-now.loading {
+        opacity: 0.7;
+        pointer-events: none;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+    
+    .stat-card h3 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        font-weight: 600;
+        opacity: 0.9;
+    }
+    
+    .stat-card .value {
+        font-size: 32px;
+        font-weight: bold;
+    }
+    
+    .stat-card.green {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+    
+    .backup-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .backup-table thead {
+        background: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .backup-table th {
+        padding: 15px;
+        text-align: left;
+        font-weight: 600;
+        color: #333;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .backup-table td {
+        padding: 15px;
+        border-bottom: 1px solid #dee2e6;
+        color: #666;
+    }
+    
+    .backup-table tbody tr:hover {
+        background: #f8f9fa;
+    }
+    
+    .backup-name {
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        color: #333;
+        word-break: break-all;
+        background: #f1f3f5;
+        padding: 8px;
+        border-radius: 4px;
+    }
+    
+    .backup-date {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .backup-date .icon {
+        font-size: 16px;
+    }
+    
+    .backup-actions {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .btn-info {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+    
+    .btn-info:hover {
+        background: #1976d2;
+        color: white;
+    }
+    
+    .btn-warning {
+        background: #fff3e0;
+        color: #f57c00;
+    }
+    
+    .btn-warning:hover {
+        background: #f57c00;
+        color: white;
+    }
+    
+    .btn-danger {
+        background: #ffebee;
+        color: #c62828;
+    }
+    
+    .btn-danger:hover {
+        background: #c62828;
+        color: white;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        color: #999;
+    }
+    
+    .empty-state i {
+        font-size: 48px;
+        color: #ddd;
+        margin-bottom: 20px;
+    }
+    
+    .empty-state p {
+        margin: 10px 0;
+        font-size: 16px;
+    }
+    
+    .info-box {
+        background: #e3f2fd;
+        border-left: 4px solid #1976d2;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        color: #1565c0;
+    }
+    
+    .info-box i {
+        margin-right: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="backup-container">
+    <!-- Header -->
+    <div class="backup-header">
+        <div>
+            <h2>
+                <i class="fas fa-cloud-upload-alt"></i>
+                Administración de Backups
+            </h2>
+            <p style="color: #999; margin-top: 5px;">Gestiona tus copias de seguridad locales</p>
+        </div>
+        <form method="POST" action="{% url 'backups:crear' %}" style="display: inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn-backup-now" id="btn-backup">
+                <i class="fas fa-plus-circle"></i>
+                Crear Backup Ahora
+            </button>
+        </form>
+    </div>
+    
+    <!-- Info Box -->
+    <div class="info-box">
+        <i class="fas fa-info-circle"></i>
+        <strong>Última actualización:</strong> Los backups se guardan localmente en tu servidor
+    </div>
+    
+    <!-- Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Total de Backups</h3>
+            <div class="value">{{ total_backups }}</div>
+        </div>
+        {% if backups %}
+        <div class="stat-card green">
+            <h3>Backup Más Reciente</h3>
+            <div class="value" style="font-size: 18px;">
+                {{ backups.0.date }} <br>
+                <span style="font-size: 14px; opacity: 0.9;">{{ backups.0.time }}</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Backups Table -->
+    {% if backups %}
+    <table class="backup-table">
+        <thead>
+            <tr>
+                <th style="width: 40%;">Nombre del Archivo</th>
+                <th style="width: 15%;">Tamaño</th>
+                <th style="width: 25%;">Fecha y Hora</th>
+                <th style="width: 20%;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for backup in backups %}
+            <tr>
+                <td>
+                    <div class="backup-name" title="{{ backup.name }}">
+                        {{ backup.name }}
+                    </div>
+                </td>
+                <td>
+                    <strong>{{ backup.size }} MB</strong>
+                </td>
+                <td>
+                    <div class="backup-date">
+                        <span class="icon">📅</span>
+                        <span>
+                            {{ backup.date }} <br>
+                            <small style="color: #999;">{{ backup.time }}</small>
+                        </span>
+                    </div>
+                </td>
+                <td>
+                    <div class="backup-actions">
+                        <!-- Botón Descargar -->
+                        <form method="POST" action="{% url 'backups:descargar' backup.nombre %}" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-sm btn-info" title="Descargar a tu dispositivo">
+                                <i class="fas fa-download"></i> Descargar
+                            </button>
+                        </form>
+                        
+                        <!-- Botón Restaurar -->
+                        <form method="POST" action="{% url 'backups:restaurar' backup.nombre %}" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-sm btn-warning" 
+                                    onclick="return confirm('⚠️ ¿Restaurar este backup?\n\nSe reemplazará la base de datos actual.');"
+                                    title="Restaurar desde este backup">
+                                <i class="fas fa-undo"></i> Restaurar
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <div>
+            <i class="fas fa-cloud-upload-alt"></i>
+            <p><strong>No hay backups aún</strong></p>
+            <p>Haz clic en "Hacer Backup Ahora" para crear el primero</p>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Instructions -->
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #dee2e6;">
+        <h4>📖 Información Técnica</h4>
+        <ul style="color: #666; line-height: 1.8;">
+            <li><strong>Ubicación:</strong> Los backups se guardan localmente en: <code style="background: #f1f3f5; padding: 2px 6px; border-radius: 3px;">/backups/</code></li>
+            <li><strong>Descargables:</strong> Puedes descargar cualquier backup a tu dispositivo</li>
+            <li><strong>Restauración:</strong> Puedes restaurar desde cualquier backup disponible</li>
+            <li><strong>Retención:</strong> Se guardan los últimos 30 backups automáticamente</li>
+            <li><strong>Seguridad:</strong> Los archivos están protegidos con permisos de servidor</li>
+            <li><strong>Respaldo manual:</strong> Puedes crear backups manuales en cualquier momento</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+document.getElementById('btn-backup').addEventListener('click', function() {
+    const btn = this;
+    btn.classList.add('loading');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creando backup...';
+});
+</script>
+{% endblock %}

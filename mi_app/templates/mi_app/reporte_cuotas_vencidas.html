@@ -1,0 +1,721 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load numeros_colombianos %}
+
+{% block title %}Cuotas Vencidas - Alertas de Mora{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Animación de rotación para ícono de sincronización */
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    
+    .fa-spin {
+        animation: spin 1s linear infinite;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 report-page">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="fas fa-exclamation-triangle"></i> Cuotas Vencidas y Alertas de Mora</h2>
+            <p class="text-muted">Seguimiento de cuotas atrasadas y próximas a vencer</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'exportar_cuotas_vencidas' %}" class="btn btn-danger btn-sm">
+                <i class="fas fa-download"></i> Exportar Excel
+            </a>
+        </div>
+    </div>
+
+    <!-- RESUMEN CRÍTICO -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm border-left-danger">
+                <div class="card-body">
+                    <small class="text-muted d-block">Cuotas Vencidas</small>
+                    <h3 class="mb-0 text-danger">{{ vencidas|length }}</h3>
+                    <small class="text-danger">⚠ Mora: {{ total_mora|formato_moneda_co}}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm border-left-warning">
+                <div class="card-body">
+                    <small class="text-muted d-block">Próximas a Vencer (7 días)</small>
+                    <h3 class="mb-0 text-warning">{{ proximas|length }}</h3>
+                    <small class="text-warning">⏰ Pendiente: {{ total_pendiente_proximas|formato_moneda_co}}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Total en Riesgo</small>
+                    <h3 class="mb-0 text-primary">{{ total_en_riesgo|formato_moneda_co}}</h3>
+                    <small>{{ vencidas|length|add:proximas|length }} cuotas</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Clientes Afectados</small>
+                    <h3 class="mb-0">{{ clientes_afectados }}</h3>
+                    <small>En mora o próximas a vencer</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🆕 WIDGET DE MORA EN TIEMPO REAL -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-body p-3">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <h6 class="mb-0">
+                                <i class="fas fa-sync-alt" id="sync-icon"></i>
+                                Mora Actualizada en Tiempo Real
+                            </h6>
+                        </div>
+                        <div class="col-auto">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="actualizarMoraEnTiempoReal()" title="Actualizar mora">
+                                <i class="fas fa-refresh"></i> Actualizar Ahora
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mt-2 text-center">
+                        <div class="col-6 col-md-3">
+                            <small class="text-muted">Total Mora</small>
+                            <h5 class="text-danger mb-0" id="total-mora-display">{{ total_mora|formato_moneda_co}}</h5>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <small class="text-muted">Cuotas con Mora</small>
+                            <h5 class="mb-0" id="cuotas-mora-count">{{ vencidas|length }}</h5>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <small class="text-muted">Última Actualización</small>
+                            <p class="mb-0 small" id="last-update">Hace unos momentos</p>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <small class="text-muted">Auto-actualizar</small>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="auto-refresh-mora" checked onchange="toggleAutoRefresh()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FILTROS Y BÚSQUEDA -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros Avanzados</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" id="filtrosForm" onsubmit="return false;">
+                <!-- FILA 1: BÚSQUEDA DINÁMICA -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold mb-2">
+                            <i class="fas fa-search"></i> Buscar Cliente
+                        </label>
+                        <div class="search-wrapper">
+                            <input 
+                                type="text" 
+                                id="cliente_search_cuotas_vencidas" 
+                                placeholder="Busca por nombre, cédula o celular..." 
+                                class="form-control cliente-search-input"
+                                autocomplete="off"
+                            >
+                        </div>
+                        <input type="hidden" name="cliente_id" id="cliente_id_hidden" value="">
+                    </div>
+                </div>
+
+                <!-- FILA 2: FILTROS ADICIONALES -->
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Período</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <input type="date" name="fecha_desde" id="filtro_fecha_desde" class="form-control" value="{{ fecha_desde }}" onchange="aplicarFiltros()">
+                            </div>
+                            <div class="col-6">
+                                <input type="date" name="fecha_hasta" id="filtro_fecha_hasta" class="form-control" value="{{ fecha_hasta }}" onchange="aplicarFiltros()">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Monto Mínimo ($)</label>
+                        <input type="number" name="monto_minimo" id="filtro_monto_minimo" class="form-control" placeholder="0" step="0.01" value="{{ monto_minimo }}" onchange="aplicarFiltros()">
+                    </div>
+                </div>
+
+                <!-- FILA 3: BOTONES (alineados, misma línea) -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="filtros-acciones">
+                            <button type="button" class="btn btn-primary" onclick="aplicarFiltros()">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="limpiarFiltros()">
+                                <i class="fas fa-times"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CUOTAS VENCIDAS - CRÍTICO -->
+    {% if vencidas %}
+        <div class="card border-0 shadow-sm border-danger mb-4">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="fas fa-clock"></i> CUOTAS VENCIDAS ({{ vencidas|length }})</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Préstamo</th>
+                            <th>Cuota</th>
+                            <th>Vencimiento</th>
+                            <th style="width: 12%">Días Vencida</th>
+                            <th style="width: 12%">Principal Pendiente</th>
+                            <th style="width: 12%">Mora Acumulada</th>
+                            <th style="width: 12%">Total Vencido</th>
+                            <th class="text-end">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cuota in vencidas %}
+                            <tr class="cliente-row table-danger-light" data-nombre="{{ cuota.prestamo.cliente.nombre }}" data-cedula="{{ cuota.prestamo.cliente.cedula }}" data-celular="{{ cuota.prestamo.cliente.celular }}" data-monto="{{ cuota.monto_pendiente }}" data-fecha="{{ cuota.fecha_pago_esperada|date:"Y-m-d" }}">
+                                <td><strong>{{ cuota.prestamo.cliente.nombre }}</strong></td>
+                                <td>#{{ cuota.prestamo.id }}</td>
+                                <td><span class="badge bg-danger">Cuota {{ cuota.numero_cuota }}</span></td>
+                                <td>{{ cuota.fecha_pago_esperada|date:"d/m/Y" }}</td>
+                                <td class="text-danger"><strong>-{{ cuota.dias_vencida }} días</strong></td>
+                                <td>{{ cuota.monto_pendiente|formato_moneda_co}}</td>
+                                <td class="text-danger"><strong>{{ cuota.calcular_mora_diaria|formato_moneda_co}}</strong></td>
+                                <td class="text-danger"><strong>{{ cuota.monto_pendiente|add:cuota.calcular_mora_diaria|formato_moneda_co}}</strong></td>
+                                <td class="text-end">
+                                    <a href="{% url 'pagar_cuota_especifica' cuota.id %}" class="btn btn-sm btn-danger">
+                                        <i class="fas fa-dollar-sign"></i> Cobrar
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="alert alert-success mb-4">
+            <i class="fas fa-check-circle"></i> ¡Excelente! No hay cuotas vencidas.
+        </div>
+    {% endif %}
+
+    <!-- CUOTAS PRÓXIMAS A VENCER - PREVENCIÓN -->
+    {% if proximas %}
+        <div class="card border-0 shadow-sm border-warning mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-calendar-alt"></i> PRÓXIMAS A VENCER EN 7 DÍAS ({{ proximas|length }})</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Préstamo</th>
+                            <th>Cuota</th>
+                            <th>Vencimiento</th>
+                            <th style="width: 10%">Días Faltantes</th>
+                            <th style="width: 14%">Principal</th>
+                            <th style="width: 14%">Interés</th>
+                            <th style="width: 14%">Total a Pagar</th>
+                            <th class="text-end">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cuota in proximas %}
+                            <tr class="cliente-row table-warning-light" data-nombre="{{ cuota.prestamo.cliente.nombre }}" data-cedula="{{ cuota.prestamo.cliente.cedula }}" data-celular="{{ cuota.prestamo.cliente.celular }}" data-monto="{{ cuota.monto_pendiente }}" data-fecha="{{ cuota.fecha_pago_esperada|date:"Y-m-d" }}">
+                                <td><strong>{{ cuota.prestamo.cliente.nombre }}</strong></td>
+                                <td>#{{ cuota.prestamo.id }}</td>
+                                <td><span class="badge bg-warning text-dark">Cuota {{ cuota.numero_cuota }}</span></td>
+                                <td>{{ cuota.fecha_pago_esperada|date:"d/m/Y" }}</td>
+                                <td class="text-warning"><strong>{{ cuota.dias_para_vencer }} días</strong></td>
+                                <td>{{ cuota.monto_pendiente|formato_moneda_co}}</td>
+                                <td>{{ cuota.interes_normal|formato_moneda_co}}</td>
+                                <td class="text-warning"><strong>{{ cuota.monto_pendiente|add:cuota.interes_normal|formato_moneda_co}}</strong></td>
+                                <td class="text-end">
+                                    <a href="{% url 'pagar_cuota_especifica' cuota.id %}" class="btn btn-sm btn-warning text-dark">
+                                        <i class="fas fa-dollar-sign"></i> Pagar
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- BOTONES DE ACCIÓN -->
+    <div class="row mt-4">
+        <div class="col">
+            <a href="{% url 'inicio' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .border-left-danger {
+        border-left: 4px solid #dc3545 !important;
+    }
+    .border-left-warning {
+        border-left: 4px solid #ffc107 !important;
+    }
+    .table-danger-light {
+        background-color: rgba(220, 53, 69, 0.1);
+    }
+    .table-warning-light {
+        background-color: rgba(255, 193, 7, 0.1);
+    }
+
+    .busqueda-container {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .search-wrapper {
+        position: static;
+        width: 100%;
+    }
+
+    #cliente_search {
+        height: 44px !important;
+        padding: 10px 16px !important;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        background-color: #f9f9f9;
+    }
+
+    #cliente_search:focus {
+        background-color: white;
+        border-color: #007bff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+
+    #cliente_search::placeholder {
+        color: #999;
+    }
+
+    .dropdown-results {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        max-height: 350px;
+        overflow-y: auto;
+        display: none;
+        z-index: 99999;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .dropdown-results.show {
+        display: block;
+    }
+
+    .dropdown-results .cliente-item {
+        padding: 12px 16px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s ease;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .dropdown-results .cliente-item:last-child {
+        border-bottom: none;
+    }
+
+    .dropdown-results .cliente-item:hover {
+        background: linear-gradient(135deg, #e3f2fd 0%, #f0f4ff 100%);
+        color: #007bff;
+    }
+
+    .dropdown-results .cliente-item .nombre {
+        font-weight: 600;
+        color: #333;
+    }
+
+    .dropdown-results .cliente-item .detalles {
+        font-size: 12px;
+        color: #999;
+        margin-top: 3px;
+    }
+
+    .dropdown-results .cliente-item small {
+        color: #999;
+        font-size: 12px;
+    }
+
+    .dropdown-results .vacio {
+        padding: 20px;
+        text-align: center;
+        color: #999;
+    }
+</style>
+
+<script>
+// ✅ CSS ESTÁNDAR DROPDOWN
+const styleDropdown = document.createElement('style');
+styleDropdown.textContent = `
+    .cliente-search-input {
+        height: 48px;
+        font-size: 1rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 0.5rem;
+        padding: 10px 14px;
+        width: 100%;
+        transition: all 0.2s ease;
+    }
+
+    .cliente-search-input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+    }
+
+    .dropdown-results {
+        position: fixed;
+        display: none;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        max-height: 450px;
+        overflow-y: auto;
+        z-index: 99999;
+        width: 300px;
+    }
+
+    .dropdown-results.show {
+        display: block;
+    }
+
+    .dropdown-results .list-group-item {
+        display: block;
+        width: 100%;
+        padding: 16px 18px;
+        border: none;
+        border-bottom: 1px solid #f5f5f5;
+        background: white;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.15s ease;
+    }
+
+    .dropdown-results .list-group-item:first-child {
+        border-top-left-radius: 0.75rem;
+        border-top-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:last-child {
+        border-bottom: none;
+        border-bottom-left-radius: 0.75rem;
+        border-bottom-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:hover {
+        background: linear-gradient(135deg, #f7f8fc 0%, #f0f2f7 100%);
+        padding-left: 22px;
+        border-left: 3px solid #667eea;
+    }
+
+    .dropdown-results .list-group-item strong {
+        display: block;
+        color: #212529;
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .dropdown-results .list-group-item small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .dropdown-results .list-group-item small i {
+        color: #667eea;
+        margin-right: 4px;
+    }
+`;
+document.head.appendChild(styleDropdown);
+
+// ✅ Cargar clientes
+let clientesGlobales_cuotas_vencidas = [];
+
+async function cargarClientes_cuotas_vencidas() {
+    try {
+        const response = await fetch('{% url "lista_clientes_api" %}');
+        const data = await response.json();
+        clientesGlobales_cuotas_vencidas = data.clientes || [];
+        console.log('✅ Clientes cargados:', clientesGlobales_cuotas_vencidas.length);
+    } catch (error) {
+        console.error('❌ Error cargando clientes:', error);
+    }
+}
+
+// ✅ Inicializar dropdown
+document.addEventListener('DOMContentLoaded', function() {
+    cargarClientes_cuotas_vencidas();
+
+    const input = document.getElementById('cliente_search_cuotas_vencidas');
+
+    if (!input) {
+        console.error('❌ Input no encontrado');
+        return;
+    }
+
+    // Crear dropdown dinámicamente al final del body
+    const resultados = document.createElement('div');
+    resultados.id = 'cliente_resultados_cuotas_vencidas';
+    resultados.className = 'dropdown-results';
+    document.body.appendChild(resultados);
+
+    console.log('✅ Sistema de búsqueda iniciado en reporte_cuotas_vencidas');
+
+    function posicionarDropdown() {
+        const rect = input.getBoundingClientRect();
+        resultados.style.top = (rect.bottom + 5) + 'px';
+        resultados.style.left = rect.left + 'px';
+        resultados.style.width = rect.width + 'px';
+        resultados.style.zIndex = '99999';
+    }
+
+    let debounceTimer;
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim().toLowerCase();
+
+        if (query.length < 1) {
+            resultados.classList.remove('show');
+            return;
+        }
+
+        debounceTimer = setTimeout(function() {
+            const filtered = clientesGlobales_cuotas_vencidas.filter(c =>
+                c.nombre.toLowerCase().includes(query) ||
+                (c.cedula && c.cedula.toLowerCase().includes(query)) ||
+                (c.celular && c.celular.toLowerCase().includes(query))
+            );
+
+            resultados.innerHTML = '';
+
+            if (filtered.length === 0) {
+                resultados.innerHTML = '<div class="list-group-item text-muted">No encontrado</div>';
+                posicionarDropdown();
+                resultados.classList.add('show');
+                return;
+            }
+
+            filtered.forEach(cliente => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action text-start';
+                btn.innerHTML = `
+                    <strong>${cliente.nombre}</strong><br>
+                    <small class="text-muted">
+                        <i class="fas fa-id-card"></i> ${cliente.cedula || '-'} | 
+                        <i class="fas fa-phone"></i> ${cliente.celular || '-'}
+                    </small>
+                `;
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    input.value = cliente.nombre;
+                    document.getElementById('cliente_id_hidden').value = cliente.id;
+                    resultados.classList.remove('show');
+                    aplicarFiltros();
+                });
+                resultados.appendChild(btn);
+            });
+
+            posicionarDropdown();
+            resultados.classList.add('show');
+        }, 300);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target !== input && !resultados.contains(e.target)) {
+            resultados.classList.remove('show');
+        }
+    });
+
+    window.addEventListener('scroll', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    }, true);
+
+    window.addEventListener('resize', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    });
+});
+
+function aplicarFiltros() {
+    const clienteNombre = document.getElementById('cliente_search_cuotas_vencidas').value.toLowerCase().trim();
+    const fechaDesde = document.getElementById('filtro_fecha_desde').value;
+    const fechaHasta = document.getElementById('filtro_fecha_hasta').value;
+    const montoMinimo = parseFloat(document.getElementById('filtro_monto_minimo').value) || 0;
+
+    const filas = document.querySelectorAll('tbody .cliente-row');
+    
+    filas.forEach(fila => {
+        let mostrar = true;
+
+        // Filtro por nombre
+        if (clienteNombre) {
+            const nombre = fila.dataset.nombre.toLowerCase();
+            if (!nombre.includes(clienteNombre)) {
+                mostrar = false;
+            }
+        }
+
+        // Filtro por monto
+        if (mostrar && montoMinimo > 0) {
+            const filaMonto = parseFloat(fila.dataset.monto) || 0;
+            if (filaMonto < montoMinimo) {
+                mostrar = false;
+            }
+        }
+
+        // Filtro por fecha
+        if (mostrar && (fechaDesde || fechaHasta)) {
+            const filaFecha = fila.dataset.fecha;
+            
+            if (fechaDesde && filaFecha < fechaDesde) {
+                mostrar = false;
+            }
+            if (fechaHasta && filaFecha > fechaHasta) {
+                mostrar = false;
+            }
+        }
+
+        // Aplicar resultado
+        fila.style.display = mostrar ? '' : 'none';
+    });
+}
+
+function limpiarFiltros() {
+    document.getElementById('cliente_search_cuotas_vencidas').value = '';
+    document.getElementById('cliente_id_hidden').value = '';
+    document.getElementById('filtro_fecha_desde').value = '';
+    document.getElementById('filtro_fecha_hasta').value = '';
+    document.getElementById('filtro_monto_minimo').value = '';
+    
+    const dropdown = document.getElementById('cliente_resultados_cuotas_vencidas');
+    if (dropdown) {
+        dropdown.classList.remove('show');
+    }
+    
+    // Mostrar todas las filas
+    const filas = document.querySelectorAll('tbody .cliente-row');
+    filas.forEach(fila => {
+        fila.style.display = '';
+    });
+}
+
+// 🆕 MORA EN TIEMPO REAL
+let autoRefreshInterval = null;
+
+async function actualizarMoraEnTiempoReal() {
+    const syncIcon = document.getElementById('sync-icon');
+    syncIcon.classList.add('fa-spin');
+    
+    try {
+        const response = await fetch('/api/mora-diaria/');
+        const data = await response.json();
+        
+        // Actualizar visualización
+        document.getElementById('total-mora-display').textContent = 
+            new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                minimumFractionDigits: 0
+            }).format(parseFloat(data.total_mora));
+        
+        document.getElementById('cuotas-mora-count').textContent = data.cuotas_con_mora;
+        
+        // Actualizar timestamp
+        const ahora = new Date();
+        const hora = ahora.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('last-update').textContent = `Hace unos momentos (${hora})`;
+        
+    } catch (error) {
+        console.error('Error actualizando mora:', error);
+    } finally {
+        syncIcon.classList.remove('fa-spin');
+    }
+}
+
+function toggleAutoRefresh() {
+    const checkbox = document.getElementById('auto-refresh-mora');
+    
+    if (checkbox.checked) {
+        // Iniciar auto-actualización cada 5 minutos (300000 ms)
+        actualizarMoraEnTiempoReal(); // Primera actualización inmediata
+        autoRefreshInterval = setInterval(actualizarMoraEnTiempoReal, 300000);
+        console.log('✅ Auto-actualización de mora ACTIVADA (cada 5 min)');
+    } else {
+        // Detener auto-actualización
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+        console.log('❌ Auto-actualización de mora DESACTIVADA');
+    }
+}
+
+// Inicializar auto-actualización al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    // Actualizar mora inmediatamente
+    actualizarMoraEnTiempoReal();
+    
+    // Iniciar auto-actualización si está activada
+    if (document.getElementById('auto-refresh-mora').checked) {
+        autoRefreshInterval = setInterval(actualizarMoraEnTiempoReal, 300000);
+    }
+});
+</script>
+
+{% endblock %}
+
+
+
+

@@ -1,0 +1,542 @@
+{% extends 'mi_app/base.html' %}
+{% load static %}
+{% load custom_filters %}
+{% load numeros_colombianos %}
+
+{% block title %}Cuota #{{ cuota.numero_cuota }} - Detalles y Pago | Sistema de Préstamos{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+    <!-- BREADCRUMB -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb bg-light px-3 py-2 rounded">
+            <li class="breadcrumb-item"><a href="{% url 'inicio' %}">Inicio</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'detalle_cliente' cliente.id %}">{{ cliente.nombre }}</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'detalles_prestamo' prestamo.id %}">Préstamo #{{ prestamo.numero_prestamo }}</a></li>
+            <li class="breadcrumb-item active">Cuota #{{ cuota.numero_cuota }}</li>
+        </ol>
+    </nav>
+
+    {% if success %}
+    <!-- COMPROBANTE DE PAGO EXITOSO -->
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-8">
+            <div class="alert alert-success border-3 py-4 text-center" role="alert">
+                <h5 class="text-success mb-3">✅ ¡PAGO REGISTRADO EXITOSAMENTE!</h5>
+                <p class="mb-0" style="font-size: 18px;">Comprobante #{{ pago.id }}</p>
+                <p class="text-muted">{{ pago.fecha_pago|date:"d/m/Y H:i" }}</p>
+                <hr>
+                <p style="font-size: 16px;"><strong>Monto Total: {{ pago.monto_pagado|formato_colombiano }}</strong></p>
+                <a href="{% url 'detalles_prestamo' prestamo.id %}" class="btn btn-primary">← Volver al Préstamo</a>
+            </div>
+        </div>
+    </div>
+
+    {% elif error %}
+    <!-- ERROR -->
+    <div class="alert alert-danger border-3 py-3 mb-4" role="alert">
+        <h5 class="text-danger mb-2">❌ Error al procesar pago</h5>
+        <p class="mb-0">{{ error }}</p>
+    </div>
+    {% endif %}
+
+    <!-- ENCABEZADO CON ESTADO DESTACADO -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h2 class="mb-1">Cuota #{{ cuota.numero_cuota }} de {{ prestamo.cuotas.count }}</h2>
+                    <p class="text-muted mb-0">Préstamo #{{ prestamo.id }} | Cliente: {{ prestamo.cliente.nombre }}</p>
+                </div>
+                <!-- ESTADO VISUAL GRANDE Y LLAMATIVO -->
+                <div>
+                    {% if cuota.pagado %}
+                        <div class="p-4 bg-success bg-opacity-10 rounded-3 border-3 border-success">
+                            <div class="text-center">
+                                <i class="fas fa-check-circle text-success" style="font-size: 48px;"></i>
+                                <p class="text-success fw-bold mb-0" style="font-size: 18px;">PAGADA</p>
+                            </div>
+                        </div>
+                    {% elif detalles.pendiente_principal == 0 and detalles.pendiente_interes > 0 %}
+                        <div class="p-4 bg-warning bg-opacity-10 rounded-3 border-3 border-warning">
+                            <div class="text-center">
+                                <i class="fas fa-hourglass-half text-warning" style="font-size: 48px;"></i>
+                                <p class="text-warning fw-bold mb-0" style="font-size: 18px;">PARCIAL</p>
+                            </div>
+                        </div>
+                    {% elif detalles.pendiente_principal > 0 %}
+                        <div class="p-4 bg-danger bg-opacity-10 rounded-3 border-3 border-danger">
+                            <div class="text-center">
+                                <i class="fas fa-clock text-danger" style="font-size: 48px;"></i>
+                                <p class="text-danger fw-bold mb-0" style="font-size: 18px;">PENDIENTE</p>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GRID 2x2 INFORMACIÓN RÁPIDA -->
+    <div class="row mb-4">
+        <div class="col-md-6 col-lg-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <p class="text-muted small mb-2"><i class="fas fa-calendar-alt"></i> Vencimiento</p>
+                    <h5 class="mb-2">{{ cuota.fecha_pago_esperada|date:"d/m/Y" }}</h5>
+                    {% if detalles.dias_para_vencer %}
+                        {% if detalles.dias_para_vencer < 0 %}
+                            <span class="badge bg-danger">Vencida hace {{ detalles.dias_vencidos_positivo }} días</span>
+                        {% elif detalles.dias_para_vencer == 0 %}
+                            <span class="badge bg-danger">¡Vence hoy!</span>
+                        {% elif detalles.dias_para_vencer <= 3 %}
+                            <span class="badge bg-warning text-dark">Vence en {{ detalles.dias_para_vencer }} días</span>
+                        {% else %}
+                            <span class="badge bg-success">Vence en {{ detalles.dias_para_vencer }} días</span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <p class="text-muted small mb-2"><i class="fas fa-money-bill"></i> Total Cuota</p>
+                    <h5 class="text-primary mb-0">{{ detalles.original_total|formato_colombiano }}</h5>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <p class="text-muted small mb-2"><i class="fas fa-check"></i> Pagado</p>
+                    <h5 class="text-success mb-0">{{ detalles.pagado_total|formato_colombiano }}</h5>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card border-0 shadow-sm h-100 border-left border-danger border-4">
+                <div class="card-body">
+                    <p class="text-muted small mb-2"><i class="fas fa-exclamation-circle"></i> Pendiente</p>
+                    <h5 class="text-danger mb-0 fw-bold">{{ detalles.pendiente_total|formato_colombiano }}</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LAYOUT 2 COLUMNAS: DETALLES (izquierda) + FORMULARIO (derecha) -->
+    <div class="row mb-4">
+        <!-- COLUMNA IZQUIERDA: DESGLOSES -->
+        <div class="col-lg-6 order-lg-1">
+            <!-- DESGLOSE ORIGINAL -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-light border-bottom-3" style="border-bottom-color: #0d6efd !important;">
+                    <h6 class="mb-0"><i class="fas fa-list-ul text-primary"></i> DESGLOSE ORIGINAL</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-2">
+                        <div class="col">
+                            <small class="text-muted">Principal</small>
+                            <p class="mb-0 text-primary fw-bold">{{ detalles.original_principal|formato_colombiano }}</p>
+                        </div>
+                        <div class="col">
+                            <small class="text-muted">Interés</small>
+                            <p class="mb-0 text-warning fw-bold">{{ detalles.original_interes|formato_colombiano }}</p>
+                        </div>
+                        <div class="col">
+                            <small class="text-muted">Mora</small>
+                            <p class="mb-0 text-info fw-bold">{{ detalles.original_mora|formato_colombiano }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DESGLOSE PAGADO -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-light border-bottom-3" style="border-bottom-color: #198754 !important;">
+                    <h6 class="mb-0"><i class="fas fa-check-double text-success"></i> DESGLOSE PAGADO</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-2">
+                        <div class="col">
+                            <small class="text-muted">Principal</small>
+                            <p class="mb-0 text-primary fw-bold">{{ detalles.pagado_principal|formato_colombiano }}</p>
+                            <small class="text-muted">{% widthratio detalles.pagado_principal detalles.original_principal 100 as pct_principal_raw %}{% if pct_principal_raw > 100 %}100{% else %}{{ pct_principal_raw }}{% endif %}%</small>
+                        </div>
+                        <div class="col">
+                            <small class="text-muted">Interés</small>
+                            <p class="mb-0 text-warning fw-bold">{{ detalles.pagado_interes|formato_colombiano }}</p>
+                            <small class="text-muted">{% widthratio detalles.pagado_interes detalles.original_interes 100 as pct_interes_raw %}{% if pct_interes_raw > 100 %}100{% else %}{{ pct_interes_raw }}{% endif %}%</small>
+                        </div>
+                        <div class="col">
+                            <small class="text-muted">Mora</small>
+                            <p class="mb-0 text-info fw-bold">{{ detalles.pagado_mora|formato_colombiano }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DESGLOSE PENDIENTE -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-light border-bottom-3" style="border-bottom-color: #dc3545 !important;">
+                    <h6 class="mb-0"><i class="fas fa-hourglass-end text-danger"></i> DESGLOSE PENDIENTE</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-2">
+                        <div class="col">
+                            <small class="text-muted">Principal</small>
+                            <p class="mb-0 text-primary fw-bold">{{ detalles.pendiente_principal|formato_colombiano }}</p>
+                        </div>
+                        <div class="col">
+                            <small class="text-muted">Interés</small>
+                            <p class="mb-0 text-warning fw-bold">{{ detalles.pendiente_interes|formato_colombiano }}</p>
+                        </div>
+                        <div class="col">
+                            <small class="text-muted">Mora</small>
+                            <p class="mb-0 text-danger fw-bold">{{ detalles.pendiente_mora|formato_colombiano }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- COLUMNA DERECHA: FORMULARIO DE PAGO -->
+        <div class="col-lg-6 order-lg-2">
+            {% if not cuota.pagado %}
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-success text-white py-3">
+                    <h5 class="mb-0"><i class="fas fa-money-bill-wave"></i> REGISTRAR PAGO</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" class="needs-validation">
+                        {% csrf_token %}
+
+                        <!-- MONTO PRINCIPAL -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">💵 Principal a Pagar</label>
+                            <div style="display: flex; gap: 0; width: 100%;">
+                                <span class="currency-symbol">$</span>
+                                <input 
+                                    type="number" 
+                                    id="monto_principal"
+                                    name="monto_principal"
+                                    class="form-control" 
+                                    placeholder="0.00"
+                                    step="0.01"
+                                    min="0"
+                                    max="{{ detalles.pendiente_principal }}"
+                                    value="0"
+                                    style="border-left: none; border-radius: 0 0.375rem 0.375rem 0; flex: 1;"
+                                >
+                            </div>
+                            <button type="button" class="btn btn-sm btn-link text-primary p-0 mt-1" onclick="adicionarPrincipal()">
+                                Máximo: {{ detalles.pendiente_principal|formato_colombiano }}
+                            </button>
+                        </div>
+
+                        <!-- MONTO INTERÉS -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">📈 Interés a Pagar</label>
+                            <div style="display: flex; gap: 0; width: 100%;">
+                                <span class="currency-symbol">$</span>
+                                <input 
+                                    type="number" 
+                                    id="monto_interes"
+                                    name="monto_interes"
+                                    class="form-control" 
+                                    placeholder="0.00"
+                                    step="0.01"
+                                    min="0"
+                                    max="{{ detalles.pendiente_interes }}"
+                                    value="0"
+                                    style="border-left: none; border-radius: 0 0.375rem 0.375rem 0; flex: 1;"
+                                >
+                            </div>
+                            <button type="button" class="btn btn-sm btn-link text-warning p-0 mt-1" onclick="adicionarInteres()">
+                                Máximo: {{ detalles.pendiente_interes|formato_colombiano }}
+                            </button>
+                        </div>
+
+                        <!-- MONTO MORA -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small">⚠️ Mora a Pagar (Opcional)</label>
+                            <div style="display: flex; gap: 0; width: 100%;">
+                                <span class="currency-symbol">$</span>
+                                <input 
+                                    type="number" 
+                                    id="monto_mora"
+                                    name="monto_mora"
+                                    class="form-control" 
+                                    placeholder="0.00"
+                                    step="0.01"
+                                    min="0"
+                                    value="0"
+                                    style="border-left: none; border-radius: 0 0.375rem 0.375rem 0; flex: 1;"
+                                >
+                            </div>
+                            <button type="button" class="btn btn-sm btn-link text-info p-0 mt-1" onclick="adicionarMora()">
+                                Máximo: {{ detalles.pendiente_mora|formato_colombiano }}
+                            </button>
+                        </div>
+
+                        <!-- BOTONES RÁPIDOS -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold mb-2">⚡ Atajos Rápidos</label>
+                            <div class="d-grid gap-2">
+                                <button type="button" class="btn btn-outline-success" onclick="rellenarAmbos()">
+                                    <i class="fas fa-check-double"></i> Capital + Interés
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="rellenarSoloPrincipal()">
+                                    <i class="fas fa-money-bill"></i> Solo Capital
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="rellenarSoloInteres()">
+                                    <i class="fas fa-chart-line"></i> Solo Interés
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- REFERENCIA -->
+                        <div class="mb-3">
+                            <label for="referencia" class="form-label fw-bold">🔖 Referencia</label>
+                            <input 
+                                type="text" 
+                                id="referencia"
+                                name="referencia"
+                                class="form-control" 
+                                placeholder="Transf. Bancaria #12345 / Efectivo / Cheque"
+                            >
+                        </div>
+
+                        <!-- NOTAS -->
+                        <div class="mb-4">
+                            <label for="notas" class="form-label fw-bold">📝 Notas</label>
+                            <textarea 
+                                id="notas"
+                                name="notas"
+                                class="form-control" 
+                                placeholder="Observaciones..."
+                                rows="2"
+                            ></textarea>
+                        </div>
+
+                        <!-- RESUMEN EN VIVO -->
+                        <div class="card bg-primary bg-opacity-10 border-primary mb-4">
+                            <div class="card-body">
+                                <h6 class="text-uppercase fw-bold mb-3">💼 RESUMEN</h6>
+                                <div class="row mb-2">
+                                    <div class="col-6">
+                                        <small class="text-muted">Principal:</small>
+                                        <p id="resumen_principal" class="mb-0 fw-bold">$0</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Interés:</small>
+                                        <p id="resumen_interes" class="mb-0 fw-bold">$0</p>
+                                    </div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-6">
+                                        <small class="text-muted">Mora:</small>
+                                        <p id="resumen_mora" class="mb-0 fw-bold">$0</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">TOTAL:</small>
+                                        <p id="resumen_total" class="mb-0 fw-bold text-success" style="font-size: 18px;">$0</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- BOTONES PRINCIPALES -->
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success btn-lg flex-grow-1">
+                                ✅ Registrar Pago
+                            </button>
+                            <a href="{% url 'detalles_prestamo' prestamo.id %}" class="btn btn-secondary btn-lg">
+                                ← Atrás
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-success border-3 py-4 mb-4" role="alert">
+                <h5 class="text-success mb-2">✅ CUOTA PAGADA COMPLETAMENTE</h5>
+                <p class="mb-2">Esta cuota no requiere más pagos.</p>
+                <p class="mb-0 text-muted">Fecha de pago: {{ cuota.fecha_pago_real|date:"d/m/Y" }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- HISTORIAL DE PAGOS (Full Width) -->
+    {% if pagos %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-dark text-white py-3">
+                    <h5 class="mb-0">📜 HISTORIAL DE PAGOS</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Fecha</th>
+                                <th class="text-end">Principal</th>
+                                <th class="text-end">Interés</th>
+                                <th class="text-end">Mora</th>
+                                <th class="text-end">Total</th>
+                                <th>Referencia</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pago in pagos %}
+                            <tr>
+                                <td>
+                                    <small class="badge bg-info">{{ pago.fecha_pago|date:"d/m/Y H:i" }}</small>
+                                </td>
+                                <td class="text-end">{{ pago.monto_principal|formato_colombiano }}</td>
+                                <td class="text-end">{{ pago.monto_interes|formato_colombiano }}</td>
+                                <td class="text-end">{{ pago.monto_mora|default:0|formato_colombiano }}</td>
+                                <td class="text-end"><strong>{{ pago.monto_pagado|formato_colombiano }}</strong></td>
+                                <td>
+                                    <small class="text-muted">{{ pago.referencia|truncatewords:3|default:"—" }}</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- SCRIPTS PARA FORMULARIO DINÁMICO -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const montoP = document.getElementById('monto_principal');
+    const montoI = document.getElementById('monto_interes');
+    const montoM = document.getElementById('monto_mora');
+    const resumenP = document.getElementById('resumen_principal');
+    const resumenI = document.getElementById('resumen_interes');
+    const resumenM = document.getElementById('resumen_mora');
+    const resumenT = document.getElementById('resumen_total');
+
+    // Valores máximos
+    const maxPrincipal = {{ detalles.pendiente_principal|default:0 }};
+    const maxInteres = {{ detalles.pendiente_interes|default:0 }};
+    const maxMora = {{ detalles.pendiente_mora|default:0 }};
+
+    function formatearMoneda(valor) {
+        return new Intl.NumberFormat('es-CO', {
+            style: 'currency',
+            currency: 'COP',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(valor || 0);
+    }
+
+    function actualizarResumen() {
+        const principal = parseFloat(montoP.value) || 0;
+        const interes = parseFloat(montoI.value) || 0;
+        const mora = parseFloat(montoM.value) || 0;
+        const total = principal + interes + mora;
+
+        resumenP.textContent = formatearMoneda(principal);
+        resumenI.textContent = formatearMoneda(interes);
+        resumenM.textContent = formatearMoneda(mora);
+        resumenT.textContent = formatearMoneda(total);
+    }
+
+    // Event listeners
+    montoP.addEventListener('input', actualizarResumen);
+    montoI.addEventListener('input', actualizarResumen);
+    montoM.addEventListener('input', actualizarResumen);
+    
+    actualizarResumen();
+});
+
+// Funciones para botones rápidos (ADITIVOS - suman en lugar de reemplazar)
+function adicionarPrincipal() {
+    const maxP = {{ detalles.pendiente_principal|default:0 }};
+    const actual = parseFloat(document.getElementById('monto_principal').value) || 0;
+    const nuevo = Math.min(actual + maxP, maxP);
+    document.getElementById('monto_principal').value = nuevo.toFixed(2);
+    actualizarResumen();
+}
+
+function adicionarInteres() {
+    const maxI = {{ detalles.pendiente_interes|default:0 }};
+    const actual = parseFloat(document.getElementById('monto_interes').value) || 0;
+    const nuevo = Math.min(actual + maxI, maxI);
+    document.getElementById('monto_interes').value = nuevo.toFixed(2);
+    actualizarResumen();
+}
+
+function adicionarMora() {
+    const maxM = {{ detalles.pendiente_mora|default:0 }};
+    const actual = parseFloat(document.getElementById('monto_mora').value) || 0;
+    const nuevo = actual + maxM;
+    document.getElementById('monto_mora').value = nuevo.toFixed(2);
+    actualizarResumen();
+}
+
+function rellenarAmbos() {
+    const maxP = {{ detalles.pendiente_principal|default:0 }};
+    const maxI = {{ detalles.pendiente_interes|default:0 }};
+    document.getElementById('monto_principal').value = maxP.toFixed(2);
+    document.getElementById('monto_interes').value = maxI.toFixed(2);
+    document.getElementById('monto_mora').value = 0;
+    actualizarResumen();
+}
+
+function rellenarSoloPrincipal() {
+    const max = {{ detalles.pendiente_principal|default:0 }};
+    document.getElementById('monto_principal').value = max.toFixed(2);
+    document.getElementById('monto_interes').value = 0;
+    document.getElementById('monto_mora').value = 0;
+    actualizarResumen();
+}
+
+function rellenarSoloInteres() {
+    const max = {{ detalles.pendiente_interes|default:0 }};
+    document.getElementById('monto_principal').value = 0;
+    document.getElementById('monto_interes').value = max.toFixed(2);
+    document.getElementById('monto_mora').value = 0;
+    actualizarResumen();
+}
+
+// Función centralizad para actualizar resumen
+function actualizarResumen() {
+    const montoP = document.getElementById('monto_principal');
+    const montoI = document.getElementById('monto_interes');
+    const montoM = document.getElementById('monto_mora');
+    const resumenP = document.getElementById('resumen_principal');
+    const resumenI = document.getElementById('resumen_interes');
+    const resumenM = document.getElementById('resumen_mora');
+    const resumenT = document.getElementById('resumen_total');
+
+    function formatearMoneda(valor) {
+        return new Intl.NumberFormat('es-CO', {
+            style: 'currency',
+            currency: 'COP',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(valor || 0);
+    }
+
+    const principal = parseFloat(montoP.value) || 0;
+    const interes = parseFloat(montoI.value) || 0;
+    const mora = parseFloat(montoM.value) || 0;
+    const total = principal + interes + mora;
+
+    resumenP.textContent = formatearMoneda(principal);
+    resumenI.textContent = formatearMoneda(interes);
+    resumenM.textContent = formatearMoneda(mora);
+    resumenT.textContent = formatearMoneda(total);
+}
+</script>
+
+{% endblock %}

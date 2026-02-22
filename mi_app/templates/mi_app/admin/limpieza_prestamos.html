@@ -1,0 +1,152 @@
+{% extends 'mi_app/base.html' %}
+{% load static %}
+
+{% block title %}Limpieza de Préstamos{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card shadow-sm">
+                <div class="card-header bg-danger text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-trash-alt"></i> Limpieza de Préstamos
+                    </h3>
+                </div>
+
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    {% if exito %}
+                        <!-- Resultados -->
+                        <div class="alert {% if fue_ejecucion %}alert-success{% else %}alert-info{% endif %}" role="alert">
+                            <h4 class="alert-heading">{% if fue_ejecucion %}✓ Limpieza Completada{% else %}ℹ️ Vista Previa{% endif %}</h4>
+                            <p>
+                                {% if fue_ejecucion %}
+                                    Se archivó y limpió la información de préstamos completados con más de <strong>{{ dias }}</strong> días.
+                                {% else %}
+                                    Esta es una simulación de lo que se limpiará para préstamos con más de <strong>{{ dias }}</strong> días.
+                                {% endif %}
+                            </p>
+                        </div>
+
+                        <!-- Resumen del sistema -->
+                        <div class="mt-4">
+                            <h5>Resumen:</h5>
+                            <p class="text-muted mb-2">La información histórica del comportamiento de pago se conserva automáticamente.</p>
+                            <details>
+                                <summary class="text-secondary" style="cursor: pointer;">Ver detalle técnico (opcional)</summary>
+                                <div class="bg-light p-3 rounded mt-2" style="max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.9rem;">
+                                    {{ output|linebreaks }}
+                                </div>
+                            </details>
+                        </div>
+
+                        <div class="mt-4">
+                            <a href="{% url 'limpieza_prestamos' %}" class="btn btn-primary">
+                                <i class="fas fa-redo"></i> Ejecutar Nuevamente
+                            </a>
+                            <a href="{% url 'auditoria_cambios' %}" class="btn btn-secondary">
+                                <i class="fas fa-file-alt"></i> Ver Auditoría
+                            </a>
+                        </div>
+
+                    {% else %}
+                        <!-- Formulario de Limpieza -->
+                        <div class="alert alert-warning" role="alert">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>¿Qué hace esta función?</strong> Ordena y limpia préstamos antiguos ya finalizados para mantener reportes claros.
+                            Tu historial de comportamiento de pago se guarda automáticamente.
+                        </div>
+
+                        <form method="POST" class="mt-4">
+                            {% csrf_token %}
+
+                            <div class="form-group mb-3">
+                                <label for="dias" class="form-label">
+                                    <strong>Limpiar préstamos finalizados de más de (días):</strong>
+                                </label>
+                                <input type="number" id="dias" name="dias" class="form-control" 
+                                       value="{{ dias_default }}" min="1" max="3650" required>
+                                <small class="form-text text-muted">
+                                    Recomendado: 90 días (limpieza mensual).
+                                </small>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label for="razon" class="form-label">
+                                    <strong>Nota (opcional):</strong>
+                                </label>
+                                <textarea id="razon" name="razon" class="form-control" rows="3" 
+                                          placeholder="Ej: limpieza mensual de datos antiguos"></textarea>
+                                <small class="form-text text-muted">
+                                    Esta nota queda guardada en el historial del sistema.
+                                </small>
+                            </div>
+
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <button type="submit" name="ejecutar" value="no" class="btn btn-warning w-100">
+                                        <i class="fas fa-eye"></i> Vista previa (sin cambios)
+                                    </button>
+                                </div>
+                                <div class="col-md-6">
+                                    <button type="submit" name="ejecutar" value="si" 
+                                            class="btn btn-danger w-100"
+                                            onclick="return confirm('¿Confirmar limpieza permanente? No se puede deshacer.')">
+                                        <i class="fas fa-trash-alt"></i> Confirmar limpieza
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+
+                        <!-- Información de Seguridad -->
+                        <div class="mt-5 pt-4 border-top">
+                            <h6 class="text-secondary">
+                                <i class="fas fa-shield-alt"></i> Tranquilidad y control
+                            </h6>
+                            <ul class="small text-muted">
+                                <li><strong>Registro:</strong> Cada ejecución queda guardada en auditoría</li>
+                                <li><strong>Historial:</strong> Se conserva el comportamiento de pago de los clientes</li>
+                                <li><strong>Recomendación:</strong> Use primero "Vista previa"</li>
+                                <li><strong>Trazabilidad:</strong> Se guarda usuario, fecha y detalle</li>
+                            </ul>
+                        </div>
+
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Información Adicional -->
+            <div class="card mt-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Uso rápido</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>1)</strong> Defina el rango de días (ej. 90).</p>
+                    <p><strong>2)</strong> Revise primero la vista previa.</p>
+                    <p><strong>3)</strong> Si está correcto, confirme la limpieza.</p>
+                    <p class="mb-0"><strong>Resultado:</strong> reportes más ordenados, historial de comportamiento conservado.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card-header {
+        padding: 1.25rem;
+        border-bottom: 1px solid rgba(0,0,0,.125);
+    }
+    .btn {
+        font-weight: 500;
+    }
+</style>
+{% endblock %}

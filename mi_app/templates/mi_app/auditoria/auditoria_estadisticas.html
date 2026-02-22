@@ -1,0 +1,307 @@
+{% extends "mi_app/base.html" %}
+{% load l10n %}
+
+{% block title %}Estadísticas de Auditoría{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    
+    .header-stats {
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .header-stats h2 {
+        margin: 0;
+        color: #333;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .stat-card {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 25px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    
+    .stat-card.large {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+    }
+    
+    .stat-card h3 {
+        margin: 0 0 10px 0;
+        font-size: 13px;
+        font-weight: 600;
+        opacity: 0.8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stat-number {
+        font-size: 48px;
+        font-weight: bold;
+        line-height: 1;
+    }
+    
+    .stat-number.small {
+        font-size: 32px;
+    }
+    
+    .stat-subtitle {
+        font-size: 12px;
+        opacity: 0.7;
+        margin-top: 8px;
+    }
+    
+    .tabla-stats {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        margin-bottom: 30px;
+    }
+    
+    .tabla-stats thead {
+        background: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .tabla-stats th {
+        padding: 15px;
+        text-align: left;
+        font-weight: 600;
+        color: #333;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .tabla-stats td {
+        padding: 15px;
+        border-bottom: 1px solid #dee2e6;
+        color: #666;
+    }
+    
+    .tabla-stats tbody tr:hover {
+        background: #f8f9fa;
+    }
+    
+    .barra-progreso {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .barra-progreso-fill {
+        flex: 1;
+        height: 20px;
+        background: #e0e0e0;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    .barra-progreso-valor {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .barra-progreso-texto {
+        font-weight: 600;
+        color: #333;
+        min-width: 50px;
+        text-align: right;
+    }
+    
+    .titulo-seccion {
+        font-size: 20px;
+        font-weight: 600;
+        color: #333;
+        margin: 30px 0 20px 0;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .btn-volver {
+        background: #e9ecef;
+        color: #333;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        margin-top: 20px;
+    }
+    
+    .btn-volver:hover {
+        background: #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="stats-container">
+    <!-- Header -->
+    <div class="header-stats">
+        <h2>
+            <i class="fas fa-chart-bar"></i>
+            Estadísticas de Auditoría
+        </h2>
+        <p style="color: #999; margin: 5px 0 0 0;">Análisis y métricas del sistema de auditoría</p>
+    </div>
+    
+    <!-- KPIs Principales -->
+    <div class="stats-grid">
+        <div class="stat-card large">
+            <h3>Total de Cambios</h3>
+            <div class="stat-number">{{ total_cambios }}</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Cambios este Mes</h3>
+            <div class="stat-number small">{{ cambios_mes }}</div>
+            <div class="stat-subtitle">últimos 30 días</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Cambios Hoy</h3>
+            <div class="stat-number small">{{ cambios_hoy }}</div>
+            <div class="stat-subtitle">{{ today|date:"d/m/Y" }}</div>
+        </div>
+    </div>
+    
+    <!-- Top Usuarios -->
+    <div class="titulo-seccion">
+        <i class="fas fa-users"></i> Top 10 Usuarios Más Activos
+    </div>
+    
+    <table class="tabla-stats">
+        <thead>
+            <tr>
+                <th style="width: 30%;">Usuario</th>
+                <th style="width: 50%;">Cambios</th>
+                <th style="width: 20%;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for usuario in top_usuarios %}
+            <tr>
+                <td>
+                    <strong>{{ usuario.usuario__first_name|default:usuario.usuario__username }}</strong>
+                </td>
+                <td>
+                    <div class="barra-progreso">
+                        <div class="barra-progreso-fill">
+                            <div class="barra-progreso-valor" style="width: {% localize off %}{{ usuario.porcentaje }}{% endlocalize %}%"></div>
+                        </div>
+                    </div>
+                </td>
+                <td class="barra-progreso-texto">{{ usuario.cantidad }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <!-- Cambios por Acción -->
+    <div class="titulo-seccion">
+        <i class="fas fa-tasks"></i> Cambios por Tipo de Acción
+    </div>
+    
+    <div class="stats-grid">
+        {% for accion in cambios_por_accion %}
+        <div class="stat-card">
+            <h3>{{ accion.accion }}</h3>
+            <div class="stat-number small">{{ accion.cantidad }}</div>
+            <div class="stat-subtitle">{{ accion.cantidad|add:1 }} registros</div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Cambios por Modelo -->
+    <div class="titulo-seccion">
+        <i class="fas fa-database"></i> Cambios por Modelo
+    </div>
+    
+    <table class="tabla-stats">
+        <thead>
+            <tr>
+                <th style="width: 30%;">Modelo</th>
+                <th style="width: 50%;">Cambios</th>
+                <th style="width: 20%;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for modelo in cambios_por_modelo %}
+            <tr>
+                <td>
+                    <strong>{{ modelo.modelo }}</strong>
+                </td>
+                <td>
+                    <div class="barra-progreso">
+                        <div class="barra-progreso-fill">
+                            <div class="barra-progreso-valor" style="width: {% localize off %}{{ modelo.porcentaje }}{% endlocalize %}%"></div>
+                        </div>
+                    </div>
+                </td>
+                <td class="barra-progreso-texto">{{ modelo.cantidad }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <!-- Actividad por Día -->
+    <div class="titulo-seccion">
+        <i class="fas fa-calendar"></i> Actividad Últimos 7 Días
+    </div>
+    
+    <table class="tabla-stats">
+        <thead>
+            <tr>
+                <th style="width: 20%;">Fecha</th>
+                <th style="width: 80%;">Cambios</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dia in cambios_por_dia %}
+            <tr>
+                <td><strong>{{ dia.fecha }}</strong></td>
+                <td>
+                    <div class="barra-progreso">
+                        <div class="barra-progreso-fill">
+                            <div class="barra-progreso-valor" style="width: {% localize off %}{{ dia.porcentaje }}{% endlocalize %}%"></div>
+                        </div>
+                        <span class="barra-progreso-texto">{{ dia.cantidad }}</span>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <!-- Botones -->
+    <div style="margin-top: 30px; display: flex; gap: 10px;">
+        <a href="{% url 'auditoria_cambios' %}" class="btn-volver">
+            <i class="fas fa-arrow-left"></i> Volver a Auditoría
+        </a>
+        <a href="{% url 'exportar_auditoria' %}" style="background: #4caf50; color: white; text-decoration: none;" class="btn-volver">
+            <i class="fas fa-download"></i> Exportar a Excel
+        </a>
+    </div>
+</div>
+{% endblock %}
