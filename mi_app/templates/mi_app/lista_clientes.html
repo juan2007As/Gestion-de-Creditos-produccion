@@ -58,7 +58,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for item in clientes %}
+                        {% for item in clientes_info %}
                         {% with cliente=item.cliente en_lista_negra=item.en_lista_negra %}
                         <tr class="cliente-row" data-nombre="{{ cliente.nombre|lower }}" data-cedula="{{ cliente.cedula|default:''|lower }}" data-celular="{{ cliente.celular|lower }}">
                             <td><strong>#{{ cliente.id }}</strong></td>

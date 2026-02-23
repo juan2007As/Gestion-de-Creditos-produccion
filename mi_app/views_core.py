@@ -480,6 +480,7 @@ def lista_clientes(request):
     total_pagado = total_pagado_agg['total']
     
     contexto = {
+        'clientes': clientes,
         'clientes_info': [{'cliente': c, 'en_lista_negra': c.lista_negra.esta_vigente if hasattr(c, 'lista_negra') and c.lista_negra else False} for c in clientes],
         'busqueda': busqueda,
         'cantidad': clientes.count(),
