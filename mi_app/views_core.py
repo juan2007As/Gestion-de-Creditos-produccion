@@ -715,37 +715,27 @@ def crear_prestamo(request, cliente_id=None):
                 monto = None
         
         # ============================================================================
-        # VALIDACIÓN #5: Número de cuotas DEBE ser exactamente 2, 4, 6 u 8
+        # VALIDACIÓN #5: Número de cuotas (Cualquier número positivo es válido)
         # ============================================================================
         if not num_cuotas_str:
             errores.append("[V5] Debe seleccionar el número de cuotas")
         else:
             try:
                 num_cuotas = int(num_cuotas_str)
-                CUOTAS_VALIDAS = [2, 4, 6, 8]
-                if num_cuotas not in CUOTAS_VALIDAS:
-                    errores.append(
-                        f"[V5] ❌ Número de cuotas inválido: {num_cuotas}. "
-                        f"Valores válidos: {', '.join(map(str, CUOTAS_VALIDAS))}"
-                    )
+                if num_cuotas <= 0:
+                    errores.append("[V5] ❌ El número de cuotas debe ser mayor a 0")
             except ValueError:
                 errores.append("[V5] Número de cuotas debe ser un entero válido")
                 num_cuotas = None
         
         # ============================================================================
-        # VALIDACIÓN #6: Tasa de interés DEBE estar entre 1.5% y 10%
+        # VALIDACIÓN #6: Tasa de interés (Sin límite superior, solo >= 0)
         # ============================================================================
         if interes_str:
             try:
                 interes_porcentaje = Decimal(interes_str)
-                MIN_TASA = Decimal('1.5')
-                MAX_TASA = Decimal('10.0')
-                
-                if interes_porcentaje < MIN_TASA or interes_porcentaje > MAX_TASA:
-                    errores.append(
-                        f"[V6] ❌ Tasa de interés fuera de rango: {interes_porcentaje}%. "
-                        f"Rango válido: {MIN_TASA}% - {MAX_TASA}%"
-                    )
+                if interes_porcentaje < 0:
+                    errores.append("[V6] ❌ La tasa de interés no puede ser negativa")
             except (ValueError, ArithmeticError):
                 errores.append("[V6] La tasa de interés debe ser un número válido")
                 interes_porcentaje = None
@@ -788,9 +778,6 @@ def crear_prestamo(request, cliente_id=None):
             # Si no viene interés del formulario, usar config
             if not interes_str:
                 interes_porcentaje = Decimal(str(config.tasa_interes_prestamo_normal))
-                # ✅ También validar la config tenga tasa válida
-                if interes_porcentaje < Decimal('1.5') or interes_porcentaje > Decimal('10.0'):
-                    interes_porcentaje = Decimal('5.0')  # Default seguro
             
             # Calcular fechas automáticamente según calendario: 5, 15, 20, 30
             fecha_inicio = date.today()
