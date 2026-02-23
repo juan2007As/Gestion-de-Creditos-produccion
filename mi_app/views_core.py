@@ -449,7 +449,8 @@ def obtener_estadisticas_sistema():
 @require_permission('cliente.view')
 def lista_clientes(request):
     """Muestra una lista de todos los clientes."""
-    from django.db.models import Sum, Coalesce, Count, Q
+    from django.db.models import Sum, Count, Q
+    from django.db.models.functions import Coalesce
     from decimal import Decimal
     
     busqueda = request.GET.get('q', '').strip()
