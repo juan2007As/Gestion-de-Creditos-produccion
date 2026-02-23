@@ -13,10 +13,15 @@ class BackupManager:
     """Gestor de backups locales"""
     
     def __init__(self):
-        # Ajuste para PythonAnywhere: buscar la BD en la raíz del usuario o del proyecto
+        # Ajuste para PythonAnywhere: buscar la BD en la raíz del proyecto
+        # Si el archivo está en mi_app/utilities/backup_manager.py, subimos 2 niveles para llegar a la raíz
         self.base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
         self.backups_dir = os.path.join(self.base_dir, 'backups')
         self.db_path = os.path.join(self.base_dir, 'db.sqlite3')
+        
+        # DEBUG para consola
+        print(f"DEBUG BackupManager: BASE_DIR={self.base_dir}")
+        print(f"DEBUG BackupManager: DB_PATH={self.db_path}")
         
         # Crear directorio si no existe
         if not os.path.exists(self.backups_dir):
