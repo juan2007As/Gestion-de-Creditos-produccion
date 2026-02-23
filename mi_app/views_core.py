@@ -4758,12 +4758,25 @@ def backups_list(request):
         for b in backups:
             if b.get('fecha'):
                 try:
-                    dt = datetime.fromisoformat(b['fecha'])
+                    # Intentar parsear fecha ISO o string simple
+                    if isinstance(b['fecha'], str):
+                        from django.utils.dateparse import parse_datetime
+                        dt = parse_datetime(b['fecha'])
+                        if not dt:
+                            # Fallback para formatos manuales
+                            dt = datetime.fromisoformat(b['fecha'].replace('Z', '+00:00'))
+                    else:
+                        dt = b['fecha']
+                    
                     b['date_display'] = dt.strftime('%d/%m/%Y')
                     b['time_display'] = dt.strftime('%H:%M:%S')
-                except:
+                except Exception as e:
+                    print(f"Error parseando fecha {b.get('fecha')}: {e}")
                     b['date_display'] = "N/A"
                     b['time_display'] = "N/A"
+            else:
+                b['date_display'] = "N/A"
+                b['time_display'] = "N/A"
             
             size_bytes = b.get('tamaño', 0)
             b['size_display'] = f"{size_bytes / (1024*1024):.2f}"
