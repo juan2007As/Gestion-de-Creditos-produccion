@@ -163,6 +163,9 @@ class BackupManager:
                 return {'success': True, 'mensaje': 'Backup eliminado'}
             else:
                 return {'success': False, 'error': 'Backup no encontrado'}
+        
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
 # Crear instancia global
 backup_manager = BackupManager()
