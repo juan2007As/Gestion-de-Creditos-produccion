@@ -13,17 +13,26 @@ class BackupManager:
     """Gestor de backups locales"""
     
     def __init__(self):
-        self.backups_dir = os.path.join(os.path.dirname(__file__), '..', 'backups')
-        self.db_path = os.path.join(os.path.dirname(__file__), '..', 'db.sqlite3')
+        # Ajuste para PythonAnywhere: buscar la BD en la raíz del usuario o del proyecto
+        self.base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        self.backups_dir = os.path.join(self.base_dir, 'backups')
+        self.db_path = os.path.join(self.base_dir, 'db.sqlite3')
         
         # Crear directorio si no existe
-        os.makedirs(self.backups_dir, exist_ok=True)
+        if not os.path.exists(self.backups_dir):
+            os.makedirs(self.backups_dir, exist_ok=True)
     
     def create_backup(self):
         """Crea un nuevo backup de la BD"""
         try:
+            print(f"DEBUG: Intentando backup. DB_PATH: {self.db_path}")
             if not os.path.exists(self.db_path):
-                return {'success': False, 'error': 'Base de datos no encontrada'}
+                # Intentar ruta alternativa si falla
+                alt_db_path = os.path.join(os.getcwd(), 'db.sqlite3')
+                if os.path.exists(alt_db_path):
+                    self.db_path = alt_db_path
+                else:
+                    return {'success': False, 'error': f'Base de datos no encontrada en {self.db_path}'}
             
             # Generar nombre con timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
