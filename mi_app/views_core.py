@@ -4749,10 +4749,24 @@ def backups_list(request):
     Solo accesible por staff/admin
     """
     try:
-        from mi_app.backup_manager import backup_manager
+        from mi_app.utilities.backup_manager import backup_manager
         
         # Obtener lista de backups
         backups = backup_manager.list_backups()
+        
+        # Formatear fechas y tamaños para el template
+        for b in backups:
+            if b.get('fecha'):
+                try:
+                    dt = datetime.fromisoformat(b['fecha'])
+                    b['date_display'] = dt.strftime('%d/%m/%Y')
+                    b['time_display'] = dt.strftime('%H:%M:%S')
+                except:
+                    b['date_display'] = "N/A"
+                    b['time_display'] = "N/A"
+            
+            size_bytes = b.get('tamaño', 0)
+            b['size_display'] = f"{size_bytes / (1024*1024):.2f}"
         
         context = {
             'backups': backups,
@@ -4774,7 +4788,7 @@ def backup_create(request):
     Solo accesible por staff/admin
     """
     try:
-        from mi_app.backup_manager import backup_manager
+        from mi_app.utilities.backup_manager import backup_manager
         
         result = backup_manager.create_backup()
         
@@ -4786,7 +4800,76 @@ def backup_create(request):
     except Exception as e:
         messages.error(request, f'Error al crear backup: {str(e)}')
     
-    return redirect('backups_list')
+    return redirect('backups:list')
+
+
+@admin_required
+def backup_descargar(request, backup_id):
+    """
+    Descarga un backup específico
+    """
+    try:
+        from mi_app.utilities.backup_manager import backup_manager
+        import os
+        from django.http import FileResponse
+        
+        # Buscar el backup
+        backups = backup_manager.list_backups()
+        backup = next((b for b in backups if b['id'] == backup_id), None)
+        
+        if not backup or not os.path.exists(backup['ruta']):
+            messages.error(request, 'Archivo de backup no encontrado')
+            return redirect('backups:list')
+            
+        return FileResponse(open(backup['ruta'], 'rb'), as_attachment=True, filename=backup['nombre'])
+        
+    except Exception as e:
+        messages.error(request, f'Error al descargar: {str(e)}')
+        return redirect('backups:list')
+
+
+@admin_required
+@require_http_methods(["POST"])
+def backup_delete(request, backup_id):
+    """
+    Elimina un backup específico
+    """
+    try:
+        from mi_app.utilities.backup_manager import backup_manager
+        
+        result = backup_manager.delete_backup(backup_id)
+        
+        if result['success']:
+            messages.success(request, 'Backup eliminado correctamente')
+        else:
+            messages.error(request, f"Error al eliminar: {result.get('error')}")
+            
+    except Exception as e:
+        messages.error(request, f'Error al eliminar backup: {str(e)}')
+        
+    return redirect('backups:list')
+
+
+@admin_required
+@require_http_methods(["POST"])
+def backup_restore(request, backup_id):
+    """
+    Restaura un backup específico
+    """
+    try:
+        from mi_app.utilities.backup_manager import backup_manager
+        
+        result = backup_manager.restore_backup(backup_id)
+        
+        if result['success']:
+            messages.success(request, result['mensaje'])
+        else:
+            messages.error(request, f"Error al restaurar: {result.get('error')}")
+            
+    except Exception as e:
+        messages.error(request, f'Error al restaurar backup: {str(e)}')
+        
+    return redirect('backups:list')
 
 
 @admin_required

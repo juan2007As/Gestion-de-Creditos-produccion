@@ -180,13 +180,15 @@
     }
     
     .btn-danger {
-        background: #ffebee;
-        color: #c62828;
+        background: #dc3545;
+        color: white;
+        box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
     }
     
     .btn-danger:hover {
-        background: #c62828;
-        color: white;
+        background: #c82333;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
     }
     
     .empty-state {
@@ -259,8 +261,8 @@
         <div class="stat-card green">
             <h3>Backup Más Reciente</h3>
             <div class="value" style="font-size: 18px;">
-                {{ backups.0.date }} <br>
-                <span style="font-size: 14px; opacity: 0.9;">{{ backups.0.time }}</span>
+                {{ backups.0.date_display }} <br>
+                <span style="font-size: 14px; opacity: 0.9;">{{ backups.0.time_display }}</span>
             </div>
         </div>
         {% endif %}
@@ -271,49 +273,56 @@
     <table class="backup-table">
         <thead>
             <tr>
-                <th style="width: 40%;">Nombre del Archivo</th>
+                <th style="width: 35%;">Nombre del Archivo</th>
                 <th style="width: 15%;">Tamaño</th>
-                <th style="width: 25%;">Fecha y Hora</th>
-                <th style="width: 20%;">Acciones</th>
+                <th style="width: 20%;">Fecha y Hora</th>
+                <th style="width: 30%;">Acciones</th>
             </tr>
         </thead>
         <tbody>
             {% for backup in backups %}
             <tr>
                 <td>
-                    <div class="backup-name" title="{{ backup.name }}">
-                        {{ backup.name }}
+                    <div class="backup-name" title="{{ backup.nombre }}">
+                        {{ backup.nombre }}
                     </div>
                 </td>
                 <td>
-                    <strong>{{ backup.size }} MB</strong>
+                    <strong>{{ backup.size_display }} MB</strong>
                 </td>
                 <td>
                     <div class="backup-date">
                         <span class="icon">📅</span>
                         <span>
-                            {{ backup.date }} <br>
-                            <small style="color: #999;">{{ backup.time }}</small>
+                            {{ backup.date_display }} <br>
+                            <small style="color: #999;">{{ backup.time_display }}</small>
                         </span>
                     </div>
                 </td>
                 <td>
                     <div class="backup-actions">
                         <!-- Botón Descargar -->
-                        <form method="POST" action="{% url 'backups:descargar' backup.nombre %}" style="display: inline;">
-                            {% csrf_token %}
-                            <button type="submit" class="btn-sm btn-info" title="Descargar a tu dispositivo">
-                                <i class="fas fa-download"></i> Descargar
-                            </button>
-                        </form>
+                        <a href="{% url 'backups:descargar' backup.id %}" class="btn-sm btn-info" title="Descargar a tu dispositivo">
+                            <i class="fas fa-download"></i> Descargar
+                        </a>
                         
                         <!-- Botón Restaurar -->
-                        <form method="POST" action="{% url 'backups:restaurar' backup.nombre %}" style="display: inline;">
+                        <form method="POST" action="{% url 'backups:restaurar' backup.id %}" style="display: inline;">
                             {% csrf_token %}
                             <button type="submit" class="btn-sm btn-warning" 
                                     onclick="return confirm('⚠️ ¿Restaurar este backup?\n\nSe reemplazará la base de datos actual.');"
                                     title="Restaurar desde este backup">
                                 <i class="fas fa-undo"></i> Restaurar
+                            </button>
+                        </form>
+
+                        <!-- Botón Eliminar -->
+                        <form method="POST" action="{% url 'backups:eliminar' backup.id %}" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-sm btn-danger" 
+                                    onclick="return confirm('❌ ¿Eliminar este backup permanentemente?');"
+                                    title="Eliminar backup">
+                                <i class="fas fa-trash"></i> Borrar
                             </button>
                         </form>
                     </div>
