@@ -248,6 +248,15 @@
                 Crear Backup Ahora
             </button>
         </form>
+        
+        <!-- Formulario para subir backup -->
+        <form method="POST" action="{% url 'backups:subir' %}" enctype="multipart/form-data" style="display: inline-flex; gap: 10px; align-items: center; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px dashed #ccc;">
+            {% csrf_token %}
+            <input type="file" name="backup_file" id="backup_file" accept=".sqlite3,.zip" style="font-size: 12px; max-width: 200px;">
+            <button type="submit" class="btn-sm btn-primary">
+                <i class="fas fa-upload"></i> Subir Backup
+            </button>
+        </form>
     </div>
     
     <!-- Info Box -->

@@ -25,14 +25,20 @@ def setup():
         defaults={'descripcion': 'Operario de Caja', 'activo': True}
     )
 
-    # 2. Crear todos los permisos necesarios (incluyendo reporte.view)
+    # 2. Crear todos los permisos necesarios
     permisos_data = [
         ('reporte.view', 'Ver reportes y estadísticas', 'LECTURA'),
         ('cliente.view', 'Ver clientes', 'LECTURA'),
         ('cliente.create', 'Crear clientes', 'CREACION'),
+        ('cliente.edit', 'Editar clientes', 'EDICION'),
         ('prestamo.view', 'Ver préstamos', 'LECTURA'),
         ('prestamo.create', 'Crear préstamos', 'CREACION'),
+        ('pago.view', 'Ver pagos', 'LECTURA'),
         ('pago.create', 'Registrar pagos', 'CREACION'),
+        ('pago.delete', 'Eliminar pagos', 'ELIMINACION'),
+        ('config.view', 'Ver configuración', 'LECTURA'),
+        ('config.edit', 'Editar configuración', 'EDICION'),
+        ('backup.manage', 'Gestionar backups', 'SISTEMA'),
     ]
 
     for codigo, desc, cat in permisos_data:

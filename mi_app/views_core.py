@@ -4887,6 +4887,39 @@ def backup_restore(request, backup_id):
 
 
 @admin_required
+@require_http_methods(["POST"])
+def backup_upload(request):
+    """
+    Sube un archivo de backup (.sqlite3 o .zip) al servidor
+    """
+    try:
+        if 'backup_file' not in request.FILES:
+            messages.error(request, 'No se seleccionó ningún archivo')
+            return redirect('backups:list')
+            
+        archivo = request.FILES['backup_file']
+        nombre = archivo.name
+        
+        if not (nombre.endswith('.sqlite3') or nombre.endswith('.zip')):
+            messages.error(request, 'Formato de archivo no válido. Use .sqlite3 o .zip')
+            return redirect('backups:list')
+            
+        from mi_app.utilities.backup_manager import backup_manager
+        ruta_destino = os.path.join(backup_manager.backups_dir, nombre)
+        
+        with open(ruta_destino, 'wb+') as destination:
+            for chunk in archivo.chunks():
+                destination.write(chunk)
+                
+        messages.success(request, f'Backup "{nombre}" subido correctamente')
+        
+    except Exception as e:
+        messages.error(request, f'Error al subir backup: {str(e)}')
+        
+    return redirect('backups:list')
+
+
+@admin_required
 @require_http_methods(["GET", "POST"])
 def backup_details(request, backup_id):
     """
