@@ -1364,11 +1364,12 @@ from django.dispatch import receiver
 def actualizar_total_prestado_cliente(sender, instance, created, **kwargs):
     """
     Signal que se dispara cuando se crea o modifica un Préstamo.
-    Actualiza automáticamente el total_prestado del cliente.
+    Actualiza automáticamente el total_prestado del cliente y su etiqueta.
     """
     if created:  # Solo si es nuevo
         cliente = instance.cliente
         cliente.total_prestado += instance.monto_total
+        cliente.actualizar_etiqueta()
         cliente.save()
 
 
@@ -1376,13 +1377,37 @@ def actualizar_total_prestado_cliente(sender, instance, created, **kwargs):
 def revertir_total_prestado_cliente(sender, instance, **kwargs):
     """
     Signal que se dispara cuando se elimina un Préstamo.
-    Revierte el total_prestado del cliente.
+    Revierte el total_prestado del cliente y actualiza su etiqueta.
     """
     cliente = instance.cliente
     cliente.total_prestado -= instance.monto_total
     if cliente.total_prestado < 0:
         cliente.total_prestado = 0
+    cliente.actualizar_etiqueta()
     cliente.save()
+
+
+@receiver(post_save, sender=Pago)
+def actualizar_cliente_post_pago(sender, instance, created, **kwargs):
+    """
+    Signal que se dispara al registrar un pago.
+    Actualiza automáticamente la etiqueta del cliente y su estado de lista negra.
+    """
+    if created:
+        cliente = instance.cuota.prestamo.cliente
+        # Actualizar etiqueta (Bueno/Medio/Malo) según el nuevo pago
+        cliente.actualizar_etiqueta()
+        # Verificar si debe salir de lista negra si ya pagó
+        cliente.actualizar_lista_negra_automatica(dias_mora=30)
+
+
+@receiver(post_save, sender=PagoPrestamoRapido)
+def actualizar_cliente_post_pago_rapido(sender, instance, created, **kwargs):
+    """Signal para pagos rápidos"""
+    if created:
+        cliente = instance.prestamo_rapido.cliente
+        cliente.actualizar_etiqueta()
+        cliente.actualizar_lista_negra_automatica(dias_mora=30)
 
 
 # Signal removed: total_pagado is now a calculated @property
