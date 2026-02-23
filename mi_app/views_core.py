@@ -381,12 +381,13 @@ def obtener_estadisticas_sistema():
     
     # ✅ OPTIMIZACIÓN N+1 #2: Usar agregación en lugar de loops sobre propiedades
     from django.db.models import Sum
+    from django.db.models.functions import Coalesce
     total_pagado_result = Cuota.objects.aggregate(
-        principal=Sum('monto_pagado_principal') or 0,
-        interes=Sum('monto_pagado_interes') or 0,
-        mora=Sum('monto_pagado_mora') or 0
+        principal=Coalesce(Sum('monto_pagado_principal'), Decimal('0')),
+        interes=Coalesce(Sum('monto_pagado_interes'), Decimal('0')),
+        mora=Coalesce(Sum('monto_pagado_mora'), Decimal('0'))
     )
-    total_pagado = Decimal(str(total_pagado_result['principal'] + total_pagado_result['interes'] + total_pagado_result['mora']))
+    total_pagado = total_pagado_result['principal'] + total_pagado_result['interes'] + total_pagado_result['mora']
     
     total_pendiente_capital = capital_prestado - total_pagado
     total_pendiente_credito = total_credito - total_pagado
@@ -448,42 +449,41 @@ def obtener_estadisticas_sistema():
 @require_permission('cliente.view')
 def lista_clientes(request):
     """Muestra una lista de todos los clientes."""
-    clientes = Cliente.objects.all()
+    from django.db.models import Sum, Coalesce, Count, Q
+    from decimal import Decimal
     
     busqueda = request.GET.get('q', '').strip()
+    clientes = Cliente.objects.all().select_related('lista_negra')
     
     if busqueda:
-        clientes = clientes.filter(nombre__icontains=busqueda) | clientes.filter(cedula__icontains=busqueda) | clientes.filter(celular__icontains=busqueda)
+        clientes = clientes.filter(
+            Q(nombre__icontains=busqueda) | 
+            Q(cedula__icontains=busqueda) | 
+            Q(celular__icontains=busqueda)
+        )
     
-    # ===== ERROR #5: AGREGAR INFORMACIÓN DE LISTA NEGRA A CADA CLIENTE =====
-    clientes_enriched = []
-    for cliente in clientes:
-        try:
-            lista_negra = cliente.lista_negra if hasattr(cliente, 'lista_negra') else None
-            esta_en_lista_negra = lista_negra.esta_vigente if lista_negra else False
-        except:
-            lista_negra = None
-            esta_en_lista_negra = False
-        
-        clientes_enriched.append({
-            'cliente': cliente,
-            'en_lista_negra': esta_en_lista_negra,
-            'lista_negra': lista_negra
-        })
+    # Obtener estadísticas generales de forma eficiente
+    stats = Cliente.objects.aggregate(
+        total_clientes=Count('id'),
+        clientes_activos=Count('id', filter=Q(estado='ACTIVO'))
+    )
     
-    # Obtener estadísticas generales
-    total_clientes = Cliente.objects.count()
-    clientes_activos = Cliente.objects.filter(estado='ACTIVO').count()
     total_prestamos = Prestamo.objects.count()
-    total_pagado = sum(p.total_pagado for p in Prestamo.objects.all())
+    
+    # Calcular total pagado global de forma eficiente
+    total_pagado_agg = Cuota.objects.aggregate(
+        total=Coalesce(Sum('monto_pagado_principal'), Decimal('0')) + 
+              Coalesce(Sum('monto_pagado_interes'), Decimal('0')) + 
+              Coalesce(Sum('monto_pagado_mora'), Decimal('0'))
+    )
+    total_pagado = total_pagado_agg['total']
     
     contexto = {
-        'clientes': clientes_enriched,
+        'clientes_info': [{'cliente': c, 'en_lista_negra': c.lista_negra.esta_vigente if hasattr(c, 'lista_negra') and c.lista_negra else False} for c in clientes],
         'busqueda': busqueda,
-        'cantidad': len(clientes_enriched),
-        # Estadísticas globales
-        'total_clientes': total_clientes,
-        'clientes_activos': clientes_activos,
+        'cantidad': clientes.count(),
+        'total_clientes': stats['total_clientes'],
+        'clientes_activos': stats['clientes_activos'],
         'total_prestamos': total_prestamos,
         'total_pagado': total_pagado,
     }
@@ -531,10 +531,12 @@ def clientes_importados(request):
     
     # Calcular total_pagado usando agregación, no propiedades que hacen queries
     from django.db.models import Sum
+    from django.db.models.functions import Coalesce
+    from decimal import Decimal
     total_pagado_aggregated = Cuota.objects.aggregate(
-        total_principal=Sum('monto_pagado_principal') or 0,
-        total_interes=Sum('monto_pagado_interes') or 0,
-        total_mora=Sum('monto_pagado_mora') or 0
+        total_principal=Coalesce(Sum('monto_pagado_principal'), Decimal('0')),
+        total_interes=Coalesce(Sum('monto_pagado_interes'), Decimal('0')),
+        total_mora=Coalesce(Sum('monto_pagado_mora'), Decimal('0'))
     )
     total_pagado = total_pagado_aggregated['total_principal'] + total_pagado_aggregated['total_interes'] + total_pagado_aggregated['total_mora']
     

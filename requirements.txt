@@ -8,4 +8,8 @@ pandas
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
-django-ratelimit==4.1.0tabulate
+django-ratelimit==4.1.0
+tabulate
+psycopg2-binary
+django-crispy-forms
+crispy-bootstrap5
