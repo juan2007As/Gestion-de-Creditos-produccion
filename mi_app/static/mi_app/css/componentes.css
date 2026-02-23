@@ -114,7 +114,7 @@
 .btn-outline-primary {
   background-color: transparent;
   color: var(--color-primary) !important;
-  border: 2px solid var(--color-primary);
+  border: 2px solid var(--color-primary) !important;
 }
 
 .btn-outline-primary:hover {
@@ -125,7 +125,7 @@
 .btn-outline-secondary {
   background-color: transparent;
   color: #6c757d !important;
-  border: 2px solid #6c757d;
+  border: 2px solid #6c757d !important;
 }
 
 .btn-outline-secondary:hover {
@@ -136,7 +136,7 @@
 .btn-outline-success {
   background-color: transparent;
   color: var(--color-success) !important;
-  border: 2px solid var(--color-success);
+  border: 2px solid var(--color-success) !important;
 }
 
 .btn-outline-success:hover {
@@ -147,7 +147,7 @@
 .btn-outline-info {
   background-color: transparent;
   color: var(--color-info) !important;
-  border: 2px solid var(--color-info);
+  border: 2px solid var(--color-info) !important;
 }
 
 .btn-outline-info:hover {
@@ -158,7 +158,7 @@
 .btn-outline-warning {
   background-color: transparent;
   color: var(--color-warning) !important;
-  border: 2px solid var(--color-warning);
+  border: 2px solid var(--color-warning) !important;
 }
 
 .btn-outline-warning:hover {
@@ -169,7 +169,7 @@
 .btn-outline-danger {
   background-color: transparent;
   color: var(--color-danger) !important;
-  border: 2px solid var(--color-danger);
+  border: 2px solid var(--color-danger) !important;
 }
 
 .btn-outline-danger:hover {
