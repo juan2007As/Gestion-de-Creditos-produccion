@@ -66,12 +66,12 @@ class BackupManager:
             return {'success': False, 'error': str(e)}
     
     def list_backups(self):
-        """Lista todos los backups disponibles"""
+        """Lista todos los backups disponibles (sqlite3 y zip)"""
         backups = []
         
         try:
             for filename in sorted(os.listdir(self.backups_dir), reverse=True):
-                if filename.endswith('.sqlite3'):
+                if filename.endswith('.sqlite3') or filename.endswith('.zip'):
                     backup_path = os.path.join(self.backups_dir, filename)
                     metadata_path = backup_path + '.json'
                     
@@ -90,7 +90,7 @@ class BackupManager:
                         'tamaño': os.path.getsize(backup_path),
                         'fecha': metadata.get('fecha', ''),
                         'descripcion': metadata.get('descripcion', 'Sin descripción'),
-                        'id': filename.replace('backup_', '').replace('.sqlite3', '')
+                        'id': filename.replace('backup_', '').replace('.sqlite3', '').replace('.zip', '')
                     })
         
         except Exception as e:
@@ -99,29 +99,42 @@ class BackupManager:
         return backups
     
     def restore_backup(self, backup_id):
-        """Restaura un backup específico"""
+        """Restaura un backup específico (sqlite3 o zip)"""
         try:
-            # Buscar el backup
-            backup_filename = f"backup_{backup_id}.sqlite3"
-            backup_path = os.path.join(self.backups_dir, backup_filename)
+            # Buscar el archivo (puede ser .sqlite3 o .zip)
+            backup_filename_sqlite = f"backup_{backup_id}.sqlite3"
+            backup_filename_zip = f"backup_{backup_id}.zip"
             
+            backup_path = os.path.join(self.backups_dir, backup_filename_sqlite)
+            is_zip = False
+            
+            if not os.path.exists(backup_path):
+                backup_path = os.path.join(self.backups_dir, backup_filename_zip)
+                is_zip = True
+                
             if not os.path.exists(backup_path):
                 return {'success': False, 'error': 'Backup no encontrado'}
             
             # Crear respaldo de la BD actual antes de restaurar
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             current_backup = f"db.sqlite3.backup_{timestamp}"
-            current_backup_path = os.path.join(os.path.dirname(__file__), '..', current_backup)
+            current_backup_path = os.path.join(self.base_dir, current_backup)
             
             if os.path.exists(self.db_path):
                 shutil.copy2(self.db_path, current_backup_path)
             
             # Restaurar backup
-            shutil.copy2(backup_path, self.db_path)
+            if is_zip:
+                import zipfile
+                with zipfile.ZipFile(backup_path, 'r') as zip_ref:
+                    # Buscar db.sqlite3 dentro del zip
+                    zip_ref.extract('db.sqlite3', self.base_dir)
+            else:
+                shutil.copy2(backup_path, self.db_path)
             
             return {
                 'success': True,
-                'mensaje': f'Backup restaurado: {backup_filename}',
+                'mensaje': f'Backup restaurado: {os.path.basename(backup_path)}',
                 'respaldo_anterior': current_backup
             }
         
@@ -129,22 +142,27 @@ class BackupManager:
             return {'success': False, 'error': str(e)}
     
     def delete_backup(self, backup_id):
-        """Elimina un backup específico"""
+        """Elimina un backup específico (sqlite3 o zip)"""
         try:
-            backup_filename = f"backup_{backup_id}.sqlite3"
-            backup_path = os.path.join(self.backups_dir, backup_filename)
-            metadata_path = backup_path + '.json'
+            backup_filename_sqlite = f"backup_{backup_id}.sqlite3"
+            backup_filename_zip = f"backup_{backup_id}.zip"
             
-            if os.path.exists(backup_path):
-                os.remove(backup_path)
+            deleted = False
+            for filename in [backup_filename_sqlite, backup_filename_zip]:
+                backup_path = os.path.join(self.backups_dir, filename)
+                metadata_path = backup_path + '.json'
+                
+                if os.path.exists(backup_path):
+                    os.remove(backup_path)
+                    deleted = True
+                
+                if os.path.exists(metadata_path):
+                    os.remove(metadata_path)
             
-            if os.path.exists(metadata_path):
-                os.remove(metadata_path)
-            
-            return {'success': True, 'mensaje': 'Backup eliminado'}
-        
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
+            if deleted:
+                return {'success': True, 'mensaje': 'Backup eliminado'}
+            else:
+                return {'success': False, 'error': 'Backup no encontrado'}
 
 # Crear instancia global
 backup_manager = BackupManager()

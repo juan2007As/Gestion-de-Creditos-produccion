@@ -5839,18 +5839,20 @@ def backup_rapido_generar(request):
         BACKUPS_DIR.mkdir(exist_ok=True)
         print(f"📁 BACKUPS_DIR: {BACKUPS_DIR}")
 
-        # Límite diario global: máximo 3 backups por día
+        # Límite diario global: máximo 10 backups por día (Aumentado de 3)
         fecha_hoy_prefijo = dt.datetime.now().strftime('backup_%Y%m%d_')
         backups_hoy = [
             f for f in BACKUPS_DIR.iterdir()
             if f.is_file()
             and f.name.startswith(fecha_hoy_prefijo)
-            and (f.name.endswith('.zip') or f.name.endswith('.db') or f.name.endswith('.db.gz'))
+            and (f.name.endswith('.zip') or f.name.endswith('.db') or f.name.endswith('.db.gz') or f.name.endswith('.sqlite3'))
         ]
-        if len(backups_hoy) >= 3:
+        
+        # Permitir a superusuarios saltarse el límite o usar el nuevo límite de 10
+        if len(backups_hoy) >= 10 and not request.user.is_superuser:
             return JsonResponse({
                 'success': False,
-                'error': 'Límite diario alcanzado: máximo 3 backups por día.'
+                'error': 'Límite diario alcanzado: máximo 10 backups por día.'
             }, status=429)
         
         # Ruta a la BD
