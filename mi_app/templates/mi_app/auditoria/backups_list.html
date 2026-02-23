@@ -71,8 +71,9 @@
     }
     
     .stat-card .value {
-        font-size: 32px;
-        font-weight: bold;
+        font-size: 36px;
+        font-weight: 800;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
     .stat-card.green {
@@ -106,21 +107,24 @@
     .backup-table td {
         padding: 15px;
         border-bottom: 1px solid #dee2e6;
-        color: #666;
+        color: #333;
+        vertical-align: middle;
     }
     
     .backup-table tbody tr:hover {
-        background: #f8f9fa;
+        background: #f1f3f5;
     }
     
     .backup-name {
-        font-family: 'Courier New', monospace;
-        font-size: 12px;
-        color: #333;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        color: #2c3e50;
         word-break: break-all;
-        background: #f1f3f5;
-        padding: 8px;
-        border-radius: 4px;
+        background: #ebf2ff;
+        padding: 10px 15px;
+        border-radius: 6px;
+        border: 1px solid #d0e1ff;
     }
     
     .backup-date {
@@ -139,32 +143,40 @@
     }
     
     .btn-sm {
-        padding: 6px 12px;
-        font-size: 12px;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 600;
         border: none;
-        border-radius: 6px;
+        border-radius: 8px;
         cursor: pointer;
         transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
     }
     
     .btn-info {
-        background: #e3f2fd;
-        color: #1976d2;
+        background: #007bff;
+        color: white;
+        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
     }
     
     .btn-info:hover {
-        background: #1976d2;
-        color: white;
+        background: #0056b3;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
     }
     
     .btn-warning {
-        background: #fff3e0;
-        color: #f57c00;
+        background: #ffc107;
+        color: #212529;
+        box-shadow: 0 2px 4px rgba(255, 193, 7, 0.2);
     }
     
     .btn-warning:hover {
-        background: #f57c00;
-        color: white;
+        background: #e0a800;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
     }
     
     .btn-danger {
