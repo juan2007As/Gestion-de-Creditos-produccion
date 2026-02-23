@@ -424,10 +424,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const resumenM = document.getElementById('resumen_mora');
     const resumenT = document.getElementById('resumen_total');
 
-    // Valores máximos
-    const maxPrincipal = {{ detalles.pendiente_principal|default:0 }};
-    const maxInteres = {{ detalles.pendiente_interes|default:0 }};
-    const maxMora = {{ detalles.pendiente_mora|default:0 }};
+    // Valores máximos (forzar punto decimal para JavaScript)
+    const maxPrincipal = {{ detalles.pendiente_principal|stringformat:".2f"|default:0 }};
+    const maxInteres = {{ detalles.pendiente_interes|stringformat:".2f"|default:0 }};
+    const maxMora = {{ detalles.pendiente_mora|stringformat:".2f"|default:0 }};
 
     function formatearMoneda(valor) {
         return new Intl.NumberFormat('es-CO', {
@@ -436,18 +436,6 @@ document.addEventListener('DOMContentLoaded', function() {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         }).format(valor || 0);
-    }
-
-    function actualizarResumen() {
-        const principal = parseFloat(montoP.value) || 0;
-        const interes = parseFloat(montoI.value) || 0;
-        const mora = parseFloat(montoM.value) || 0;
-        const total = principal + interes + mora;
-
-        resumenP.textContent = formatearMoneda(principal);
-        resumenI.textContent = formatearMoneda(interes);
-        resumenM.textContent = formatearMoneda(mora);
-        resumenT.textContent = formatearMoneda(total);
     }
 
     // Event listeners
@@ -460,7 +448,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Funciones para botones rápidos (ADITIVOS - suman en lugar de reemplazar)
 function adicionarPrincipal() {
-    const maxP = {{ detalles.pendiente_principal|default:0 }};
+    const maxP = {{ detalles.pendiente_principal|stringformat:".2f"|default:0 }};
     const actual = parseFloat(document.getElementById('monto_principal').value) || 0;
     const nuevo = Math.min(actual + maxP, maxP);
     document.getElementById('monto_principal').value = nuevo.toFixed(2);
@@ -468,7 +456,7 @@ function adicionarPrincipal() {
 }
 
 function adicionarInteres() {
-    const maxI = {{ detalles.pendiente_interes|default:0 }};
+    const maxI = {{ detalles.pendiente_interes|stringformat:".2f"|default:0 }};
     const actual = parseFloat(document.getElementById('monto_interes').value) || 0;
     const nuevo = Math.min(actual + maxI, maxI);
     document.getElementById('monto_interes').value = nuevo.toFixed(2);
@@ -476,7 +464,7 @@ function adicionarInteres() {
 }
 
 function adicionarMora() {
-    const maxM = {{ detalles.pendiente_mora|default:0 }};
+    const maxM = {{ detalles.pendiente_mora|stringformat:".2f"|default:0 }};
     const actual = parseFloat(document.getElementById('monto_mora').value) || 0;
     const nuevo = actual + maxM;
     document.getElementById('monto_mora').value = nuevo.toFixed(2);
@@ -484,8 +472,8 @@ function adicionarMora() {
 }
 
 function rellenarAmbos() {
-    const maxP = {{ detalles.pendiente_principal|default:0 }};
-    const maxI = {{ detalles.pendiente_interes|default:0 }};
+    const maxP = {{ detalles.pendiente_principal|stringformat:".2f"|default:0 }};
+    const maxI = {{ detalles.pendiente_interes|stringformat:".2f"|default:0 }};
     document.getElementById('monto_principal').value = maxP.toFixed(2);
     document.getElementById('monto_interes').value = maxI.toFixed(2);
     document.getElementById('monto_mora').value = 0;
@@ -493,7 +481,7 @@ function rellenarAmbos() {
 }
 
 function rellenarSoloPrincipal() {
-    const max = {{ detalles.pendiente_principal|default:0 }};
+    const max = {{ detalles.pendiente_principal|stringformat:".2f"|default:0 }};
     document.getElementById('monto_principal').value = max.toFixed(2);
     document.getElementById('monto_interes').value = 0;
     document.getElementById('monto_mora').value = 0;
@@ -501,7 +489,7 @@ function rellenarSoloPrincipal() {
 }
 
 function rellenarSoloInteres() {
-    const max = {{ detalles.pendiente_interes|default:0 }};
+    const max = {{ detalles.pendiente_interes|stringformat:".2f"|default:0 }};
     document.getElementById('monto_principal').value = 0;
     document.getElementById('monto_interes').value = max.toFixed(2);
     document.getElementById('monto_mora').value = 0;
