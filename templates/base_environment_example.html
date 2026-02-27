@@ -1,0 +1,70 @@
+<!-- templates/base.html - Ejemplo de uso de variables de ambiente -->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sistema de Créditos{% endblock %}</title>
+
+    <!-- CSS condicional por ambiente -->
+    {% if PRODUCTION %}
+        <!-- Estilos de producción -->
+        <link rel="stylesheet" href="{% static 'css/production.css' %}">
+    {% elif STAGING %}
+        <!-- Estilos de staging -->
+        <link rel="stylesheet" href="{% static 'css/staging.css' %}">
+    {% else %}
+        <!-- Estilos de desarrollo -->
+        <link rel="stylesheet" href="{% static 'css/development.css' %}">
+    {% endif %}
+
+</head>
+<body>
+
+    <!-- Barra de ambiente (solo visible en desarrollo y staging) -->
+    {% if not PRODUCTION %}
+    <div class="environment-banner environment-{{ ENVIRONMENT }}">
+        <strong>Ambiente: {{ ENVIRONMENT|upper }}</strong>
+        {% if DEBUG %}
+            <span class="debug-indicator">DEBUG</span>
+        {% endif %}
+        <span class="config-info">
+            Máx. Préstamo: ${{ CREDITS_CONFIG.MAX_LOAN_AMOUNT|intcomma }}
+        </span>
+    </div>
+    {% endif %}
+
+    <!-- Contenido principal -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Scripts condicionales -->
+    {% if PRODUCTION %}
+        <!-- Analytics de producción -->
+        <script src="https://analytics.example.com/tracker.js"></script>
+    {% endif %}
+
+    {% if LOCAL %}
+        <!-- Herramientas de desarrollo -->
+        <script src="{% static 'js/dev-tools.js' %}"></script>
+    {% endif %}
+
+    <!-- Información de debug (solo en desarrollo) -->
+    {% if DEBUG %}
+    <div class="debug-panel">
+        <details>
+            <summary>🐛 Información de Debug</summary>
+            <pre>
+Ambiente: {{ ENVIRONMENT }}
+Usuario: {{ user.username }}
+Tiempo de carga: {{ load_time }}ms
+Configuración: {{ CREDITS_CONFIG|json_script:"config-data" }}
+            </pre>
+        </details>
+    </div>
+    {% endif %}
+
+</body>
+</html>

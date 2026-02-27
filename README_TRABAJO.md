@@ -78,11 +78,52 @@ pip install -r requirements.txt
 ```
 
 ### Variables de Entorno (.env)
-Crear archivo `.env` en la raíz del proyecto:
+
+#### **Sistema de Configuración por Ambiente**
+
+Ahora el proyecto soporta **3 ambientes** con configuraciones específicas:
+
+- **🏠 `local`**: Desarrollo local (SQLite, configuraciones relajadas)
+- **🧪 `staging`**: Pruebas/Testing (PostgreSQL, configuraciones de producción)
+- **🌐 `production`**: Producción real (PostgreSQL, seguridad máxima)
+
+#### **Configuración Rápida:**
+
+1. **Para desarrollo local:**
+```bash
+cp config/local.env.example .env
+```
+
+2. **Para PythonAnywhere (producción):**
+```bash
+cp config/pythonanywhere.env.example .env
+# Luego edita los valores específicos de tu cuenta
+```
+
+#### **Archivo .env Local (Desarrollo):**
 ```env
-DEBUG=True
-SECRET_KEY=django-insecure-test-key-for-development-only-123456789
+ENVIRONMENT=local
+SECRET_KEY=django-insecure-dev-key-for-local-development-only
 ALLOWED_HOSTS=localhost,127.0.0.1,testserver
+TIME_ZONE=America/Bogota
+```
+
+#### **Archivo .env Producción (PythonAnywhere):**
+```env
+ENVIRONMENT=production
+SECRET_KEY=tu-secret-key-super-segura-aqui
+ALLOWED_HOSTS=tu-usuario.pythonanywhere.com,tu-dominio.com
+DB_NAME=tu_usuario$proyecto_john
+DB_USER=tu_usuario
+DB_PASSWORD=tu_password_db
+DB_HOST=tu_usuario.mysql.pythonanywhere-services.com
+DB_PORT=3306
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=tu-email@gmail.com
+EMAIL_HOST_PASSWORD=tu-app-password
+TIME_ZONE=America/Bogota
 ```
 
 ### Comandos Django Básicos
@@ -156,8 +197,13 @@ git diff origin/main
 ```
 
 ### Gestión de Base de Datos
+
+#### **Base de Datos por Ambiente:**
+- **Local**: SQLite automático (`db.sqlite3`)
+- **Producción**: PostgreSQL (configurado en variables de entorno)
+
 ```bash
-# Backup antes de cambios
+# Backup antes de cambios (local)
 cp db.sqlite3 db.sqlite3.backup_$(date +%Y%m%d_%H%M%S)
 
 # Limpiar base de datos
@@ -168,6 +214,103 @@ python manage.py migrate
 
 # Recargar aplicación web
 # Ir a Web tab -> Reload
+```
+
+### Funcionalidades Condicionales por Ambiente
+
+#### **En Templates (HTML):**
+```html
+{% if PRODUCTION %}
+  <!-- Solo se muestra en producción -->
+  <div class="production-notice">Sistema en Producción</div>
+{% endif %}
+
+{% if LOCAL %}
+  <!-- Solo se muestra en desarrollo -->
+  <div class="debug-info">Modo Desarrollo</div>
+{% endif %}
+
+{% if CREDITS_CONFIG.ENABLE_ADVANCED_REPORTS %}
+  <a href="{% url 'advanced_reports' %}">Reportes Avanzados</a>
+{% endif %}
+```
+
+#### **En Vistas (Python):**
+```python
+from django.conf import settings
+
+def mi_vista(request):
+    if settings.PRODUCTION:
+        # Lógica específica de producción
+        enviar_email_notificacion()
+
+    if settings.CREDITS_CONFIG['AUTO_BACKUP_ENABLED']:
+        # Realizar backup automático
+        crear_backup()
+
+    return render(request, 'template.html', {
+        'max_loan': settings.CREDITS_CONFIG['MAX_LOAN_AMOUNT'],
+        'environment': settings.ENVIRONMENT,
+    })
+```
+
+#### **En Settings (configuración condicional):**
+- Middleware solo en producción/staging
+- Configuración de email solo en producción
+- Cache Redis solo en producción
+- Logging de archivos solo en producción
+- Configuración de seguridad SSL solo en producción
+
+### Variables Disponibles en Templates
+
+Todas las variables están disponibles en todos los templates:
+
+```html
+<!-- Variables booleanas -->
+{% if PRODUCTION %}Modo Producción{% endif %}
+{% if STAGING %}Ambiente de Pruebas{% endif %}
+{% if LOCAL %}Desarrollo Local{% endif %}
+{% if DEBUG %}Debug Activado{% endif %}
+
+<!-- Información del ambiente -->
+Ambiente actual: {{ ENVIRONMENT }}
+Configuración: {{ CREDITS_CONFIG.MAX_LOAN_AMOUNT }}
+
+<!-- Configuración de la app -->
+{% if CREDITS_CONFIG.ENABLE_ADVANCED_REPORTS %}
+  <a href="{% url 'reportes_avanzados' %}">Reportes Avanzados</a>
+{% endif %}
+```
+
+### Ejemplo Práctico
+
+Ver archivo de ejemplo: `templates/base_environment_example.html`
+
+---
+
+## 🚀 Checklist de Configuración por Ambiente
+
+### Para Desarrollo Local:
+- [ ] Copiar `config/local.env.example` → `.env`
+- [ ] Configurar `ENVIRONMENT=local`
+- [ ] Ejecutar `python manage.py migrate`
+- [ ] Probar `python manage.py runserver`
+
+### Para PythonAnywhere:
+- [ ] Copiar `config/pythonanywhere.env.example` → `.env`
+- [ ] Configurar `ENVIRONMENT=production`
+- [ ] Configurar credenciales de BD PostgreSQL
+- [ ] Configurar variables de email (opcional)
+- [ ] Ejecutar `python manage.py collectstatic`
+- [ ] Reiniciar aplicación web
+
+### Verificación:
+```bash
+# Ver qué ambiente está activo
+python manage.py shell -c "from django.conf import settings; print(f'Ambiente: {settings.ENVIRONMENT}')"
+
+# Ver configuración de créditos
+python manage.py shell -c "from django.conf import settings; import json; print(json.dumps(settings.CREDITS_CONFIG, indent=2))"
 ```
 
 ### Monitoreo y Logs

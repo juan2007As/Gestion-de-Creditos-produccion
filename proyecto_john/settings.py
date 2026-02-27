@@ -17,10 +17,24 @@ from decouple import config
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ============= PRODUCCIÓN CONFIGURATION =============
-DEBUG = config('DEBUG', default=False, cast=bool)
-SECRET_KEY = config('SECRET_KEY')
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,testserver').split(',')
+# ============= CONFIGURACIÓN DE AMBIENTE =============
+# Determina el ambiente actual: 'local', 'staging', 'production'
+ENVIRONMENT = config('ENVIRONMENT', default='local')
+
+# Configuración basada en ambiente
+DEBUG = ENVIRONMENT == 'local'
+PRODUCTION = ENVIRONMENT == 'production'
+STAGING = ENVIRONMENT == 'staging'
+
+# ============= SEGURIDAD Y CONFIGURACIÓN BÁSICA =============
+if PRODUCTION:
+    SECRET_KEY = config('SECRET_KEY')  # Requerida en producción
+    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='tu-dominio.com').split(',')
+    CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS if host != 'localhost']
+else:
+    SECRET_KEY = config('SECRET_KEY', default='django-insecure-dev-key-change-in-production')
+    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,testserver').split(',')
+    CSRF_TRUSTED_ORIGINS = []
 
 
 # Application definition
@@ -45,8 +59,12 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'mi_app.auditoria.AuditoriaRequestMiddleware',
-    'mi_app.utilities.middleware.RateLimitMiddleware',  # ✅ NUEVA: Manejo de rate limiting (Bloque B - REGLA #3)
 ]
+
+# Middleware condicional basado en ambiente
+if PRODUCTION or STAGING:
+    # Solo en producción/staging
+    MIDDLEWARE.append('mi_app.utilities.middleware.RateLimitMiddleware')
 
 ROOT_URLCONF = 'proyecto_john.urls'
 
@@ -60,6 +78,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'mi_app.context_processors.environment_context',  # Agregar contexto del ambiente
             ],
         },
     },
@@ -71,15 +90,16 @@ WSGI_APPLICATION = 'proyecto_john.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# Database - SQLite para desarrollo (DEBUG=True), PostgreSQL para servidor (DEBUG=False)
-if DEBUG:
+if ENVIRONMENT == 'local':
+    # Desarrollo local - SQLite
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-else:
+elif ENVIRONMENT in ['staging', 'production']:
+    # Producción/Staging - PostgreSQL
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -88,6 +108,9 @@ else:
             'PASSWORD': config('DB_PASSWORD'),
             'HOST': config('DB_HOST', default='localhost'),
             'PORT': config('DB_PORT', default='5432'),
+            'OPTIONS': {
+                'sslmode': 'require' if PRODUCTION else 'prefer',
+            } if PRODUCTION else {},
         }
     }
 
@@ -114,56 +137,123 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = config('LANGUAGE_CODE', default='es-co')
-TIME_ZONE = config('TIME_ZONE', default='America/Bogota')
+LANGUAGE_CODE = 'es-co'  # Español Colombia
+
+TIME_ZONE = 'America/Bogota' if ENVIRONMENT == 'local' else config('TIME_ZONE', default='UTC')
 
 USE_I18N = True
 
 USE_TZ = True
 
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# https://docs.djangoproject.com/en/6.0/howto/static-files/
+
+STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Configuración de archivos estáticos por ambiente
+if PRODUCTION:
+    # WhiteNoise para servir archivos estáticos en producción
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    WHITENOISE_USE_FINDERS = True
+    WHITENOISE_AUTOREFRESH = False
+else:
+    # Configuración de desarrollo
+    STATICFILES_DIRS = [
+        BASE_DIR / 'static',
+    ]
 
 # Media files
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-# ============= AUTENTICACIÓN CONFIGURATION =============
-LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'inicio'
-LOGOUT_REDIRECT_URL = 'login'
+MEDIA_ROOT = BASE_DIR / 'media'
 
-# ============= EMAIL CONFIGURATION (Backups) =============
-# Para Gmail, necesita contraseña de app (no la contraseña normal)
-# Genera en: https://myaccount.google.com/apppasswords
-# Si no puedes generar app password: habilita "Acceso a apps menos seguras"
+# Default primary key field type
+# https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# ✅ NUEVA: Cache para rate limiting (django-ratelimit)
-# En produción usar Redis, aquí usando LocMemCache para desarrollo
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'proyecto-john-cache',
-        'KEY_PREFIX': 'proyecto_ratelimit',
-        'TIMEOUT': 3600,  # 1 hora para rate limit counters
+# ============= CONFIGURACIONES ESPECÍFICAS POR AMBIENTE =============
+
+# Logging
+if PRODUCTION:
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'handlers': {
+            'file': {
+                'level': 'ERROR',
+                'class': 'logging.FileHandler',
+                'filename': BASE_DIR / 'logs' / 'django_error.log',
+            },
+        },
+        'loggers': {
+            'django': {
+                'handlers': ['file'],
+                'level': 'ERROR',
+                'propagate': True,
+            },
+        },
     }
+    # Crear directorio de logs si no existe
+    os.makedirs(BASE_DIR / 'logs', exist_ok=True)
+
+# Email configuration
+if PRODUCTION:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = config('EMAIL_HOST')
+    EMAIL_PORT = config('EMAIL_PORT', cast=int)
+    EMAIL_USE_TLS = config('EMAIL_USE_TLS', cast=bool, default=True)
+    EMAIL_HOST_USER = config('EMAIL_HOST_USER')
+    EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
+    DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
+else:
+    # Email backend de consola para desarrollo
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Cache configuration
+if PRODUCTION:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': config('REDIS_URL', default='redis://127.0.0.1:6379/1'),
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
+
+# Security settings for production
+if PRODUCTION:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+
+# ============= CONFIGURACIÓN DE LA APLICACIÓN =============
+
+# Configuraciones específicas de la app de créditos
+CREDITS_CONFIG = {
+    'MAX_LOAN_AMOUNT': config('MAX_LOAN_AMOUNT', default=10000000, cast=int),
+    'MIN_LOAN_AMOUNT': config('MIN_LOAN_AMOUNT', default=100000, cast=int),
+    'DEFAULT_INTEREST_RATE': config('DEFAULT_INTEREST_RATE', default=15.0, cast=float),
+    'MAX_PAYMENT_DAYS': config('MAX_PAYMENT_DAYS', default=30, cast=int),
+
+    # Configuración de reportes
+    'ENABLE_ADVANCED_REPORTS': config('ENABLE_ADVANCED_REPORTS', default=PRODUCTION, cast=bool),
+
+    # Configuración de backups
+    'AUTO_BACKUP_ENABLED': config('AUTO_BACKUP_ENABLED', default=PRODUCTION, cast=bool),
+    'BACKUP_RETENTION_DAYS': config('BACKUP_RETENTION_DAYS', default=30, cast=int),
 }
 
-
-# Email: SIEMPRE backend real (SMTP) para envíos reales
-_email_password = config('EMAIL_HOST_PASSWORD', default='')
-EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
-EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
-EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = _email_password
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER or 'noreply@localhost')
-BACKUP_RECIPIENT_EMAIL = config('BACKUP_RECIPIENT_EMAIL', default='juan6722634@gmail.com')
+# Configuración de auditoría
+AUDIT_CONFIG = {
+    'ENABLE_AUDIT_LOG': config('ENABLE_AUDIT_LOG', default=True, cast=bool),
+    'AUDIT_RETENTION_DAYS': config('AUDIT_RETENTION_DAYS', default=365, cast=int) if PRODUCTION else 30,
+}
