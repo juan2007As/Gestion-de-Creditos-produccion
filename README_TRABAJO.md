@@ -309,7 +309,10 @@ Ver archivo de ejemplo: `templates/base_environment_example.html`
 # Ver qué ambiente está activo
 python manage.py shell -c "from django.conf import settings; print(f'Ambiente: {settings.ENVIRONMENT}')"
 
-# Ver configuración de créditos
+# Ver configuración completa (recomendado)
+python scripts/verificar_config.py
+
+# Ver configuración de créditos específicamente
 python manage.py shell -c "from django.conf import settings; import json; print(json.dumps(settings.CREDITS_CONFIG, indent=2))"
 ```
 
