@@ -1,5 +1,54 @@
 # 🚀 Guía de Trabajo: Desarrollo Local vs Producción PythonAnywhere
 
+---
+
+## 🎯 CONTEXTO DEL PROYECTO (IMPORTANTE PARA REANUDAR CONVERSACIONES)
+
+### 📌 **Identificación del Proyecto**
+- **Nombre**: Sistema de Gestión de Créditos
+- **Propietario**: Juan Carlos (Juancho)
+- **Tipo**: Aplicación web Django para gestión financiera
+- **GitHub**: https://github.com/juan2007As/Gestion-de-Creditos
+- **Producción**: PythonAnywhere (`Gestion-de-Creditos`)
+
+### 🛠️ **Stack Tecnológico**
+- **Backend**: Django (Python)
+- **Base de Datos**: SQLite (local) / PostgreSQL (producción)
+- **Frontend**: HTML, CSS, JavaScript, Bootstrap
+- **Hosting**: PythonAnywhere
+- **Control de Versiones**: Git
+
+### 🎯 **Funcionalidad Principal**
+Sistema completo para gestión de créditos que incluye:
+- Gestión de clientes y préstamos
+- Cálculo de cuotas e intereses
+- Sistema de pagos y amortización
+- Reportes financieros
+- Lista negra de clientes
+- Importación desde Excel
+- Auditoría completa del sistema
+
+### 👤 **Información del Desarrollador**
+- **Usuario**: Juan Carlos
+- **Ubicación**: Colombia
+- **Proyecto**: Portafolio profesional
+- **Contacto**: Desarrollo local en Windows
+
+### 📅 **Estado Actual**
+- **Última actualización**: $(date)
+- **Versión**: Producción activa
+- **Estado**: En desarrollo continuo
+- **Flujo**: Local → Git → PythonAnywhere
+
+### ⚠️ **Notas Importantes para Continuidad**
+- **Entorno local**: `c:\Users\Juancho\Desktop\Proyectos para portafolio\proyecto_john_produccion`
+- **Entorno producción**: PythonAnywhere bash: `(mi-env) ~/Gestion-de-Creditos (main)$`
+- **Base de datos**: Se limpia frecuentemente para pruebas
+- **Scripts importantes**: `limpiar_db.py`, `generar_plantilla.py`
+- **Archivos clave**: `manage.py`, `requirements.txt`, `Plantilla_Maestra_Creditos.xlsx`
+
+---
+
 ## 📋 Información General
 
 Este proyecto tiene **DOS ambientes**:
