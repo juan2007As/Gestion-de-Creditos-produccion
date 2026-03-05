@@ -68,8 +68,8 @@ class ResponsiveCurrencyInputsTests(TestCase):
             template_content = f.read()
         
         # Buscar sección de monto
-        monto_section = template_content[template_content.find('id="monto_total"'):
-                                         template_content.find('id="monto_total"') + 500]
+        idx = template_content.find('id="monto_total"')
+        monto_section = template_content[idx - 200 : idx + 500]
         self.assertIn('<span class="input-group-text currency-symbol">$</span>', monto_section)
     
     def test_formulario_prestamo_interes_input_has_percent_symbol(self):
