@@ -487,23 +487,23 @@ class Cliente(models.Model):
         constraints = [
             # ✅ CRÍTICA #8: Validaciones de datos financieros
             models.CheckConstraint(
-                condition=models.Q(total_prestado__gte=0),
+                check=models.Q(total_prestado__gte=0),
                 name='cliente_total_prestado_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(total_pagado_historico__gte=0),
+                check=models.Q(total_pagado_historico__gte=0),
                 name='cliente_total_pagado_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(tasa_cumplimiento__gte=0) & models.Q(tasa_cumplimiento__lte=100),
+                check=models.Q(tasa_cumplimiento__gte=0) & models.Q(tasa_cumplimiento__lte=100),
                 name='cliente_tasa_cumplimiento_rango_valido'
             ),
             models.CheckConstraint(
-                condition=models.Q(dias_mora_promedio__gte=0),
+                check=models.Q(dias_mora_promedio__gte=0),
                 name='cliente_dias_mora_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(rating__gte=0),
+                check=models.Q(rating__gte=0),
                 name='cliente_rating_no_negativo'
             ),
         ]
@@ -663,11 +663,11 @@ class Prestamo(models.Model):
         constraints = [
             # ✅ CRÍTICA #8: Validaciones de datos financieros
             models.CheckConstraint(
-                condition=models.Q(monto_total__gt=0),
+                check=models.Q(monto_total__gt=0),
                 name='prestamo_monto_total_positivo'
             ),
             models.CheckConstraint(
-                condition=models.Q(interes_porcentaje__gte=0),
+                check=models.Q(interes_porcentaje__gte=0),
                 name='prestamo_interes_no_negativo'
             ),
         ]
@@ -890,35 +890,35 @@ class Cuota(models.Model):
         constraints = [
             # ✅ CRÍTICA #8: Validaciones de datos financieros
             models.CheckConstraint(
-                condition=models.Q(numero_cuota__gt=0),
+                check=models.Q(numero_cuota__gt=0),
                 name='cuota_numero_positivo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_original__gt=0),
+                check=models.Q(monto_original__gt=0),
                 name='cuota_monto_original_positivo'
             ),
             models.CheckConstraint(
-                condition=models.Q(interes_normal__gte=0),
+                check=models.Q(interes_normal__gte=0),
                 name='cuota_interes_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_pagado_principal__gte=0),
+                check=models.Q(monto_pagado_principal__gte=0),
                 name='cuota_monto_pagado_principal_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_pagado_interes__gte=0),
+                check=models.Q(monto_pagado_interes__gte=0),
                 name='cuota_monto_pagado_interes_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_pagado_mora__gte=0),
+                check=models.Q(monto_pagado_mora__gte=0),
                 name='cuota_monto_pagado_mora_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_pendiente__gte=0),
+                check=models.Q(monto_pendiente__gte=0),
                 name='cuota_monto_pendiente_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(porcentaje_pagado__gte=0) & models.Q(porcentaje_pagado__lte=100),
+                check=models.Q(porcentaje_pagado__gte=0) & models.Q(porcentaje_pagado__lte=100),
                 name='cuota_porcentaje_pagado_rango_valido'
             ),
         ]
@@ -977,19 +977,19 @@ Notas: {self.notas or 'N/A'}
         constraints = [
             # ✅ CRÍTICA #8: Validaciones de datos financieros
             models.CheckConstraint(
-                condition=models.Q(monto_pagado__gt=0),
+                check=models.Q(monto_pagado__gt=0),
                 name='pago_monto_pagado_positivo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_principal__gte=0),
+                check=models.Q(monto_principal__gte=0),
                 name='pago_monto_principal_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_interes__gte=0),
+                check=models.Q(monto_interes__gte=0),
                 name='pago_monto_interes_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_mora__gte=0),
+                check=models.Q(monto_mora__gte=0),
                 name='pago_monto_mora_no_negativo'
             ),
         ]
@@ -1134,15 +1134,15 @@ class PrestamoRapido(models.Model):
         constraints = [
             # ✅ CRÍTICA #8: Validaciones de datos financieros
             models.CheckConstraint(
-                condition=models.Q(monto__gt=0),
+                check=models.Q(monto__gt=0),
                 name='prestamo_rapido_monto_positivo'
             ),
             models.CheckConstraint(
-                condition=models.Q(interes_porcentaje__gte=0),
+                check=models.Q(interes_porcentaje__gte=0),
                 name='prestamo_rapido_interes_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_pagado__gte=0),
+                check=models.Q(monto_pagado__gte=0),
                 name='prestamo_rapido_monto_pagado_no_negativo'
             ),
         ]
@@ -1284,35 +1284,35 @@ class CuotaRapida(models.Model):
         constraints = [
             # ✅ CRÍTICA #8: Validaciones de datos financieros
             models.CheckConstraint(
-                condition=models.Q(numero_cuota__gt=0),
+                check=models.Q(numero_cuota__gt=0),
                 name='cuota_rapida_numero_positivo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_original__gt=0),
+                check=models.Q(monto_original__gt=0),
                 name='cuota_rapida_monto_original_positivo'
             ),
             models.CheckConstraint(
-                condition=models.Q(interes_normal__gte=0),
+                check=models.Q(interes_normal__gte=0),
                 name='cuota_rapida_interes_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_pendiente__gte=0),
+                check=models.Q(monto_pendiente__gte=0),
                 name='cuota_rapida_monto_pendiente_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_pagado_principal__gte=0),
+                check=models.Q(monto_pagado_principal__gte=0),
                 name='cuota_rapida_monto_pagado_principal_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_pagado_interes__gte=0),
+                check=models.Q(monto_pagado_interes__gte=0),
                 name='cuota_rapida_monto_pagado_interes_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(monto_pagado_mora__gte=0),
+                check=models.Q(monto_pagado_mora__gte=0),
                 name='cuota_rapida_monto_pagado_mora_no_negativo'
             ),
             models.CheckConstraint(
-                condition=models.Q(porcentaje_pagado__gte=0) & models.Q(porcentaje_pagado__lte=100),
+                check=models.Q(porcentaje_pagado__gte=0) & models.Q(porcentaje_pagado__lte=100),
                 name='cuota_rapida_porcentaje_pagado_rango_valido'
             ),
         ]
@@ -1347,7 +1347,7 @@ class PagoPrestamoRapido(models.Model):
         constraints = [
             # ✅ CRÍTICA #8: Validaciones de datos financieros
             models.CheckConstraint(
-                condition=models.Q(monto_pagado__gt=0),
+                check=models.Q(monto_pagado__gt=0),
                 name='pago_prestamo_rapido_monto_positivo'
             ),
         ]
