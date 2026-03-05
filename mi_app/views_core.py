@@ -21,6 +21,7 @@ from mi_app.utilities.decorators import (
 )
 from mi_app.utilities.transaction_integrity import atomic_payment_view, registrar_pago_atomico  # ✅ CRÍTICA #7
 from mi_app.utils import determinar_estado_cuota_al_crear  # ✅ OPCIÓN C PASO 2: Import centralizado
+import time
 from datetime import date, timedelta
 from decimal import Decimal
 from calendar import monthrange
@@ -3036,7 +3037,16 @@ def detalle_prestamo_rapido(request, prestamo_id):
     
     # BUG #4 FIX: Asegurar que los datos sean frescos desde BD
     prestamo.refresh_from_db()
-    
+
+    # Recalcular monto_pagado desde los pagos para asegurar consistencia
+    from django.db.models import Sum
+    from decimal import Decimal
+    total_pagado = prestamo.pagos.aggregate(total=Sum('monto_pagado'))['total'] or Decimal('0')
+    if prestamo.monto_pagado != total_pagado:
+        prestamo.monto_pagado = total_pagado
+        prestamo.actualizar_estado()
+        prestamo.save()
+
     pagos = PagoPrestamoRapido.objects.filter(prestamo_rapido=prestamo).order_by('-fecha_pago')
     cuotas = CuotaRapida.objects.filter(prestamo_rapido=prestamo).order_by('numero_cuota')
 
@@ -3199,7 +3209,11 @@ def registrar_pago_rapido(request, cuota_id):
 
             prestamo.refresh_from_db()
 
-            return redirect('detalle_prestamo_rapido', prestamo_id=prestamo.id)
+            # Redirigir con timestamp para evitar cache del navegador
+            from django.urls import reverse
+            from django.http import HttpResponseRedirect
+            url = reverse('detalle_prestamo_rapido', kwargs={'prestamo_id': prestamo.id})
+            return HttpResponseRedirect(url + '?t=' + str(int(time.time())))
         
         else:
             return render(request, 'mi_app/registrar_pago_rapido.html', {
@@ -3287,7 +3301,11 @@ def registrar_pago_rapido_directo(request, prestamo_id):
                 prestamo.fecha_pago_real = date.today()
             prestamo.save()
 
-            return redirect('detalle_prestamo_rapido', prestamo_id=prestamo.id)
+            # Redirigir con timestamp para evitar cache del navegador
+            from django.urls import reverse
+            from django.http import HttpResponseRedirect
+            url = reverse('detalle_prestamo_rapido', kwargs={'prestamo_id': prestamo.id})
+            return HttpResponseRedirect(url + '?t=' + str(int(time.time())))
 
         return render(request, 'mi_app/registrar_pago_rapido.html', {
             'form': form,

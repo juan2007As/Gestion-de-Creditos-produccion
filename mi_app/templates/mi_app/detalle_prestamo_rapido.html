@@ -5,6 +5,12 @@
 
 {% block title %}Detalle Préstamo Rápido{% endblock %}
 
+{% block extra_head %}
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-4">
     <div class="row">
@@ -99,8 +105,9 @@
                             </span>
                         </div>
                         <div class="progress" style="height: 40px; background-color: #f0f0f0;">
-                            <div class="progress-bar {% if porcentaje_pagado == 100 %}bg-success{% elif porcentaje_pagado > 50 %}bg-info{% elif porcentaje_pagado > 0 %}bg-warning{% else %}bg-danger{% endif %}" 
-                                 style="width: {% localize off %}{{ porcentaje_pagado }}{% endlocalize %}%; font-size: 16px; font-weight: bold; line-height: 40px; transition: width 0.3s ease;">
+                            <div class="progress-bar {% if porcentaje_pagado == 100 %}bg-success{% elif porcentaje_pagado > 50 %}bg-info{% elif porcentaje_pagado > 0 %}bg-warning{% else %}bg-danger{% endif %}"
+                                 id="barra-progreso-principal"
+                                 style="width: {% localize off %}{{ porcentaje_pagado }}{% endlocalize %}%; font-size: 16px; font-weight: bold; line-height: 40px; transition: width 0.5s ease-in-out;">
                                 {% if porcentaje_pagado > 10 %}{{ porcentaje_pagado|formato_porcentaje}}{% endif %}
                             </div>
                         </div>
@@ -320,6 +327,49 @@
         </div>
     </div>
 </div>
+
+<script>
+// Forzar actualización visual de la barra de progreso
+document.addEventListener('DOMContentLoaded', function() {
+    // Forzar reflow de la barra de progreso
+    const barraProgreso = document.getElementById('barra-progreso-principal');
+    if (barraProgreso) {
+        // Forzar recalculo de estilos
+        const currentWidth = barraProgreso.style.width;
+        barraProgreso.style.width = '0%';
+        setTimeout(function() {
+            barraProgreso.style.width = currentWidth;
+        }, 10);
+    }
+
+    // Limpiar cualquier cache visual
+    if (window.localStorage) {
+        const cacheKey = 'prestamo_' + {{ prestamo.id }};
+        localStorage.removeItem(cacheKey);
+    }
+});
+
+// Función para actualizar barra dinámicamente (por si acaso)
+function actualizarBarraProgreso(porcentaje) {
+    const barra = document.getElementById('barra-progreso-principal');
+    if (barra) {
+        barra.style.width = porcentaje + '%';
+        barra.textContent = porcentaje > 10 ? Math.round(porcentaje) + '%' : '';
+
+        // Cambiar color según porcentaje
+        barra.className = 'progress-bar';
+        if (porcentaje == 100) {
+            barra.classList.add('bg-success');
+        } else if (porcentaje > 50) {
+            barra.classList.add('bg-info');
+        } else if (porcentaje > 0) {
+            barra.classList.add('bg-warning');
+        } else {
+            barra.classList.add('bg-danger');
+        }
+    }
+}
+</script>
 {% endblock %}
 
 
