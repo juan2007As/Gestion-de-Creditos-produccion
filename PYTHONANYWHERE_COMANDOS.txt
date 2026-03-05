@@ -1,0 +1,89 @@
+# ============================================================================
+# 🚀 COMANDOS PARA DESPLIEGUE EN PYTHONANYWHERE
+# ============================================================================
+# Ejecuta estos comandos en orden en tu consola de PythonAnywhere
+# ============================================================================
+
+echo "=== PASO 1: Verificar entorno ==="
+pwd
+which python
+python --version
+
+echo "=== PASO 2: Ir al directorio del proyecto ==="
+cd ~/Gestion-de-Creditos
+
+echo "=== PASO 3: Activar entorno virtual ==="
+source ~/.virtualenvs/mi-env/bin/activate  # Cambia 'mi-env' por tu entorno virtual
+
+echo "=== PASO 4: Verificar que el entorno esté activo ==="
+which python
+python --version
+
+echo "=== PASO 5: Hacer pull de los últimos cambios ==="
+git status
+git pull origin main
+
+echo "=== PASO 6: Instalar dependencias nuevas (si las hay) ==="
+pip install -r requirements.txt
+
+echo "=== PASO 7: Aplicar migraciones de base de datos ==="
+python manage.py migrate
+
+echo "=== PASO 8: Recopilar archivos estáticos ==="
+python manage.py collectstatic --noinput
+
+echo "=== PASO 9: Verificar configuración ==="
+python manage.py check --deploy
+
+echo "=== PASO 10: Probar que la aplicación funciona ==="
+python manage.py shell -c "import django; django.setup(); print('✅ Django configurado correctamente')"
+
+echo "=== PASO 11: Probar servidor de desarrollo (opcional) ==="
+# python manage.py runserver 0.0.0.0:8000  # Solo para pruebas, luego detener con Ctrl+C
+
+echo "=== PASO 12: IMPORTANTE - Reiniciar aplicación web ==="
+echo "Ve a la pestaña 'Web' en PythonAnywhere y haz clic en 'Reload'"
+
+echo "=== PASO 13: Verificar logs después del restart ==="
+tail -f /var/log/pythonanywhere/error.log  # En otra terminal
+
+echo "=== PASO 14: Probar aplicación en producción ==="
+# Abre tu sitio web: https://tu-usuario.pythonanywhere.com
+
+# ============================================================================
+# 📊 VERIFICACIÓN POST-DESPLIEGUE
+# ============================================================================
+
+echo "=== Verificar que funciona el login ==="
+curl -I https://tu-usuario.pythonanywhere.com/login/
+
+echo "=== Verificar base de datos ==="
+python manage.py shell -c "from mi_app.models import Cliente; print(f'Clientes: {Cliente.objects.count()}')"
+
+echo "=== Verificar archivos estáticos ==="
+ls -la staticfiles/
+
+echo "=== Verificar configuración ==="
+python manage.py shell -c "from django.conf import settings; print(f'DEBUG: {settings.DEBUG}'); print(f'ENVIRONMENT: {settings.ENVIRONMENT}')"
+
+# ============================================================================
+# 🆘 SOLUCIÓN DE PROBLEMAS
+# ============================================================================
+
+# Si hay error de SECRET_KEY:
+# echo "SECRET_KEY=tu-nueva-secret-key-super-segura" >> .env
+
+# Si hay error de ALLOWED_HOSTS:
+# nano .env  # Agregar tu dominio a ALLOWED_HOSTS
+
+# Si hay error de base de datos:
+# python manage.py dbshell  # Verificar conexión
+# python manage.py migrate  # Re-ejecutar migraciones
+
+# Ver logs de error:
+# tail -50 /var/log/pythonanywhere/error.log
+# tail -50 /var/log/pythonanywhere/access.log
+
+# Reiniciar servicios si es necesario:
+# - Web tab -> Reload
+# - Databases -> Reload (si cambiaste algo de BD)
