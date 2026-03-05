@@ -12,7 +12,7 @@ from django.db.models.functions import Coalesce
 from django.core.mail import EmailMessage
 from django.conf import settings
 from django.urls import reverse
-from mi_app.forms import ClienteForm, PrestamoForm
+from mi_app.forms import ClienteForm, PrestamoForm, ReporteCuotasVencidasForm
 from .models import Cliente, Prestamo, Cuota, Pago, Configuracion, PrestamoRapido, PagoPrestamoRapido, CuotaRapida, ListaNegra, calcular_fechas_pago, AuditoriaBackup
 from mi_app.utilities.decorators import (
     require_rol, require_permission, require_any_permission,
@@ -822,10 +822,6 @@ def crear_prestamo(request, cliente_id=None):
                     monto_pendiente_interes=interes_por_cuota,
                     fecha_pago_esperada=fecha_pago
                 )
-            
-            # Actualizar total_prestado del cliente
-            cliente.total_prestado += monto
-            cliente.save()
             
             return redirect('perfil_cliente', cliente_id=cliente.id)
         
@@ -2073,102 +2069,61 @@ def reporte_cuotas_completo(request):
 
 def reporte_cuotas_vencidas(request):
     """
-    Reporte de cuotas vencidas y próximas a vencer con filtros:
-    - Filtro por cliente
-    - Filtro por rango de fechas de vencimiento
-    - Filtro por monto mínimo
+    Reporte de cuotas vencidas y próximas a vencer con filtros.
     """
-    from django.db.models import Q
+    form = ReporteCuotasVencidasForm(request.GET or None)
     
-    # Cuotas vencidas
-    cuotas_vencidas = Cuota.objects.filter(
+    # Querysets base
+    cuotas_vencidas_qs = Cuota.objects.filter(
         pagado=False,
         fecha_pago_esperada__lt=date.today()
     ).select_related('prestamo__cliente').order_by('-fecha_pago_esperada')
     
-    # Cuotas próximas a vencer (próximos 7 días)
     fecha_limite = date.today() + timedelta(days=7)
-    cuotas_proximas = Cuota.objects.filter(
+    cuotas_proximas_qs = Cuota.objects.filter(
         pagado=False,
         fecha_pago_esperada__gte=date.today(),
         fecha_pago_esperada__lte=fecha_limite
     ).select_related('prestamo__cliente').order_by('fecha_pago_esperada')
-    
-    # Filtro por cliente_id si viene del dropdown
-    cliente_id = request.GET.get('cliente_id', '').strip()
-    if cliente_id:
-        try:
-            cliente_id_int = int(cliente_id)
-            cuotas_vencidas = cuotas_vencidas.filter(prestamo__cliente_id=cliente_id_int)
-            cuotas_proximas = cuotas_proximas.filter(prestamo__cliente_id=cliente_id_int)
-        except (ValueError, TypeError):
-            pass
-    
-    # Búsqueda por cliente
-    busqueda = request.GET.get('search', '').strip()
-    if busqueda:
-        cuotas_vencidas = cuotas_vencidas.filter(
-            prestamo__cliente__nombre__icontains=busqueda
-        )
-        cuotas_proximas = cuotas_proximas.filter(
-            prestamo__cliente__nombre__icontains=busqueda
-        )
-    
-    # Filtro por rango de fechas de vencimiento
-    fecha_desde = request.GET.get('fecha_desde', '')
-    fecha_hasta = request.GET.get('fecha_hasta', '')
-    
-    if fecha_desde:
-        try:
-            from datetime import datetime
-            fecha_desde_obj = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
-            cuotas_vencidas = cuotas_vencidas.filter(fecha_pago_esperada__gte=fecha_desde_obj)
-            cuotas_proximas = cuotas_proximas.filter(fecha_pago_esperada__gte=fecha_desde_obj)
-        except (ValueError, AttributeError):
-            pass
-    
-    if fecha_hasta:
-        try:
-            from datetime import datetime
-            fecha_hasta_obj = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
-            cuotas_vencidas = cuotas_vencidas.filter(fecha_pago_esperada__lte=fecha_hasta_obj)
-            cuotas_proximas = cuotas_proximas.filter(fecha_pago_esperada__lte=fecha_hasta_obj)
-        except (ValueError, AttributeError):
-            pass
-    
-    # Filtro por monto mínimo a recuperar
-    monto_minimo = request.GET.get('monto_minimo', '')
-    if monto_minimo:
-        try:
-            from decimal import Decimal
-            monto_val = Decimal(monto_minimo)
-            cuotas_vencidas = cuotas_vencidas.filter(monto_pendiente__gte=monto_val)
-            cuotas_proximas = cuotas_proximas.filter(monto_pendiente__gte=monto_val)
-        except:
-            pass
-    
-    # Calcular mora acumulada
-    total_mora = sum(c.calcular_mora_diaria() for c in cuotas_vencidas)
-    total_pendiente_vencidas = sum(c.monto_pendiente for c in cuotas_vencidas)
-    total_pendiente_proximas = sum(c.monto_pendiente for c in cuotas_proximas)
+
+    # Aplicar filtros si el formulario es válido
+    if form.is_valid():
+        cliente = form.cleaned_data.get('cliente')
+        fecha_desde = form.cleaned_data.get('fecha_desde')
+        fecha_hasta = form.cleaned_data.get('fecha_hasta')
+        monto_minimo = form.cleaned_data.get('monto_minimo')
+
+        if cliente:
+            cuotas_vencidas_qs = cuotas_vencidas_qs.filter(prestamo__cliente=cliente)
+            cuotas_proximas_qs = cuotas_proximas_qs.filter(prestamo__cliente=cliente)
+        
+        if fecha_desde:
+            cuotas_vencidas_qs = cuotas_vencidas_qs.filter(fecha_pago_esperada__gte=fecha_desde)
+            cuotas_proximas_qs = cuotas_proximas_qs.filter(fecha_pago_esperada__gte=fecha_desde)
+
+        if fecha_hasta:
+            cuotas_vencidas_qs = cuotas_vencidas_qs.filter(fecha_pago_esperada__lte=fecha_hasta)
+            cuotas_proximas_qs = cuotas_proximas_qs.filter(fecha_pago_esperada__lte=fecha_hasta)
+        
+        if monto_minimo is not None:
+            cuotas_vencidas_qs = cuotas_vencidas_qs.filter(monto_pendiente__gte=monto_minimo)
+            cuotas_proximas_qs = cuotas_proximas_qs.filter(monto_pendiente__gte=monto_minimo)
+
+    # Cálculos de resumen
+    total_mora = sum(c.calcular_mora_diaria() for c in cuotas_vencidas_qs)
+    total_pendiente_vencidas = sum(c.monto_pendiente for c in cuotas_vencidas_qs)
+    total_pendiente_proximas = sum(c.monto_pendiente for c in cuotas_proximas_qs)
     total_en_riesgo = total_pendiente_vencidas + total_pendiente_proximas + total_mora
     
-    # Clientes afectados
-    clientes_afectados_ids = set()
-    for cuota in cuotas_vencidas:
-        clientes_afectados_ids.add(cuota.prestamo.cliente.id)
-    for cuota in cuotas_proximas:
-        clientes_afectados_ids.add(cuota.prestamo.cliente.id)
-    
+    clientes_afectados_ids = set(cuotas_vencidas_qs.values_list('prestamo__cliente_id', flat=True))
+    clientes_afectados_ids.update(cuotas_proximas_qs.values_list('prestamo__cliente_id', flat=True))
+
     contexto = {
-        'vencidas': cuotas_vencidas,
-        'proximas': cuotas_proximas,
-        'total_vencidas': cuotas_vencidas.count(),
-        'total_proximas': cuotas_proximas.count(),
-        'search': busqueda,
-        'fecha_desde': fecha_desde,
-        'fecha_hasta': fecha_hasta,
-        'monto_minimo': monto_minimo,
+        'form': form,
+        'vencidas': cuotas_vencidas_qs,
+        'proximas': cuotas_proximas_qs,
+        'total_vencidas': cuotas_vencidas_qs.count(),
+        'total_proximas': cuotas_proximas_qs.count(),
         'total_mora': total_mora,
         'total_pendiente_vencidas': total_pendiente_vencidas,
         'total_pendiente_proximas': total_pendiente_proximas,
@@ -5517,6 +5472,7 @@ def reporte_interes_mensual(request):
     resumen = reporte.get_resumen_general()
     proyeccion = reporte.calcular_proyeccion_mes_actual()
     comparativa = reporte.get_comparativa_mes_anterior()
+    salud_cartera = reporte.get_salud_cartera()
     
     # Preparar datos para gráficos (en formato JSON para Chart.js)
     datos_grafico_1mes = resumen['periodo_1_mes']['datos']
@@ -5541,6 +5497,7 @@ def reporte_interes_mensual(request):
         'resumen': resumen,
         'proyeccion': proyeccion,
         'comparativa': comparativa,
+        'salud_cartera': salud_cartera,
         
         # Gráfico 1 mes
         'labels_1mes': json.dumps(labels_1mes),

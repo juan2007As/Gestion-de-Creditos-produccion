@@ -14,6 +14,44 @@ class ReporteInteresMensual:
     
     def __init__(self):
         self.hoy = date.today()
+
+    def get_salud_cartera(self):
+        """
+        Calcula la salud de la cartera, mostrando el total vencido y el total en alto riesgo.
+        """
+        # Cartera vencida (1+ días de mora)
+        cartera_vencida_qs = Cuota.objects.filter(
+            pagado=False,
+            fecha_pago_esperada__lt=self.hoy
+        )
+        
+        total_vencido_agg = cartera_vencida_qs.aggregate(
+            total_capital=Sum('monto_pendiente'),
+            total_interes=Sum('monto_pendiente_interes')
+        )
+        total_vencido = (total_vencido_agg['total_capital'] or Decimal('0')) + \
+                        (total_vencido_agg['total_interes'] or Decimal('0'))
+
+        # Cartera de alto riesgo (90+ días de mora)
+        fecha_limite_alto_riesgo = self.hoy - timedelta(days=90)
+        cartera_alto_riesgo_qs = cartera_vencida_qs.filter(
+            fecha_pago_esperada__lt=fecha_limite_alto_riesgo
+        )
+        
+        total_alto_riesgo_agg = cartera_alto_riesgo_qs.aggregate(
+            total_capital=Sum('monto_pendiente'),
+            total_interes=Sum('monto_pendiente_interes')
+        )
+        total_alto_riesgo = (total_alto_riesgo_agg['total_capital'] or Decimal('0')) + \
+                            (total_alto_riesgo_agg['total_interes'] or Decimal('0'))
+        
+        return {
+            'total_vencido': float(total_vencido),
+            'cuotas_vencidas': cartera_vencida_qs.count(),
+            'total_alto_riesgo': float(total_alto_riesgo),
+            'cuotas_alto_riesgo': cartera_alto_riesgo_qs.count(),
+        }
+
     
     def get_fecha_inicio_periodo(self, meses=1):
         """Calcula la fecha de inicio hace X meses"""

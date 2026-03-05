@@ -510,3 +510,29 @@ class PagoPrestamoRapidoForm(forms.Form):
         if monto is None or float(monto) <= 0:
             raise ValidationError('El monto debe ser mayor a 0.')
         return monto
+
+
+class ReporteCuotasVencidasForm(forms.Form):
+    """Formulario para filtrar el reporte de cuotas vencidas."""
+    cliente = forms.ModelChoiceField(
+        queryset=Cliente.objects.filter(prestamo__isnull=False).distinct().order_by('nombre'),
+        required=False,
+        label="Filtrar por Cliente",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    fecha_desde = forms.DateField(
+        required=False,
+        label="Vencimiento Desde",
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+    fecha_hasta = forms.DateField(
+        required=False,
+        label="Vencimiento Hasta",
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+    monto_minimo = forms.DecimalField(
+        required=False,
+        min_value=0,
+        label="Monto Mínimo Pendiente",
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00'})
+    )
