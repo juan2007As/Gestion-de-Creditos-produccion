@@ -51,6 +51,7 @@ SECRET_KEY={secret_key}
 ALLOWED_HOSTS={usuario_pa}.pythonanywhere.com,www.{usuario_pa}.pythonanywhere.com
 
 # Base de datos MySQL (PythonAnywhere)
+DB_ENGINE=django.db.backends.mysql
 DB_NAME={usuario_pa}$proyecto_john
 DB_USER={usuario_pa}
 DB_PASSWORD={db_password}

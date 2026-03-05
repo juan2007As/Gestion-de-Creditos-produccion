@@ -13,3 +13,5 @@ tabulate
 psycopg2-binary
 django-crispy-forms
 crispy-bootstrap5
+redis
+mysqlclient
