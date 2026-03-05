@@ -84,3 +84,10 @@ htmlcov/
 # Google Drive Credentials
 config/google_drive_credentials.json
 config/*.json
+
+# Directorios y archivos ajenos al proyecto
+Bases de desarrollo/
+docs/APIS_HU_Organizado.md
+docs/audios_skandia_organizados.md
+docs/pendientes_organizados.md
+resources/
