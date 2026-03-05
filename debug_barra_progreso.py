@@ -54,7 +54,8 @@ def debug_prestamo_progreso(prestamo_id):
         print(f"  Monto pagado en préstamo: ${prestamo.monto_pagado}")
 
         if total_pagos != prestamo.monto_pagado:
-            print("❌ ¡INCONSISTENCIA! Los totales no coinciden"            return False
+            print("❌ ¡INCONSISTENCIA! Los totales no coinciden")
+            return False
 
         print("\n✅ Todos los cálculos son consistentes")
         return True
