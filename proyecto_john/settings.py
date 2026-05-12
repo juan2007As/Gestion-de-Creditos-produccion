@@ -19,7 +19,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ============= CONFIGURACIÓN DE AMBIENTE =============
 # Determina el ambiente actual: 'local', 'staging', 'production'
+# Render detectado automaticamente (Render pone RENDER=true por defecto)
 ENVIRONMENT = config('ENVIRONMENT', default='local')
+
+# Si Render esta activo, forzar modo produccion
+RENDER = config('RENDER', default=False, cast=bool)
+if RENDER:
+    ENVIRONMENT = 'production'
+    PRODUCTION_HOST = os.environ.get('RENDER_EXTERNAL_HOSTNAME', '')
 
 # Configuración basada en ambiente
 DEBUG = ENVIRONMENT == 'local'
@@ -27,7 +34,14 @@ PRODUCTION = ENVIRONMENT == 'production'
 STAGING = ENVIRONMENT == 'staging'
 
 # ============= SEGURIDAD Y CONFIGURACIÓN BÁSICA =============
-if PRODUCTION:
+if RENDER:
+    # Render: dominio automatico + hosts del .env
+    SECRET_KEY = config('SECRET_KEY')
+    _extra_hosts = [host.strip() for host in config('ALLOWED_HOSTS', default='').split(',') if host.strip()]
+    _render_hosts = [PRODUCTION_HOST, '.onrender.com'] if PRODUCTION_HOST else ['.onrender.com']
+    ALLOWED_HOSTS = _render_hosts + _extra_hosts
+    CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS if not host.startswith('.')]
+elif PRODUCTION:
     SECRET_KEY = config('SECRET_KEY')  # Requerida en producción
     ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='tu-dominio.com').split(',')
     CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS if host != 'localhost']
@@ -100,19 +114,35 @@ if ENVIRONMENT == 'local':
     }
 elif ENVIRONMENT in ['staging', 'production']:
     # Producción/Staging - PostgreSQL
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': config('DB_NAME', default='proyecto_john'),
-            'USER': config('DB_USER', default='django_user'),
-            'PASSWORD': config('DB_PASSWORD'),
-            'HOST': config('DB_HOST', default='localhost'),
-            'PORT': config('DB_PORT', default='5432'),
-            'OPTIONS': {
-                'sslmode': 'require' if PRODUCTION else 'prefer',
-            } if PRODUCTION else {},
+    # Soporte para DATABASE_URL (Render, Railway, etc.)
+    import urllib.parse
+    _db_url = os.environ.get('DATABASE_URL', '')
+    if _db_url:
+        _url = urllib.parse.urlparse(_db_url)
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': _url.path[1:],  # quitar el / inicial
+                'USER': _url.username,
+                'PASSWORD': _url.password,
+                'HOST': _url.hostname,
+                'PORT': _url.port or 5432,
+            }
         }
-    }
+    else:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': config('DB_NAME', default='proyecto_john'),
+                'USER': config('DB_USER', default='django_user'),
+                'PASSWORD': config('DB_PASSWORD'),
+                'HOST': config('DB_HOST', default='localhost'),
+                'PORT': config('DB_PORT', default='5432'),
+                'OPTIONS': {
+                    'sslmode': 'require' if PRODUCTION else 'prefer',
+                } if PRODUCTION else {},
+            }
+        }
 
 
 # Password validation
@@ -228,6 +258,9 @@ else:
 
 # Security settings for production
 if PRODUCTION:
+    # Render usa proxy reverso con SSL termination
+    if RENDER:
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True

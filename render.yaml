@@ -1,0 +1,74 @@
+# Blueprint de Render — despliegue automatico desde GitHub
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Para usar esto:
+# 1. Ve a https://dashboard.render.com
+# 2. Click "New" → "Blueprint"
+# 3. Conecta tu repo GitHub (juan2007As/Gestion-de-Creditos)
+# 4. Render lee este archivo y crea todo automaticamente
+
+services:
+  # =========================================================================
+  # Servicio Web: Django + Gunicorn
+  # =========================================================================
+  - type: web
+    name: gestion-creditos
+    runtime: python
+    region: oregon  # US West — menor latencia desde Colombia
+    plan: free      # Cambiar a "starter" si necesitas 24/7
+
+    # Rama que activa el deploy
+    branch: main
+    autoDeploy: true
+
+    # Comandos de build y arranque
+    buildCommand: bash build.sh
+    startCommand: gunicorn proyecto_john.wsgi:application --workers 3 --timeout 300 --bind 0.0.0.0:$PORT
+
+    # Variables de entorno (ajusta los valores con ***)
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true     # Render genera una automatica, segura
+      - key: ALLOWED_HOSTS
+        value: .onrender.com
+      - key: TIME_ZONE
+        value: America/Bogota
+
+      # Credenciales de email (opcional — para notificaciones)
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USE_TLS
+        value: "True"
+      - key: EMAIL_HOST_USER
+        value: tu-email@gmail.com        # *** CAMBIAR ***
+      - key: EMAIL_HOST_PASSWORD
+        sync: false                      # Se configura manual en el dashboard
+      - key: DEFAULT_FROM_EMAIL
+        value: tu-email@gmail.com        # *** CAMBIAR ***
+
+      # Configuracion de la app (ajusta segun necesites)
+      - key: MAX_LOAN_AMOUNT
+        value: "10000000"
+      - key: MIN_LOAN_AMOUNT
+        value: "100000"
+      - key: DEFAULT_INTEREST_RATE
+        value: "15.0"
+      - key: MAX_PAYMENT_DAYS
+        value: "30"
+      - key: ENABLE_ADVANCED_REPORTS
+        value: "True"
+      - key: AUTO_BACKUP_ENABLED
+        value: "False"
+
+# =========================================================================
+# Base de Datos: PostgreSQL
+# =========================================================================
+databases:
+  - name: creditos-db
+    plan: free   # 1GB storage, 256MB RAM — suficiente para empezar
+    databaseName: creditos_db
+    user: creditos_user
