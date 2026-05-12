@@ -114,7 +114,7 @@ if ENVIRONMENT == 'local':
     }
 elif ENVIRONMENT in ['staging', 'production']:
     # Producción/Staging - PostgreSQL
-    # Soporte para DATABASE_URL (Render, Railway, etc.)
+    # Soporte para DATABASE_URL (Render lo inyecta automaticamente al linkear la BD)
     import urllib.parse
     _db_url = os.environ.get('DATABASE_URL', '')
     if _db_url:
@@ -122,9 +122,9 @@ elif ENVIRONMENT in ['staging', 'production']:
         DATABASES = {
             'default': {
                 'ENGINE': 'django.db.backends.postgresql',
-                'NAME': _url.path[1:],  # quitar el / inicial
+                'NAME': _url.path[1:],
                 'USER': _url.username,
-                'PASSWORD': _url.password,
+                'PASSWORD': _url.password or '',
                 'HOST': _url.hostname,
                 'PORT': _url.port or 5432,
             }
@@ -135,7 +135,7 @@ elif ENVIRONMENT in ['staging', 'production']:
                 'ENGINE': 'django.db.backends.postgresql',
                 'NAME': config('DB_NAME', default='proyecto_john'),
                 'USER': config('DB_USER', default='django_user'),
-                'PASSWORD': config('DB_PASSWORD'),
+                'PASSWORD': config('DB_PASSWORD', default=''),
                 'HOST': config('DB_HOST', default='localhost'),
                 'PORT': config('DB_PORT', default='5432'),
                 'OPTIONS': {
