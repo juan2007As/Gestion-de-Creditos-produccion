@@ -297,3 +297,4 @@ const Ajax = {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = Ajax;
 }
+window.Ajax = Ajax;

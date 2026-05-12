@@ -226,3 +226,4 @@ const Modales = {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = Modales;
 }
+window.Modales = Modales;

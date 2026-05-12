@@ -54,8 +54,8 @@ const Utils = {
     try {
       return JSON.parse(str);
     } catch (e) {
-      this.log(`Error parsing JSON: ${e.message}`, 'error');
-      return null;
+      // Si no es JSON valido, devolver el valor original (ej: 'light', 'dark')
+      return str;
     }
   },
 
@@ -231,3 +231,4 @@ const Utils = {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = Utils;
 }
+window.Utils = Utils;

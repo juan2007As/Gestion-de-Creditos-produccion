@@ -213,3 +213,4 @@ const Validadores = {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = Validadores;
 }
+window.Validadores = Validadores;

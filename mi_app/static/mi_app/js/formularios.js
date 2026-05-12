@@ -294,3 +294,4 @@ const Formularios = {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = Formularios;
 }
+window.Formularios = Formularios;

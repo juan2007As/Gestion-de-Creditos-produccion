@@ -24,4 +24,7 @@ else:
     print(f'Superusuario {username} ya existe')
 " || echo "AVISO: No se pudo crear superusuario. Crea uno cuando la BD este disponible."
 
+echo "========== BUILD: Roles y permisos =========="
+python manage.py setup_admin || echo "AVISO: No se pudo configurar roles. Ejecuta 'python manage.py setup_admin' luego."
+
 echo "========== BUILD COMPLETADO =========="

@@ -256,3 +256,4 @@ const Dropdowns = {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = Dropdowns;
 }
+window.Dropdowns = Dropdowns;
