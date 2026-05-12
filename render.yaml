@@ -36,6 +36,12 @@ services:
       - key: TIME_ZONE
         value: America/Bogota
 
+      # Conexion a la BD — Render inyecta la URL interna automaticamente
+      - key: DATABASE_URL
+        fromDatabase:
+          name: creditos-db
+          property: connectionString
+
       # Credenciales de email (opcional — para notificaciones)
       - key: EMAIL_HOST
         value: smtp.gmail.com
