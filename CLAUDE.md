@@ -2,12 +2,26 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Antes de responder a nada, leé estos archivos
+
+1. **`reglas/00-CORE.md`** — las reglas que aplican a todo. Una página, se lee entera siempre.
+2. **`reglas/01-DISPARADORES.md`** — la tabla de enrutamiento. Se consulta **antes de empezar cada tarea**.
+3. **`CONTEXTO.md`** — qué es este proyecto, qué perfil tiene (P3), y las decisiones ya tomadas con su porqué.
+4. **`DEUDA-TECNICA.md`** — el estado real conocido: qué falta, qué se aceptó conscientemente, y por qué.
+
+Si la conversación se alarga y ya no tenés el núcleo delante, volvé a leerlo antes de seguir.
+
+- **Perfil:** P3 — maneja dinero real y datos personales de clientes. Ver `reglas/README.md`.
+- **Nivel de autonomía:** Consultivo. Ver `reglas/ai-rules.md` §9.
+- **Se para y se pregunta siempre** ante: algo irreversible, cualquier operación difícil de deshacer sobre producción (y nunca sin backup verificado — `.github/workflows/backup.yml`), dinero (cálculo de interés/mora/cuotas), una categoría nueva de datos personales, un cambio de alcance, o el mismo problema fallando dos veces.
+- Si un disparador de `reglas/01-DISPARADORES.md` apunta a un archivo marcado `(pendiente de generar)`, ese es el momento de escribirlo especializado, no de improvisar el dominio de memoria.
+
 ## Project Overview
 
 Sistema de Gestión de Créditos — a Django (Python) web application for financial credit management. Includes client management, loan creation, installment calculation, payment processing, financial reporting, Excel import/export, audit logging, and a blacklist system.
 
 **Owner:** Juan Carlos (Colombia) — professional portfolio project.
-**Production:** PythonAnywhere (`Gestion-de-Creditos`).
+**Production:** Render (`gestion-creditos`, see `render.yaml`). PythonAnywhere was the previous deploy target; `PYTHONANYWHERE_COMANDOS.txt` and `prepare_production.py` are legacy from that era and no longer match `settings.py` (which only supports PostgreSQL in staging/production, not the MySQL those scripts generate).
 
 ## Stack
 
