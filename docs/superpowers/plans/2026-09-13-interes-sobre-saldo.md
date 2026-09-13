@@ -229,7 +229,8 @@ from mi_app.services.amortizacion_service import calcular_interes_periodo
 
 class CalcularInteresPeriodoTests(SimpleTestCase):
     def test_capital_500000(self):
-        self.assertEqual(calcular_interes_periodo(Decimal('500000')), Decimal('37500'))
+        # 500000*15%/2 = 37500 exacto, redondea hacia arriba a 38000 (mismo criterio que 18750->19000)
+        self.assertEqual(calcular_interes_periodo(Decimal('500000')), Decimal('38000'))
 
     def test_capital_250000_redondea_a_19000(self):
         self.assertEqual(calcular_interes_periodo(Decimal('250000')), Decimal('19000'))
@@ -898,7 +899,7 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
 
         cuotas = list(prestamo.cuotas.order_by('numero_cuota'))
         self.assertEqual(len(cuotas), 4)
-        self.assertEqual(cuotas[0].interes_normal, Decimal('37500'))  # 500000 * 15% / 2
+        self.assertEqual(cuotas[0].interes_normal, Decimal('38000'))  # 500000 * 15% / 2 = 37500, redondea a 38000
         self.assertEqual(cuotas[1].interes_normal, Decimal('0'))  # todavia no calculada
         self.assertEqual(cuotas[2].interes_normal, Decimal('0'))
         self.assertEqual(cuotas[3].interes_normal, Decimal('0'))
@@ -1024,7 +1025,7 @@ Append a la misma clase o una nueva en `mi_app/tests/test_integration_workflows.
         self.assertEqual(prestamo.capital_pendiente, Decimal('300000'))
 
         cuotas = list(prestamo.cuotas_rapidas.order_by('numero_cuota'))
-        self.assertEqual(cuotas[0].interes_normal, Decimal('22500'))  # 300000 * 15% / 2
+        self.assertEqual(cuotas[0].interes_normal, Decimal('23000'))  # 300000 * 15% / 2 = 22500, redondea a 23000
         self.assertEqual(cuotas[1].interes_normal, Decimal('0'))
 ```
 
