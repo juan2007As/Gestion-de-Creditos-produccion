@@ -1,0 +1,245 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load static %}
+{% load l10n %}
+
+{% block title %}Registrar Pago Préstamo Rápido{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Header -->
+            <div class="mb-4">
+                <h1 class="h2 mb-2">
+                    <i class="fas fa-money-bill-wave text-success"></i>
+                    Registrar Pago - Préstamo Rápido #{{ prestamo.id }}{% if cuota %} (Cuota {{ cuota.numero_cuota }}){% else %} (Pago Directo){% endif %}
+                </h1>
+            </div>
+
+            <!-- Información del Préstamo -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Información del Préstamo</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Cliente:</strong> {{ prestamo.cliente.nombre }}</p>
+                            <p><strong>Monto Original:</strong> <strong class="text-primary">{{ prestamo.monto|formato_moneda_co}}</strong></p>
+                            <p><strong>Interés:</strong> {{ prestamo.interes_porcentaje }}%</p>
+                        </div>
+                        <div class="col-md-6">
+                            {% if cuota %}
+                                <p><strong>Cuota:</strong> {{ cuota.numero_cuota }}</p>
+                                <p><strong>Vencimiento:</strong>
+                                    {% if cuota.fecha_pago_esperada %}
+                                        {{ cuota.fecha_pago_esperada|date:"d/m/Y" }}
+                                    {% else %}
+                                        <span class="text-muted">Sin fecha</span>
+                                    {% endif %}
+                                </p>
+                                <p><strong>Mora Actual:</strong> <strong class="text-danger">{{ mora_actual|formato_moneda_co}}</strong></p>
+                            {% else %}
+                                <p><strong>Modo:</strong> Pago directo sin cuotas</p>
+                                <p><strong>Saldo pendiente del préstamo:</strong> <strong class="text-danger">{{ total_debido|formato_moneda_co}}</strong></p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulario de Pago -->
+            <form method="POST" class="needs-validation">
+                {% csrf_token %}
+
+                <div class="card mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="fas fa-credit-card"></i> Detalles del Pago</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="{{ form.monto_pagado.id_for_label }}" class="form-label">
+                                Monto a Pagar * 
+                                <small class="text-muted">(Máximo: {{ total_debido|formato_moneda_co}})</small>
+                            </label>
+                            {{ form.monto_pagado }}
+                            {% if form.monto_pagado.errors %}
+                            <div class="invalid-feedback d-block">{{ form.monto_pagado.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.usuario_registra.id_for_label }}" class="form-label">
+                                        Usuario que Registra
+                                    </label>
+                                    {{ form.usuario_registra }}
+                                    <small class="text-muted">Dejar en blanco para usar "Sistema"</small>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.referencia.id_for_label }}" class="form-label">
+                                        Referencia/Comprobante
+                                    </label>
+                                    {{ form.referencia }}
+                                    <small class="text-muted">Ej: Número de transferencia</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.notas.id_for_label }}" class="form-label">Notas</label>
+                            {{ form.notas }}
+                            <small class="text-muted">Anotaciones adicionales (opcional)</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resumen del Pago - MEJORADO -->
+                <div class="card mb-4 border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-calculator"></i> Resumen del Pago</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Tabla de cálculos -->
+                        <table class="table table-sm mb-3">
+                            <tr class="table-light">
+                                <td><strong><i class="fas fa-wallet text-danger"></i> {% if cuota %}Total Cuota{% else %}Saldo Préstamo{% endif %}:</strong></td>
+                                <td class="text-end"><strong class="text-danger" style="font-size: 16px;">{{ total_debido|formato_moneda_co}}</strong></td>
+                            </tr>
+                            <tr class="table-light">
+                                <td><strong><i class="fas fa-minus-circle text-warning"></i> Monto a Pagar:</strong></td>
+                                <td class="text-end"><strong id="monto_pago_resumen" class="text-warning" style="font-size: 16px;">$0,00</strong></td>
+                            </tr>
+                            <tr class="table-primary">
+                                <td><strong><i class="fas fa-equals"></i> Nuevo Saldo:</strong></td>
+                                <td class="text-end"><strong id="nuevo_saldo_resumen" class="text-info" style="font-size: 18px; padding: 5px 0;">{{ total_debido|formato_moneda_co}}</strong></td>
+                            </tr>
+                        </table>
+
+                        <!-- Alerta de validación -->
+                        <div id="resumen-error" class="alert alert-danger" style="display: none; margin-bottom: 0;">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            <strong>El monto no puede ser mayor al saldo pendiente</strong>
+                        </div>
+
+                        <!-- Indicador de progreso -->
+                        <div class="mt-3">
+                            <small class="text-muted">Indicador de Pago:</small>
+                            <div class="progress mt-2" style="height: 25px;">
+                                <div id="progreso-pago" class="progress-bar bg-info" style="width: 0%; transition: width 0.2s ease; font-weight: bold; line-height: 25px; font-size: 12px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botones -->
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success btn-lg flex-grow-1">
+                        <i class="fas fa-check"></i> Registrar Pago
+                    </button>
+                    <a href="{% url 'detalle_prestamo_rapido' prestamo.id %}" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const montoInput = document.getElementById('id_monto_pagado');
+    const saldoActual = parseFloat('{% localize off %}{{ total_debido }}{% endlocalize %}') || 0;
+
+    if (!montoInput) {
+        return;
+    }
+
+    // Función para formatear a moneda colombiana
+    function formatearMonedaColombia(valor) {
+        return new Intl.NumberFormat('es-CO', {
+            style: 'currency',
+            currency: 'COP',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(valor);
+    }
+
+    function actualizarResumen() {
+        const montoPago = parseFloat(montoInput.value) || 0;
+        const nuevoSaldo = saldoActual - montoPago;
+        const porcentajePago = saldoActual > 0 ? (montoPago / saldoActual) * 100 : 0;
+
+        // Actualizar monto a pagar
+        document.getElementById('monto_pago_resumen').textContent = formatearMonedaColombia(montoPago);
+
+        // Actualizar nuevo saldo
+        document.getElementById('nuevo_saldo_resumen').textContent = formatearMonedaColombia(Math.max(0, nuevoSaldo));
+        
+        // Actualizar indicador de progreso
+        const progresoElement = document.getElementById('progreso-pago');
+        const porcentajeSeguro = Math.min(porcentajePago, 100);
+        progresoElement.style.width = porcentajeSeguro + '%';
+        progresoElement.textContent = porcentajeSeguro > 10 ? Math.round(porcentajeSeguro) + '%' : '';
+        
+        // Cambiar color del progreso
+        if (porcentajeSeguro === 100) {
+            progresoElement.className = 'progress-bar bg-success';
+        } else if (porcentajeSeguro >= 50) {
+            progresoElement.className = 'progress-bar bg-info';
+        } else if (porcentajeSeguro > 0) {
+            progresoElement.className = 'progress-bar bg-warning';
+        } else {
+            progresoElement.className = 'progress-bar bg-secondary';
+        }
+        
+        // Cambiar color del nuevo saldo según situación
+        const nuevoSaldoElement = document.getElementById('nuevo_saldo_resumen');
+        if (nuevoSaldo < 0) {
+            nuevoSaldoElement.className = 'text-danger fw-bold';
+            document.getElementById('resumen-error').style.display = 'block';
+        } else if (nuevoSaldo === 0 || (montoPago > 0 && nuevoSaldo < 100)) {
+            nuevoSaldoElement.className = 'text-success fw-bold';
+            document.getElementById('resumen-error').style.display = 'none';
+        } else {
+            nuevoSaldoElement.className = 'text-info fw-bold';
+            document.getElementById('resumen-error').style.display = 'none';
+        }
+    }
+
+    montoInput.addEventListener('input', actualizarResumen);
+    montoInput.addEventListener('change', actualizarResumen);
+    
+    // Inicializar
+    actualizarResumen();
+
+    // Validación antes de enviar
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const montoPago = parseFloat(montoInput.value) || 0;
+        
+        if (montoPago <= 0) {
+            e.preventDefault();
+            alert('El monto debe ser mayor a 0');
+            montoInput.focus();
+            return false;
+        }
+
+        if (montoPago > saldoActual) {
+            e.preventDefault();
+            alert(`El monto no puede ser mayor a ${formatearMonedaColombia(saldoActual)}`);
+            montoInput.focus();
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}
+
+
+
+

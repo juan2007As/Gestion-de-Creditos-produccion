@@ -1,0 +1,904 @@
+{% extends 'mi_app/base.html' %}
+
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}Crear Préstamo{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" id="form-container">
+    <!-- HEADER -->
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="fas fa-file-contract"></i> Crear Préstamo</h2>
+            <p class="text-muted">Formulario para crear un nuevo préstamo con cuotas automáticas</p>
+        </div>
+    </div>
+
+    {% if error %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle"></i> {{ error }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endif %}
+
+    <!-- FORMULARIO PRINCIPAL -->
+    <form method="POST" class="needs-validation" novalidate>
+        {% csrf_token %}
+
+        <!-- ==================== SECCIÓN 1: INFORMACIÓN BÁSICA ==================== -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle"></i> Información Básica
+                </h5>
+            </div>
+            <div class="card-body p-4">
+
+                <!-- CLIENTE - Full Width -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold mb-2">👤 Cliente *</label>
+                    <input 
+                        type="text" 
+                        id="cliente_search_prestamo" 
+                        class="cliente-search-input" 
+                        placeholder="Busca por nombre, cédula o teléfono..."
+                        autocomplete="off"
+                        required
+                    />
+                    <input type="hidden" id="cliente_id" name="cliente" required />
+                    
+                    <!-- Cliente seleccionado -->
+                    <div id="cliente_seleccionado" style="display: none;" class="mt-3">
+                        <div class="alert alert-success border-0 bg-success bg-opacity-10 mb-2">
+                            <small class="fw-bold text-success">
+                                <i class="fas fa-check-circle"></i> Cliente seleccionado:
+                            </small>
+                            <h6 class="mb-1 mt-2" id="cliente_nombre_display"></h6>
+                            <small class="text-muted">
+                                <i class="fas fa-id-card"></i> <span id="cliente_cedula_display"></span> | 
+                                <i class="fas fa-phone"></i> <span id="cliente_celular_display"></span>
+                            </small>
+                        </div>
+                        
+                        <!-- ===== ERROR #5: ALERTA LISTA NEGRA ===== -->
+                        <div id="alerta_lista_negra" style="display: none;" class="alert alert-warning border-3 border-warning bg-warning bg-opacity-10 mb-0">
+                            <h6 class="mb-2 text-warning">
+                                <i class="fas fa-exclamation-circle"></i> ⚠️ CLIENTE EN LISTA NEGRA
+                            </h6>
+                            <p class="mb-1 small">
+                                <strong>Razón:</strong> <span id="lista_negra_razon"></span>
+                            </p>
+                            <p class="mb-0 small text-muted">
+                                <strong>Desde:</strong> <span id="lista_negra_fecha"></span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MONTO E INTERÉS - Row 50/50 -->
+                <div class="row g-3 mb-4">
+                    <!-- MONTO TOTAL -->
+                    <div class="col-md-6">
+                        <label for="monto_total" class="form-label fw-bold mb-2">💵 Monto Total ($) *</label>
+                        <div class="input-currency">
+                            <span class="currency-symbol">$</span>
+                            <input 
+                                type="number" 
+                                id="monto_total" 
+                                name="monto_total"
+                                class="form-control" 
+                                placeholder="100000"
+                                step="0.01"
+                                min="0"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <!-- INTERÉS -->
+                    <div class="col-md-6">
+                        <label for="interes_porcentaje" class="form-label fw-bold mb-2">📊 Tasa de Interés (%) *</label>
+                        <div class="input-currency">
+                            <span class="currency-symbol">%</span>
+                            <input 
+                                type="number" 
+                                id="interes_porcentaje" 
+                                name="interes_porcentaje"
+                                class="form-control" 
+                                placeholder="15"
+                                value="15"
+                                step="0.01"
+                                min="0"
+                                max="100"
+                                required
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DIVISOR -->
+                <hr class="my-4">
+
+                <!-- RESUMEN DE CÁLCULO -->
+                <h6 class="text-uppercase fw-bold mb-3">
+                    <i class="fas fa-calculator text-info"></i> Resumen de Cálculo
+                </h6>
+
+                <div class="row g-3">
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card border-0 shadow-sm bg-primary bg-opacity-10 h-100">
+                            <div class="card-body p-3">
+                                <small class="text-muted d-block">Monto a Prestar</small>
+                                <h5 id="resumen_monto" class="text-primary fw-bold mb-2">$0.00</h5>
+                                <small class="text-muted"><i class="fas fa-arrow-right"></i> Capital</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card border-0 shadow-sm bg-warning bg-opacity-10 h-100">
+                            <div class="card-body p-3">
+                                <small class="text-muted d-block">Interés Total</small>
+                                <h5 id="resumen_interes_total" class="text-warning fw-bold mb-2">$0.00</h5>
+                                <small class="text-muted"><i class="fas fa-info-circle"></i> Automático</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card border-0 shadow-sm bg-success bg-opacity-10 h-100">
+                            <div class="card-body p-3">
+                                <small class="text-muted d-block">Total Mensual</small>
+                                <h5 id="resumen_total_mes" class="text-success fw-bold mb-2">$0.00</h5>
+                                <small class="text-muted"><i class="fas fa-plus"></i> Capital + Interés</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card border-0 shadow-sm bg-info bg-opacity-10 h-100">
+                            <div class="card-body p-3">
+                                <small class="text-muted d-block">Interés x Cuota</small>
+                                <h5 id="resumen_interes_cuota" class="text-info fw-bold mb-2">$0.00</h5>
+                                <small class="text-muted"><i class="fas fa-divide"></i> Por cuota</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ==================== SECCIÓN 2: NÚMERO DE CUOTAS ==================== -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-list-ol"></i> Número de Cuotas
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="cuota_count" class="form-label fw-bold mb-2">
+                            ¿Cuántas cuotas? (1 a 6) *
+                        </label>
+                        <select 
+                            id="cuota_count" 
+                            name="numero_cuotas"
+                            class="form-select form-select-lg"
+                            required
+                        >
+                            <option value="" disabled selected>Selecciona...</option>
+                            <option value="1">1 cuota</option>
+                            <option value="2">2 cuotas</option>
+                            <option value="3">3 cuotas</option>
+                            <option value="4">4 cuotas</option>
+                            <option value="5">5 cuotas</option>
+                            <option value="6">6 cuotas</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label d-block mb-2">&nbsp;</label>
+                        <button 
+                            type="button" 
+                            class="btn btn-info btn-lg w-100"
+                            onclick="generarCuotas()"
+                        >
+                            <i class="fas fa-cogs"></i> Generar Cuotas Automáticamente
+                        </button>
+                    </div>
+                </div>
+                <small class="text-muted d-block mt-2">
+                    <i class="fas fa-calendar-check"></i> Fechas cada 15 días
+                </small>
+            </div>
+        </div>
+
+        <!-- ==================== SECCIÓN 3: TABLA DE CUOTAS ==================== -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-table"></i> Vista Previa de Cuotas
+                </h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 10%;">Cuota #</th>
+                            <th style="width: 22%;">Capital</th>
+                            <th style="width: 22%;">Interés x Cuota (<span id="interes_header">7.5</span>%)</th>
+                            <th style="width: 22%;">Total</th>
+                            <th style="width: 24%;">Fecha de Pago</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cuotas_tbody">
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox" style="font-size: 2em;"></i><br>
+                                <small>Completa los datos y haz clic en "Generar Cuotas Automáticamente"</small>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ==================== CAMPO OCULTO ==================== -->
+        <input type="hidden" id="num_cuotas_input" name="num_cuotas" value="1">
+
+        <!-- ==================== BOTONES DE ACCIÓN ==================== -->
+        <div class="row g-3">
+            <div class="col-md-8">
+                <button type="submit" class="btn btn-success btn-lg w-100">
+                    <i class="fas fa-save"></i> Crear Préstamo
+                </button>
+            </div>
+            <div class="col-md-4">
+                <a href="{% url 'inicio' %}" class="btn btn-secondary btn-lg w-100">
+                    <i class="fas fa-times"></i> Cancelar
+                </a>
+            </div>
+        </div>
+
+    </form>
+</div>
+
+<!-- ==================== ESTILOS CSS ==================== -->
+<!-- ==================== ESTILOS CSS ==================== -->
+<style>
+    #form-container {
+        background-color: #f8f9fa;
+        padding: 1.5rem;
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        border: none;
+    }
+
+    .table {
+        margin-bottom: 0;
+    }
+
+    /* Dropdown Cliente - MEJORADO CON Z-INDEX GARANTIZADO */
+    .cliente-dropdown {
+        position: fixed;
+        z-index: 10000 !important;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        max-height: 300px;
+        overflow-y: auto;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        min-width: 200px;
+        display: none;
+    }
+
+    .cliente-dropdown.show {
+        display: block;
+    }
+
+    .cliente-dropdown .list-group-item {
+        display: block;
+        width: 100%;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0;
+        background-color: white;
+        border: none;
+        border-bottom: 1px solid #dee2e6;
+        cursor: pointer;
+        text-align: left;
+        transition: background-color 0.15s ease;
+        appearance: none;
+    }
+
+    .cliente-dropdown .list-group-item:last-child {
+        border-bottom: none;
+    }
+
+    .cliente-dropdown .list-group-item:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .cliente-dropdown .list-group-item.active {
+        background-color: #e9ecef;
+    }
+    
+    .cliente-dropdown .dropdown-empty {
+        padding: 0.75rem 1rem;
+        color: #6c757d;
+        text-align: center;
+        font-size: 0.875rem;
+    }
+
+    /* Input Groups - Alineación perfecta */
+    .input-group {
+        display: flex;
+        width: 100%;
+    }
+
+    .input-group-lg .form-control,
+    .input-group-lg .input-group-text {
+        height: calc(1.5em + 1.5rem + 2px);
+        font-size: 1rem;
+    }
+
+    .input-group-text {
+        background-color: #e9ecef;
+        border: 1px solid #dee2e6;
+        padding: 0.75rem;
+        min-width: auto;
+        width: 50px !important;
+    }
+
+    .input-group .form-control {
+        border: 1px solid #dee2e6;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .input-group-text:first-child {
+        border-right: none;
+    }
+
+    .input-group-text:last-child {
+        border-left: none;
+    }
+
+    .input-currency {
+        display: flex;
+        align-items: stretch;
+        width: 100%;
+    }
+
+    .input-currency input.form-control {
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        border-left: 0;
+        min-height: 44px;
+    }
+
+    .input-currency .currency-symbol {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 50px;
+        padding: 0 12px;
+        min-height: 44px;
+        border: 1px solid #dee2e6;
+        border-right: 0;
+        background-color: #e9ecef;
+        color: #495057;
+        font-weight: 600;
+        border-top-left-radius: 0.375rem;
+        border-bottom-left-radius: 0.375rem;
+    }
+
+    .input-currency:focus-within .currency-symbol {
+        border-color: #86b7fe;
+    }
+
+    .bg-primary.bg-opacity-10 {
+        background-color: rgba(13, 110, 253, 0.1) !important;
+    }
+
+    .bg-warning.bg-opacity-10 {
+        background-color: rgba(255, 193, 7, 0.1) !important;
+    }
+
+    .bg-success.bg-opacity-10 {
+        background-color: rgba(25, 135, 84, 0.1) !important;
+    }
+
+    .bg-info.bg-opacity-10 {
+        background-color: rgba(13, 202, 240, 0.1) !important;
+    }
+</style>
+
+<!-- ==================== JAVASCRIPT ==================== -->
+<script>
+// ✅ CSS ESTÁNDAR DROPDOWN
+const styleDropdown = document.createElement('style');
+styleDropdown.textContent = `
+    .cliente-search-input {
+        height: 48px;
+        font-size: 1rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 0.5rem;
+        padding: 10px 14px;
+        width: 100%;
+        transition: all 0.2s ease;
+    }
+
+    .cliente-search-input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+    }
+
+    .dropdown-results {
+        position: fixed;
+        top: auto;
+        left: auto;
+        right: auto;
+        display: none;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        max-height: 450px;
+        overflow-y: auto;
+        z-index: 99999;
+        width: 300px;
+    }
+
+    .dropdown-results.show {
+        display: block;
+    }
+
+    .dropdown-results .list-group-item {
+        display: block;
+        width: 100%;
+        padding: 16px 18px;
+        border: none;
+        border-bottom: 1px solid #f5f5f5;
+        background: white;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.15s ease;
+    }
+
+    .dropdown-results .list-group-item:first-child {
+        border-top-left-radius: 0.75rem;
+        border-top-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:last-child {
+        border-bottom: none;
+        border-bottom-left-radius: 0.75rem;
+        border-bottom-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:hover {
+        background: linear-gradient(135deg, #f7f8fc 0%, #f0f2f7 100%);
+        padding-left: 22px;
+        border-left: 3px solid #667eea;
+    }
+
+    .dropdown-results .list-group-item strong {
+        display: block;
+        color: #212529;
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .dropdown-results .list-group-item small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .dropdown-results .list-group-item small i {
+        color: #667eea;
+        margin-right: 4px;
+    }
+`;
+document.head.appendChild(styleDropdown);
+
+// ===== ERROR #5: MAPA DE LISTA NEGRA =====
+const listaNegraPrestamo = {{ clientes_lista_negra_json|safe }};
+const clientePreselectionado_json = '{{ cliente_preseleccionado_json|safe }}';
+console.log('📋 Mapa de lista negra cargado:', listaNegraPrestamo);
+
+// ✅ Cargar clientes
+let clientesGlobales_prestamo = [];
+
+async function cargarClientes_prestamo() {
+    try {
+        const response = await fetch('{% url "lista_clientes_api" %}');
+        const data = await response.json();
+        clientesGlobales_prestamo = data.clientes || [];
+        console.log('✅ Clientes cargados:', clientesGlobales_prestamo.length);
+    } catch (error) {
+        console.error('❌ Error cargando clientes:', error);
+    }
+}
+
+// ✅ Inicializar dropdown
+document.addEventListener('DOMContentLoaded', function() {
+    cargarClientes_prestamo();
+
+    const input = document.getElementById('cliente_search_prestamo');
+
+    if (!input) {
+        console.error('❌ Input no encontrado');
+        return;
+    }
+
+    // Crear dropdown dinámicamente al final del body
+    const resultados = document.createElement('div');
+    resultados.id = 'cliente_resultados_prestamo';
+    resultados.className = 'dropdown-results';
+    document.body.appendChild(resultados);
+
+    console.log('✅ Sistema de búsqueda iniciado en formulario_prestamo');
+
+    function posicionarDropdown() {
+        const rect = input.getBoundingClientRect();
+        resultados.style.top = (rect.bottom + 5) + 'px';
+        resultados.style.left = rect.left + 'px';
+        resultados.style.width = rect.width + 'px';
+        resultados.style.zIndex = '99999';
+    }
+
+    let debounceTimer;
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim().toLowerCase();
+
+        if (query.length < 1) {
+            resultados.classList.remove('show');
+            return;
+        }
+
+        debounceTimer = setTimeout(function() {
+            const filtered = clientesGlobales_prestamo.filter(c =>
+                c.nombre.toLowerCase().includes(query) ||
+                (c.cedula && c.cedula.toLowerCase().includes(query)) ||
+                (c.celular && c.celular.toLowerCase().includes(query))
+            );
+
+            resultados.innerHTML = '';
+
+            if (filtered.length === 0) {
+                resultados.innerHTML = '<div class="list-group-item text-muted">No encontrado</div>';
+                posicionarDropdown();
+                resultados.classList.add('show');
+                return;
+            }
+
+            filtered.forEach(cliente => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action text-start';
+                btn.innerHTML = `
+                    <strong>${cliente.nombre}</strong><br>
+                    <small class="text-muted">
+                        <i class="fas fa-id-card"></i> ${cliente.cedula || '-'} | 
+                        <i class="fas fa-phone"></i> ${cliente.celular || '-'}
+                    </small>
+                `;
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    input.value = cliente.nombre;
+                    document.getElementById('cliente_id').value = cliente.id;
+                    resultados.classList.remove('show');
+                    
+                    // Mostrar datos del cliente
+                    document.getElementById('cliente_nombre_display').textContent = cliente.nombre;
+                    document.getElementById('cliente_cedula_display').textContent = cliente.cedula || '-';
+                    document.getElementById('cliente_celular_display').textContent = cliente.celular || '-';
+                    document.getElementById('cliente_seleccionado').style.display = 'block';
+                    
+                    // ===== ERROR #5: MOSTRAR/OCULTAR ALERTA LISTA NEGRA =====
+                    const alertaDiv = document.getElementById('alerta_lista_negra');
+                    if (listaNegraPrestamo[cliente.id]) {
+                        const datosListaNegra = listaNegraPrestamo[cliente.id];
+                        document.getElementById('lista_negra_razon').textContent = datosListaNegra.razon;
+                        document.getElementById('lista_negra_fecha').textContent = datosListaNegra.fecha;
+                        alertaDiv.style.display = 'block';
+                        console.log('⚠️ Cliente en lista negra:', cliente.nombre);
+                    } else {
+                        alertaDiv.style.display = 'none';
+                        console.log('✅ Cliente no está en lista negra');
+                    }
+                });
+                resultados.appendChild(btn);
+            });
+
+            posicionarDropdown();
+            resultados.classList.add('show');
+        }, 300);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target !== input && !resultados.contains(e.target)) {
+            resultados.classList.remove('show');
+        }
+    });
+
+    window.addEventListener('scroll', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    }, true);
+
+    window.addEventListener('resize', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    });
+
+    // Limpiar selección cuando cambia input
+    input.addEventListener('input', function() {
+        if (this.value.trim() === '') {
+            document.getElementById('cliente_id').value = '';
+            document.getElementById('cliente_seleccionado').style.display = 'none';
+            document.getElementById('alerta_lista_negra').style.display = 'none';
+        }
+    });
+});
+
+// ✅ FUNCIÓN 2: Formatear moneda colombiana
+function formatearMonedaColombia(valor) {
+    return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(valor || 0);
+}
+
+// ✅ FUNCIÓN 3: Actualizar resumen en vivo
+document.addEventListener('DOMContentLoaded', function() {
+    const montoInput = document.getElementById('monto_total');
+    const interesInput = document.getElementById('interes_porcentaje');
+    const cuotaCountInput = document.getElementById('cuota_count');
+
+    function actualizarResumen() {
+        const monto = parseFloat(montoInput.value) || 0;
+        const interes = parseFloat(interesInput.value) || 0;
+        const numCuotas = parseInt(cuotaCountInput.value) || 2; // Default a 2 si no hay selección
+
+        const interesMensual = (monto * interes) / 100;
+        const totalMensual = monto + interesMensual;
+        const interesPorCuota = numCuotas > 0 ? interesMensual / numCuotas : 0; // ✅ CORREGIDO
+
+        document.getElementById('resumen_monto').textContent = formatearMonedaColombia(monto);
+        document.getElementById('resumen_interes_total').textContent = formatearMonedaColombia(interesMensual);
+        document.getElementById('resumen_total_mes').textContent = formatearMonedaColombia(totalMensual);
+        document.getElementById('resumen_interes_cuota').textContent = formatearMonedaColombia(interesPorCuota);
+    }
+
+    montoInput.addEventListener('input', actualizarResumen);
+    interesInput.addEventListener('input', actualizarResumen);
+    cuotaCountInput.addEventListener('change', actualizarResumen);
+
+    actualizarResumen();
+});
+
+// ===== ERROR #5: PRES ELECC CLIENTE PRESELECCIONADO CUANDO LA PÁGINA CARGA =====
+document.addEventListener('DOMContentLoaded', function() {
+    if (clientePreselectionado_json) {
+        try {
+            const cliente = JSON.parse(clientePreselectionado_json);
+            console.log('📌 Cliente preseleccionado:', cliente.nombre);
+            
+            // Llenar el formulario con el cliente preseleccionado
+            document.getElementById('cliente_id').value = cliente.id;
+            document.getElementById('cliente_search_prestamo').value = cliente.nombre;
+            document.getElementById('cliente_nombre_display').textContent = cliente.nombre;
+            document.getElementById('cliente_cedula_display').textContent = cliente.cedula || '-';
+            document.getElementById('cliente_celular_display').textContent = cliente.celular || '-';
+            document.getElementById('cliente_seleccionado').style.display = 'block';
+            
+            // ===== ERROR #5: MOSTRAR ALERTA LISTA NEGRA SI APLICA =====
+            const alertaDiv = document.getElementById('alerta_lista_negra');
+            if (listaNegraPrestamo[cliente.id]) {
+                const datosListaNegra = listaNegraPrestamo[cliente.id];
+                document.getElementById('lista_negra_razon').textContent = datosListaNegra.razon;
+                document.getElementById('lista_negra_fecha').textContent = datosListaNegra.fecha;
+                alertaDiv.style.display = 'block';
+                console.log('⚠️ PRESELECCIONADO: Cliente en lista negra');
+            } else {
+                alertaDiv.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('❌ Error al parsear cliente preseleccionado:', error);
+        }
+    }
+});
+
+// ✅ FUNCIÓN 4: Generar fechas de pago cada 15 días
+function generarFechasPago(numCuotas) {
+    /**
+     * Genera fechas de pago automáticas cada 15 días.
+     * 
+     * Lógica:
+     * 1. Primera cuota: próxima fecha >= (hoy + 15 días) en el conjunto {5, 15, 20, 30}
+     * 2. Siguientes cuotas: cada 15 días después
+     * 3. Si la fecha no existe en el mes (ej: 30 de febrero), usa la siguiente disponible
+     */
+    
+    const diasPagoValidos = [5, 15, 20, 30];
+    const fechas = [];
+    
+    // Hoy + 15 días
+    let fechaMinima = new Date();
+    fechaMinima.setDate(fechaMinima.getDate() + 15);
+    
+    let fechaActual = new Date(fechaMinima);
+    
+    for (let i = 0; i < numCuotas; i++) {
+        let fechaEncontrada = null;
+        let mesActual = fechaActual.getMonth();
+        let añoActual = fechaActual.getFullYear();
+        
+        // Buscar en días válidos del mes actual
+        for (let dia of diasPagoValidos) {
+            const candidata = new Date(añoActual, mesActual, dia);
+            
+            // Verificar que el día existe en este mes
+            if (candidata.getDate() === dia && candidata >= fechaActual) {
+                fechaEncontrada = new Date(candidata);
+                break;
+            }
+        }
+        
+        // Si no encuentra en este mes, buscar en el siguiente
+        if (!fechaEncontrada) {
+            mesActual = (mesActual + 1) % 12;
+            if (mesActual === 0) añoActual++;
+            
+            fechaActual = new Date(añoActual, mesActual, 1);
+            
+            for (let dia of diasPagoValidos) {
+                const candidata = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), dia);
+                if (candidata.getDate() === dia) {
+                    fechaEncontrada = new Date(candidata);
+                    break;
+                }
+            }
+        }
+        
+        if (fechaEncontrada) {
+            fechas.push(new Date(fechaEncontrada));
+            
+            // Próxima fecha = 15 días después
+            fechaActual = new Date(fechaEncontrada);
+            fechaActual.setDate(fechaActual.getDate() + 15);
+        }
+    }
+    
+    return fechas;
+}
+
+// ✅ FUNCIÓN 5: Redondear a múltiplos inteligentes
+function redondearInteligente(valor) {
+    /**
+     * Redondea a múltiplos de 1,000 para montos >= 50,000
+     * Redondea a múltiplos de 100 para montos < 50,000
+     */
+    if (valor >= 50000) {
+        return Math.round(valor / 1000) * 1000;
+    } else {
+        return Math.round(valor / 100) * 100;
+    }
+}
+
+// ✅ FUNCIÓN 6: Generar cuotas con redondeo inteligente
+function generarCuotas() {
+    const clienteId = document.getElementById('cliente_id').value;
+    const montoTotalInput = document.getElementById('monto_total');
+    const interesInput = document.getElementById('interes_porcentaje');
+    const cuotaCountInput = document.getElementById('cuota_count');
+
+    // Validaciones
+    if (!clienteId) {
+        alert('❌ Selecciona un cliente primero');
+        return;
+    }
+
+    if (!montoTotalInput.value || parseFloat(montoTotalInput.value) <= 0) {
+        alert('❌ Ingresa un monto válido');
+        montoTotalInput.focus();
+        return;
+    }
+
+    if (!cuotaCountInput.value) {
+        alert('❌ Selecciona el número de cuotas');
+        cuotaCountInput.focus();
+        return;
+    }
+
+    const montoTotal = parseFloat(montoTotalInput.value);
+    const interesPorcentaje = parseFloat(interesInput.value) / 100;
+    const numCuotas = parseInt(cuotaCountInput.value);
+
+    // Generar fechas cada 15 días
+    const fechasPago = generarFechasPago(numCuotas);
+
+    // ==================== CÁLCULOS QUINCENAL (2 CUOTAS POR MES) ====================
+    const cuotasPorMes = 2;
+    const numMeses = numCuotas / cuotasPorMes;
+    const capitalPorMes = montoTotal / numMeses;
+    const interesPorMes = capitalPorMes * interesPorcentaje;  // Interés MENSUAL
+    const interesPorCuotaSinRedondeo = interesPorMes / cuotasPorMes;  // Interés por quincena (÷2)
+    
+    const montoCapitalSinRedondeo = capitalPorMes / cuotasPorMes;  // Capital por quincena
+
+    // ==================== CÁLCULOS CON REDONDEO ====================
+    const montoCapitalRedondeado = redondearInteligente(montoCapitalSinRedondeo);
+    const interesRedondeado = redondearInteligente(interesPorCuotaSinRedondeo);
+
+    // Calcular total de capital redondeado para todas las cuotas excepto la última
+    const capitalTotalRedondeado = montoCapitalRedondeado * (numCuotas - 1);
+    
+    // La última cuota absorbe la diferencia
+    const capitalUltimaCuota = montoTotal - capitalTotalRedondeado;
+
+    // Actualizar header con el porcentaje de interés por quincena
+    const interesPorcentajePorCuota = (interesPorcentaje * 100 / 2).toFixed(2);  // 50% del interés mensual
+    document.getElementById('interes_header').textContent = interesPorcentajePorCuota;
+
+    // ==================== GENERAR TABLA ====================
+    const tbody = document.getElementById('cuotas_tbody');
+    tbody.innerHTML = '';
+
+    for (let i = 0; i < numCuotas; i++) {
+        let capital, interes, total;
+        
+        if (i < numCuotas - 1) {
+            // Cuotas normales: con redondeo
+            capital = montoCapitalRedondeado;
+            interes = interesRedondeado;
+        } else {
+            // Última cuota: absorbe la diferencia
+            capital = capitalUltimaCuota;
+            interes = interesRedondeado;
+        }
+        
+        total = capital + interes;
+        const fecha = fechasPago[i].toLocaleDateString('es-CO');
+
+        const row = `<tr>
+            <td><strong>#${i + 1}</strong></td>
+            <td>${formatearMonedaColombia(capital)}</td>
+            <td>${formatearMonedaColombia(interes)}</td>
+            <td><strong>${formatearMonedaColombia(total)}</strong></td>
+            <td>${fecha}</td>
+        </tr>`;
+
+        tbody.innerHTML += row;
+    }
+
+    document.getElementById('num_cuotas_input').value = numCuotas;
+
+    console.log('✅ Cuotas generadas con redondeo inteligente!');
+    console.log('📊 Capital sin redondeo:', montoCapitalSinRedondeo);
+    console.log('📊 Capital redondeado:', montoCapitalRedondeado);
+    console.log('📊 Diferencia:', (montoCapitalRedondeado - montoCapitalSinRedondeo).toFixed(2));
+    console.log('📅 Fechas de pago:', fechasPago.map(f => f.toLocaleDateString('es-CO')));
+}
+</script>
+
+{% endblock %}
+

@@ -1,0 +1,312 @@
+{% extends 'mi_app/base.html' %}
+{% load static %}
+
+{% block title %}Centro de Exportaciones{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="fas fa-download"></i> Centro de Exportaciones</h2>
+            <p class="text-muted">Descarga todos los reportes del sistema en formato Excel</p>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 1: DATOS MAESTROS -->
+    <div class="row mb-5">
+        <div class="col">
+            <h5 class="mb-3 border-bottom pb-2"><i class="fas fa-database text-primary"></i> Datos Maestros</h5>
+            
+            <div class="row g-3">
+                <!-- Clientes -->
+                <div class="col-md-4">
+                    <div class="card border-left-primary h-100 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-users text-primary" style="font-size: 32px;"></i>
+                                <div class="ms-3">
+                                    <h6 class="mb-0">Clientes</h6>
+                                    <small class="text-muted">{{ total_clientes }} registros</small>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-3">Listado maestro de todos los clientes del sistema</p>
+                            <a href="{% url 'exportar_clientes' %}" class="btn btn-sm btn-primary w-100">
+                                <i class="fas fa-download"></i> Descargar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Préstamos -->
+                <div class="col-md-4">
+                    <div class="card border-left-success h-100 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-hand-holding-usd text-success" style="font-size: 32px;"></i>
+                                <div class="ms-3">
+                                    <h6 class="mb-0">Préstamos</h6>
+                                    <small class="text-muted">{{ total_prestamos }} registros</small>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-3">Detalle completo de todos los préstamos registrados</p>
+                            <a href="{% url 'exportar_prestamos' %}" class="btn btn-sm btn-success w-100">
+                                <i class="fas fa-download"></i> Descargar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cuotas -->
+                <div class="col-md-4">
+                    <div class="card border-left-warning h-100 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-list-ol text-warning" style="font-size: 32px;"></i>
+                                <div class="ms-3">
+                                    <h6 class="mb-0">Cuotas</h6>
+                                    <small class="text-muted">{{ total_cuotas }} registros</small>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-3">Tabla completa de cuotas con estados de pago</p>
+                            <a href="{% url 'exportar_cuotas' %}" class="btn btn-sm btn-warning w-100">
+                                <i class="fas fa-download"></i> Descargar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 2: REPORTES ANALÍTICOS -->
+    <div class="row mb-5">
+        <div class="col">
+            <h5 class="mb-3 border-bottom pb-2"><i class="fas fa-chart-bar text-info"></i> Reportes Analíticos</h5>
+            
+            <div class="row g-3">
+                <!-- Cuotas Vencidas -->
+                <div class="col-md-4">
+                    <div class="card border-left-danger h-100 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-exclamation-circle text-danger" style="font-size: 32px;"></i>
+                                <div class="ms-3">
+                                    <h6 class="mb-0">Cuotas Vencidas</h6>
+                                    <small class="text-muted">{{ cuotas_vencidas }} pendientes</small>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-3">Cuotas atrasadas con seguimiento de mora y días vencido</p>
+                            <a href="{% url 'exportar_cuotas_vencidas' %}" class="btn btn-sm btn-danger w-100">
+                                <i class="fas fa-download"></i> Descargar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Estadísticas -->
+                <div class="col-md-4">
+                    <div class="card border-left-info h-100 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-chart-pie text-info" style="font-size: 32px;"></i>
+                                <div class="ms-3">
+                                    <h6 class="mb-0">Estadísticas</h6>
+                                    <small class="text-muted">Dashboard general</small>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-3">Resumen ejecutivo con métricas clave del sistema</p>
+                            <a href="{% url 'exportar_estadisticas' %}" class="btn btn-sm btn-info w-100">
+                                <i class="fas fa-download"></i> Descargar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Préstamos Rápidos -->
+                <div class="col-md-4">
+                    <div class="card border-left-success h-100 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-bolt text-success" style="font-size: 32px;"></i>
+                                <div class="ms-3">
+                                    <h6 class="mb-0">Préstamos Rápidos</h6>
+                                    <small class="text-muted">Dinero extra/corto plazo</small>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-3">Todos los préstamos rápidos con estados de pago</p>
+                            <a href="{% url 'exportar_prestamos_rapidos' %}" class="btn btn-sm btn-success w-100">
+                                <i class="fas fa-download"></i> Descargar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Histórico de Pagos -->
+                <div class="col-md-4">
+                    <div class="card border-left-primary h-100 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-history text-primary" style="font-size: 32px;"></i>
+                                <div class="ms-3">
+                                    <h6 class="mb-0">Histórico Pagos</h6>
+                                    <small class="text-muted">Desglose completo</small>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-3">Registro detallado de todos los pagos (principal, interés, mora)</p>
+                            <a href="{% url 'exportar_historico_pagos' %}" class="btn btn-sm btn-primary w-100">
+                                <i class="fas fa-download"></i> Descargar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 3: REPORTES VISUALES -->
+    <div class="row mb-5">
+        <div class="col">
+            <h5 class="mb-3 border-bottom pb-2"><i class="fas fa-eye text-secondary"></i> Reportes Visuales Completos</h5>
+            
+            <div class="row g-3">
+                <!-- Reporte Clientes -->
+                <div class="col-md-4">
+                    <div class="card border-left-primary h-100 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-users-cog text-primary" style="font-size: 32px;"></i>
+                                <div class="ms-3">
+                                    <h6 class="mb-0">Reporte Clientes</h6>
+                                    <small class="text-muted">Vista completa</small>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-3">Reporte visual con filtros y análisis de clientes</p>
+                            <a href="{% url 'reporte_clientes' %}" class="btn btn-sm btn-primary w-100">
+                                <i class="fas fa-arrow-right"></i> Ver Reporte
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reporte Préstamos -->
+                <div class="col-md-4">
+                    <div class="card border-left-success h-100 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-handshake text-success" style="font-size: 32px;"></i>
+                                <div class="ms-3">
+                                    <h6 class="mb-0">Reporte Préstamos</h6>
+                                    <small class="text-muted">Vista completa</small>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-3">Reporte visual con estados y análisis de préstamos</p>
+                            <a href="{% url 'reporte_prestamos' %}" class="btn btn-sm btn-success w-100">
+                                <i class="fas fa-arrow-right"></i> Ver Reporte
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reporte Cuotas -->
+                <div class="col-md-4">
+                    <div class="card border-left-warning h-100 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-list-check text-warning" style="font-size: 32px;"></i>
+                                <div class="ms-3">
+                                    <h6 class="mb-0">Reporte Cuotas</h6>
+                                    <small class="text-muted">Vista completa</small>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-3">Reporte visual con detalles completos de cuotas</p>
+                            <a href="{% url 'reporte_cuotas' %}" class="btn btn-sm btn-warning w-100">
+                                <i class="fas fa-arrow-right"></i> Ver Reporte
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 4: REPORTE GENERAL CONSOLIDADO -->
+    <div class="row mb-5">
+        <div class="col">
+            <div class="card border-left-warning shadow-lg">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <h5 class="mb-1"><i class="fas fa-file-archive text-warning"></i> Reporte General Consolidado</h5>
+                            <p class="text-muted small mb-2">
+                                Exportación completa en un único archivo Excel con 7 hojas: Resumen Ejecutivo, Clientes, 
+                                Préstamos, Préstamos Rápidos, Cuotas, Cuotas Vencidas e Histórico de Pagos
+                            </p>
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i> 
+                                Descarga: <strong>Reporte_General_Completo.xlsx</strong>
+                            </small>
+                        </div>
+                        <div class="col-auto">
+                            <a href="{% url 'exportar_reporte_general' %}" class="btn btn-lg btn-warning">
+                                <i class="fas fa-download"></i> Descargar Todo
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card text-center bg-light border-0">
+                <div class="card-body py-4">
+                    <h3 class="text-primary mb-0">{{ total_clientes }}</h3>
+                    <small class="text-muted">Clientes</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center bg-light border-0">
+                <div class="card-body py-4">
+                    <h3 class="text-success mb-0">{{ total_prestamos }}</h3>
+                    <small class="text-muted">Préstamos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center bg-light border-0">
+                <div class="card-body py-4">
+                    <h3 class="text-warning mb-0">{{ total_cuotas }}</h3>
+                    <small class="text-muted">Cuotas</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center bg-light border-0">
+                <div class="card-body py-4">
+                    <h3 class="text-danger mb-0">{{ cuotas_vencidas }}</h3>
+                    <small class="text-muted">Cuotas Vencidas</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .border-left-primary {
+        border-left: 4px solid #007bff !important;
+    }
+    .border-left-success {
+        border-left: 4px solid #28a745 !important;
+    }
+    .border-left-warning {
+        border-left: 4px solid #ffc107 !important;
+    }
+    .border-left-danger {
+        border-left: 4px solid #dc3545 !important;
+    }
+    .border-left-info {
+        border-left: 4px solid #17a2b8 !important;
+    }
+</style>
+{% endblock %}

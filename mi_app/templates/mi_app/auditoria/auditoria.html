@@ -1,0 +1,447 @@
+{% extends "mi_app/base.html" %}
+
+{% block title %}Auditoría de Cambios{% endblock %}
+
+{% block extra_css %}
+<style>
+    .auditoria-container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    
+    .header-auditoria {
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .header-auditoria h2 {
+        margin: 0 0 5px 0;
+        color: #333;
+    }
+    
+    .filtros-auditoria {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 25px;
+    }
+    
+    .filtro-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .filtro-row:last-child {
+        margin-bottom: 0;
+    }
+    
+    .filtro-group {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .filtro-group.filtros-acciones {
+        flex-direction: row;
+    }
+    
+    .filtro-group label {
+        font-weight: 600;
+        margin-bottom: 5px;
+        color: #333;
+        font-size: 13px;
+    }
+    
+    .filtro-group select,
+    .filtro-group input {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    
+    .btn-filtrar {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 600;
+        align-self: flex-end;
+    }
+    
+    .btn-filtrar:hover {
+        background: #5568d3;
+    }
+    
+    .btn-limpiar {
+        background: #e9ecef;
+        color: #333;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-left: 5px;
+    }
+    
+    .btn-limpiar:hover {
+        background: #dee2e6;
+    }
+    
+    .tabla-auditoria {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .tabla-auditoria thead {
+        background: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .tabla-auditoria th {
+        padding: 15px;
+        text-align: left;
+        font-weight: 600;
+        color: #333;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .tabla-auditoria td {
+        padding: 15px;
+        border-bottom: 1px solid #dee2e6;
+        color: #666;
+    }
+    
+    .tabla-auditoria tbody tr:hover {
+        background: #f8f9fa;
+    }
+    
+    .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    
+    .badge-crear {
+        background: #c8e6c9;
+        color: #2e7d32;
+    }
+    
+    .badge-editar {
+        background: #bbdefb;
+        color: #1565c0;
+    }
+    
+    .badge-eliminar {
+        background: #ffccbc;
+        color: #d84315;
+    }
+    
+    .badge-condonar {
+        background: #ffe0b2;
+        color: #e65100;
+    }
+    
+    .badge-pagar {
+        background: #b2dfdb;
+        color: #00695c;
+    }
+    
+    .usuario-badge {
+        background: #e8eaf6;
+        color: #3f51b5;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    
+    .fecha-hora {
+        white-space: nowrap;
+        font-family: monospace;
+        font-size: 12px;
+    }
+    
+    .btn-detalle {
+        background: #667eea;
+        color: white;
+        padding: 6px 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        text-decoration: none;
+        display: inline-block;
+    }
+    
+    .btn-detalle:hover {
+        background: #5568d3;
+        color: white;
+    }
+    
+    .paginacion {
+        display: flex;
+        justify-content: center;
+        gap: 5px;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .paginacion a,
+    .paginacion span {
+        padding: 8px 12px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        color: #667eea;
+        text-decoration: none;
+    }
+    
+    .paginacion a:hover {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
+    
+    .paginacion .current {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
+    
+    .info-resumen {
+        background: #e3f2fd;
+        border-left: 4px solid #1976d2;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+    }
+    
+    .info-resumen strong {
+        color: #1565c0;
+    }
+    
+    .acciones-superiores {
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+        margin-bottom: 20px;
+    }
+    
+    .exportar-btn {
+        background: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    
+    .exportar-btn:hover {
+        background: #45a049;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auditoria-container">
+    <!-- Header -->
+    <div class="header-auditoria">
+        <h2>
+            <i class="fas fa-history"></i>
+            Auditoría de Cambios
+        </h2>
+        <p style="color: #999; margin: 5px 0 0 0;">Registro completo de todos los cambios realizados en el sistema</p>
+    </div>
+    
+    <!-- Resumen -->
+    <div class="info-resumen">
+        <i class="fas fa-info-circle"></i>
+        Total de cambios registrados: <strong>{{ total_cambios }}</strong>
+        {% if filtros_activos %}
+            | Mostrando: <strong>{{ page_obj.paginator.count }}</strong> cambios
+        {% endif %}
+    </div>
+    
+    <!-- Acciones -->
+    <div class="acciones-superiores">
+        <div></div>
+        <div>
+            <a href="{% url 'auditoria_estadisticas' %}" class="btn btn-secondary" style="display: inline-block; margin-right: 10px;">
+                <i class="fas fa-chart-bar"></i> Estadísticas
+            </a>
+            <a href="{% url 'exportar_auditoria' %}" class="exportar-btn">
+                <i class="fas fa-download"></i> Exportar a Excel
+            </a>
+        </div>
+    </div>
+    
+    <!-- Filtros -->
+    <form method="GET" class="filtros-auditoria">
+        <div class="filtro-row">
+            <div class="filtro-group">
+                <label for="usuario">Usuario</label>
+                <select name="usuario" id="usuario">
+                    <option value="">-- Todos --</option>
+                    {% for usuario in usuarios %}
+                        <option value="{{ usuario.id }}" {% if request.GET.usuario|stringformat:"s" == usuario.id|stringformat:"s" %}selected{% endif %}>
+                            {{ usuario.get_full_name|default:usuario.username }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="filtro-group">
+                <label for="accion">Tipo de Acción</label>
+                <select name="accion" id="accion">
+                    <option value="">-- Todos --</option>
+                    {% for valor, nombre in tipos_accion %}
+                        <option value="{{ valor }}" {% if request.GET.accion == valor %}selected{% endif %}>
+                            {{ nombre }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="filtro-group">
+                <label for="modelo">Modelo</label>
+                <select name="modelo" id="modelo">
+                    <option value="">-- Todos --</option>
+                    {% for modelo in modelos_lista %}
+                        <option value="{{ modelo }}" {% if request.GET.modelo == modelo %}selected{% endif %}>
+                            {{ modelo }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
+        <div class="filtro-row">
+            <div class="filtro-group">
+                <label for="desde">Desde</label>
+                <input type="date" name="desde" id="desde" value="{{ request.GET.desde }}">
+            </div>
+            
+            <div class="filtro-group">
+                <label for="hasta">Hasta</label>
+                <input type="date" name="hasta" id="hasta" value="{{ request.GET.hasta }}">
+            </div>
+            
+            <div class="filtro-group filtros-acciones">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+                {% if filtros_activos %}
+                    <a href="{% url 'auditoria_cambios' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-times"></i> Limpiar
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+    
+    <!-- Tabla de Cambios -->
+    {% if page_obj.object_list %}
+    <table class="tabla-auditoria">
+        <thead>
+            <tr>
+                <th style="width: 15%;">Fecha y Hora</th>
+                <th style="width: 12%;">Usuario</th>
+                <th style="width: 10%;">Acción</th>
+                <th style="width: 15%;">Modelo</th>
+                <th style="width: 25%;">Objeto</th>
+                <th style="width: 15%;">Cambio</th>
+                <th style="width: 8%;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cambio in page_obj.object_list %}
+            <tr>
+                <td class="fecha-hora">
+                    {{ cambio.fecha_cambio|date:"d/m/Y H:i" }}
+                </td>
+                
+                <td>
+                    <span class="usuario-badge">
+                        {{ cambio.usuario.get_full_name|default:cambio.usuario.username }}
+                    </span>
+                </td>
+                
+                <td>
+                    <span class="badge badge-{{ cambio.accion|lower }}">
+                        {{ cambio.get_accion_display }}
+                    </span>
+                </td>
+                
+                <td>
+                    <strong>{{ cambio.modelo }}</strong>
+                </td>
+                
+                <td>
+                    {{ cambio.objeto_str }}
+                </td>
+                
+                <td style="font-size: 12px; color: #999;">
+                    {% if cambio.campo_modificado %}
+                        <strong>{{ cambio.campo_modificado }}:</strong><br>
+                        <span style="color: #d32f2f;">{{ cambio.valor_anterior }}</span> → 
+                        <span style="color: #388e3c;">{{ cambio.valor_nuevo }}</span>
+                    {% else %}
+                        {{ cambio.resumen }}
+                    {% endif %}
+                </td>
+                
+                <td>
+                    <a href="{% url 'auditoria_detalle' cambio.id %}" class="btn-detalle">
+                        <i class="fas fa-eye"></i> Ver
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <!-- Paginación -->
+    {% if page_obj.has_other_pages %}
+    <div class="paginacion">
+        {% if page_obj.has_previous %}
+            <a href="?page=1">Primero</a>
+            <a href="?page={{ page_obj.previous_page_number }}">Anterior</a>
+        {% endif %}
+        
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+                <span class="current">{{ num }}</span>
+            {% else %}
+                <a href="?page={{ num }}">{{ num }}</a>
+            {% endif %}
+        {% endfor %}
+        
+        {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}">Siguiente</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}">Último</a>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    {% else %}
+    <div style="text-align: center; padding: 60px 20px; background: #f8f9fa; border-radius: 8px; color: #999;">
+        <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 20px; display: block; color: #ddd;"></i>
+        <p><strong>No hay cambios que coincidan con los filtros</strong></p>
+        <p style="font-size: 14px;">Intenta cambiar los filtros o <a href="{% url 'auditoria_cambios' %}" style="color: #667eea;">ver todos los cambios</a></p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

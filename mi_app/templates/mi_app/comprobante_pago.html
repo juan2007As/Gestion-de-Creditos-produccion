@@ -1,0 +1,160 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load numeros_colombianos %}
+
+{% block title %}Comprobante de Pago{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- COMPROBANTE IMPRIMIBLE -->
+    <div id="comprobantePago" style="background: white; max-width: 800px; margin: 0 auto; padding: 40px; border: 1px solid #ddd; font-family: 'Courier New', monospace;">
+        
+        <!-- ENCABEZADO -->
+        <div style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 20px;">
+            <h2 style="margin: 0; font-size: 24px;">COMPROBANTE DE PAGO</h2>
+            <p style="margin: 5px 0; color: #666;">Sistema de Gestión de Préstamos</p>
+        </div>
+
+        <!-- INFORMACIÓN GENERAL -->
+        <table style="width: 100%; margin-bottom: 20px; border-collapse: collapse;">
+            <tr>
+                <td style="width: 50%; padding: 5px 0;">
+                    <strong>No. Comprobante:</strong> {{ pago.id|stringformat:"05d" }}
+                </td>
+                <td style="width: 50%; padding: 5px 0; text-align: right;">
+                    <strong>Fecha:</strong> {{ pago.fecha_pago|date:"d/m/Y H:i" }}
+                </td>
+            </tr>
+        </table>
+
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+
+        <!-- DATOS DEL CLIENTE -->
+        <div style="margin-bottom: 20px;">
+            <h4 style="margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px;">CLIENTE</h4>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="width: 50%; padding: 3px 0;"><strong>Nombre:</strong> {{ pago.cuota.prestamo.cliente.nombre }}</td>
+                    <td style="width: 50%; padding: 3px 0;"><strong>Cédula:</strong> {{ pago.cuota.prestamo.cliente.cedula }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 3px 0;"><strong>Contacto:</strong> {{ pago.cuota.prestamo.cliente.celular }}</td>
+                    <td style="padding: 3px 0;"><strong>Email:</strong> {{ pago.cuota.prestamo.cliente.email }}</td>
+                </tr>
+            </table>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+
+        <!-- DATOS DEL PRÉSTAMO Y CUOTA -->
+        <div style="margin-bottom: 20px;">
+            <h4 style="margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px;">PRÉSTAMO Y CUOTA</h4>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="width: 25%; padding: 3px 0;"><strong>Préstamo #</strong> {{ pago.cuota.prestamo.id }}</td>
+                    <td style="width: 25%; padding: 3px 0;"><strong>Cuota</strong> {{ pago.cuota.numero_cuota }}</td>
+                    <td style="width: 25%; padding: 3px 0;"><strong>Vencimiento:</strong> {{ pago.cuota.fecha_pago_esperada|date:"d/m/Y" }}</td>
+                    <td style="width: 25%; padding: 3px 0; text-align: right;">
+                        {% if pago.cuota.pagado %}
+                            <span style="color: green; font-weight: bold;">✓ PAGADA</span>
+                        {% else %}
+                            <span style="color: orange; font-weight: bold;">⏳ PENDIENTE</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+
+        <!-- DESGLOSE DEL PAGO -->
+        <div style="margin-bottom: 20px;">
+            <h4 style="margin: 0 0 15px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DETALLES DEL PAGO</h4>
+            <table style="width: 100%; border-collapse: collapse; border: 1px solid #999;">
+                <tr style="background-color: #f0f0f0; font-weight: bold;">
+                    <td style="padding: 10px; border-right: 1px solid #999;">Concepto</td>
+                    <td style="padding: 10px; text-align: right;">Monto</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border-right: 1px solid #999;">Capital (Principal)</td>
+                    <td style="padding: 10px; text-align: right;">{{ pago.monto_principal|formato_moneda_co}}</td>
+                </tr>
+                <tr style="background-color: #f9f9f9;">
+                    <td style="padding: 10px; border-right: 1px solid #999;">Interés</td>
+                    <td style="padding: 10px; text-align: right;">{{ pago.monto_interes|formato_moneda_co}}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border-right: 1px solid #999;">Mora</td>
+                    <td style="padding: 10px; text-align: right;">{{ pago.monto_mora|formato_moneda_co}}</td>
+                </tr>
+                <tr style="background-color: #e8f5e9; font-weight: bold; border-top: 2px solid #333;">
+                    <td style="padding: 10px; border-right: 1px solid #999;">TOTAL PAGADO</td>
+                    <td style="padding: 10px; text-align: right; font-size: 16px;">{{ pago.monto_pagado|formato_moneda_co}}</td>
+                </tr>
+            </table>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+
+        <!-- INFORMACIÓN ADICIONAL -->
+        <div style="margin-bottom: 20px;">
+            <h4 style="margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px;">INFORMACIÓN ADICIONAL</h4>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="width: 50%; padding: 3px 0;"><strong>Referencia:</strong> {{ pago.referencia|default:"---" }}</td>
+                    <td style="width: 50%; padding: 3px 0;"><strong>Usuario:</strong> {{ pago.usuario_registra|default:"---" }}</td>
+                </tr>
+            </table>
+        </div>
+
+        {% if pago.notas %}
+            <div style="margin-bottom: 20px; background-color: #f9f9f9; padding: 10px; border-left: 3px solid #2196F3;">
+                <strong>Observaciones:</strong><br>
+                {{ pago.notas }}
+            </div>
+        {% endif %}
+
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+
+        <!-- PIE -->
+        <div style="text-align: center; font-size: 11px; color: #666; margin-top: 30px;">
+            <p style="margin: 5px 0;">Este comprobante confirma el registro del pago en el sistema.</p>
+            <p style="margin: 5px 0;">Fecha y hora de impresión: {{ now|date:"d/m/Y H:i" }}</p>
+            <p style="margin: 5px 0; border-top: 1px solid #ddd; padding-top: 10px; margin-top: 20px;">Comprobante válido como documento de transacción.</p>
+        </div>
+    </div>
+
+    <!-- BOTONES DE ACCIÓN -->
+    <div style="text-align: center; margin-top: 30px;">
+        <button onclick="window.print()" class="btn btn-primary">
+            <i class="fas fa-print"></i> Imprimir Comprobante
+        </button>
+        <a href="{% url 'detalles_cuota' pago.cuota.id %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Volver a Cuota
+        </a>
+    </div>
+</div>
+
+<style>
+    @media print {
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        .container-fluid {
+            padding: 0;
+        }
+        .btn {
+            display: none;
+        }
+        #comprobantePago {
+            border: none;
+            box-shadow: none;
+        }
+    }
+</style>
+{% endblock %}
+
+
+
+

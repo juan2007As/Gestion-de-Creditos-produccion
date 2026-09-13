@@ -1,0 +1,172 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load numeros_colombianos %}
+
+{% block title %}Mis Préstamos - {{ cliente.nombre }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-1">Mis Préstamos</h2>
+            <p class="text-muted">Cliente: <strong>{{ cliente.nombre }}</strong></p>
+        </div>
+    </div>
+
+    <!-- FILTROS -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label">Estado:</label>
+                    <div class="btn-group" role="group" aria-label="Filtro Estado">
+                        <a href="?estado=todos" class="btn btn-sm {% if estado_filter == 'todos' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            Todos ({{ prestamos_data|length }})
+                        </a>
+                        <a href="?estado=BORRADOR" class="btn btn-sm {% if estado_filter == 'BORRADOR' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            Borradores
+                        </a>
+                        <a href="?estado=ACTIVO" class="btn btn-sm {% if estado_filter == 'ACTIVO' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            Activos
+                        </a>
+                        <a href="?estado=COMPLETADO" class="btn btn-sm {% if estado_filter == 'COMPLETADO' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            Completados
+                        </a>
+                    </div>
+                </div>
+                <div class="col-md-6 text-end">
+                    <a href="{% url 'crear_prestamo_cliente' cliente.id %}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Nuevo Préstamo
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LISTA DE PRÉSTAMOS -->
+    {% if prestamos_data %}
+        {% for item in prestamos_data %}
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="row align-items-start mb-3">
+                        <div class="col">
+                            <h5 class="card-title mb-1">Préstamo #{{ item.prestamo.id }}</h5>
+                            <p class="text-muted small mb-0">
+                                Creado: {{ item.prestamo.fecha_creacion|date:"d/m/Y" }} | 
+                                Inicio: {{ item.prestamo.fecha_inicio|date:"d/m/Y" }} - 
+                                Fin: {{ item.prestamo.fecha_fin_estimada|date:"d/m/Y" }}
+                            </p>
+                        </div>
+                        <div class="col-auto">
+                            {% if item.prestamo.estado == 'ACTIVO' %}
+                                <span class="badge bg-info">ACTIVO</span>
+                            {% elif item.prestamo.estado == 'COMPLETADO' %}
+                                <span class="badge bg-success">✓ COMPLETADO</span>
+                            {% else %}
+                                <span class="badge bg-secondary">BORRADOR</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- INFO FINANCIERA -->
+                    <div class="row mb-3">
+                        <div class="col-md-2">
+                            <small class="text-muted d-block">Monto Original</small>
+                            <h6 class="mb-0">{{ item.resumen.monto_original|formato_moneda_co}}</h6>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted d-block">Interés Total</small>
+                            <h6 class="mb-0 text-warning">{{ item.resumen.interes_total_credito|formato_moneda_co}}</h6>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted d-block">Total Crédito</small>
+                            <h6 class="mb-0 text-primary">{{ item.resumen.total_credito|formato_moneda_co}}</h6>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted d-block">Total Pagado</small>
+                            <h6 class="mb-0 text-success">{{ item.resumen.total_pagado_principal|formato_moneda_co}}</h6>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted d-block">Pendiente</small>
+                            <h6 class="mb-0 text-danger">{{ item.resumen.total_pendiente_principal|formato_moneda_co}}</h6>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted d-block">Progreso</small>
+                            <h6 class="mb-0">{{ item.progreso|formato_porcentaje}}</h6>
+                        </div>
+                    </div>
+
+                    <!-- BARRA DE PROGRESO -->
+                    <div class="mb-3">
+                        <div class="progress" style="height: 25px;">
+                            {% widthratio item.resumen.total_pagado_principal item.resumen.monto_original 100 as progreso_raw %}
+                            <div class="progress-bar bg-success" role="progressbar" style="width: {% if progreso_raw > 100 %}100{% else %}{{ progreso_raw }}{% endif %}%;" aria-valuenow="{% if progreso_raw > 100 %}100{% else %}{{ progreso_raw }}{% endif %}" aria-valuemin="0" aria-valuemax="100">
+                                <small><strong>{% if progreso_raw > 100 %}100{% else %}{{ progreso_raw }}{% endif %}% Pagado</strong></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- INFO DE CUOTAS -->
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Total Cuotas</small>
+                            <span class="badge bg-secondary px-2 py-1">{{ item.num_cuotas }} cuotas</span>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Pagadas</small>
+                            <span class="badge bg-success px-2 py-1">{{ item.num_pagadas }} ✓</span>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Pendientes</small>
+                            <span class="badge bg-warning px-2 py-1">{{ item.num_pendientes }} ⏳</span>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Vencidas</small>
+                            {% if item.num_vencidas > 0 %}
+                                <span class="badge bg-danger px-2 py-1">{{ item.num_vencidas }} ⚠</span>
+                            {% else %}
+                                <span class="badge bg-success px-2 py-1">0</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- BOTONES DE ACCIÓN -->
+                    <div class="btn-group" role="group">
+                        <a href="{% url 'detalles_prestamo' item.prestamo.id %}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-eye"></i> Ver Detalles
+                        </a>
+                        {% if item.prestamo.estado == 'ACTIVO' %}
+                            <a href="{% url 'detalles_prestamo' item.prestamo.id %}" class="btn btn-sm btn-success">
+                                <i class="fas fa-money-bill-wave"></i> Pagar
+                            </a>
+                        {% endif %}
+                        {% if item.prestamo.estado == 'BORRADOR' %}
+                            <a href="#" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editarPrestamoModal">
+                                <i class="fas fa-edit"></i> Editar
+                            </a>
+                            <a href="#" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#eliminarPrestamoModal">
+                                <i class="fas fa-trash"></i> Eliminar
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info" role="alert">
+            <i class="fas fa-info-circle"></i> No hay préstamos que cumplan con los filtros
+        </div>
+    {% endif %}
+
+    <div class="mt-4">
+        <a href="{% url 'perfil_cliente' cliente.id %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Volver al Perfil
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+
+
+
+

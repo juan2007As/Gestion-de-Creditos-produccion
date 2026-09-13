@@ -1,0 +1,647 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load static %}
+{% load l10n %}
+
+{% block title %}Reporte de Cuotas{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Dropdown Results CSS */
+    .dropdown-results {
+        position: fixed;
+        top: auto;
+        left: auto;
+        right: auto;
+        display: none;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        max-height: 450px;
+        overflow-y: auto;
+        z-index: 99999;
+        width: 300px;
+    }
+
+    .dropdown-results.show {
+        display: block;
+    }
+
+    .dropdown-results .list-group-item {
+        display: block;
+        width: 100%;
+        padding: 16px 18px;
+        border: none;
+        border-bottom: 1px solid #f5f5f5;
+        background: white;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.15s ease;
+    }
+
+    .dropdown-results .list-group-item:first-child {
+        border-top-left-radius: 0.75rem;
+        border-top-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:last-child {
+        border-bottom: none;
+        border-bottom-left-radius: 0.75rem;
+        border-bottom-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:hover {
+        background: linear-gradient(135deg, #f7f8fc 0%, #f0f2f7 100%);
+        padding-left: 22px;
+        border-left: 3px solid #667eea;
+    }
+
+    .dropdown-results .list-group-item strong {
+        display: block;
+        color: #212529;
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .dropdown-results .list-group-item small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .dropdown-results .list-group-item small i {
+        color: #667eea;
+        margin-right: 4px;
+    }
+
+    .cliente-search-input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+
+    .cliente-search-input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+    }
+
+    .cliente-row {
+        transition: all 0.2s ease;
+    }
+
+    .cliente-row:hover {
+        background-color: #f8f9fa;
+    }
+
+    .cliente-row.hidden {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid report-page">
+    <!-- ENCABEZADO -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="mb-0">
+                        <i class="fas fa-list-check"></i> Reporte Completo de Cuotas
+                    </h1>
+                    <p class="text-muted mt-2">Información detallada de todas las cuotas del sistema</p>
+                </div>
+                <div>
+                    <a href="{% url 'exportar_cuotas' %}" class="btn btn-warning btn-sm">
+                        <i class="fas fa-download"></i> Exportar Excel
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FILTROS -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros Avanzados</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" id="filtrosForm" onsubmit="return false;">
+                <!-- FILA 1: BÚSQUEDA DINÁMICA -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold mb-2">
+                            <i class="fas fa-search"></i> Buscar Cliente
+                        </label>
+                        <input 
+                            type="text" 
+                            id="cliente_search_cuotas" 
+                            placeholder="Busca por nombre, cédula o celular..." 
+                            class="cliente-search-input"
+                            autocomplete="off"
+                        >
+                        <input type="hidden" name="cliente_id" id="cliente_id_hidden" value="">
+                    </div>
+                </div>
+
+                <!-- FILA 2: FILTROS ADICIONALES -->
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Estado</label>
+                        <select name="estado" id="filtro_estado" class="form-select" onchange="aplicarFiltros()">
+                            <option value="">Todos los estados</option>
+                            <option value="pendiente" {% if estado_filtro == "pendiente" %}selected{% endif %}>Pendiente</option>
+                            <option value="parcial" {% if estado_filtro == "parcial" %}selected{% endif %}>Parcialmente Pagada</option>
+                            <option value="pagada" {% if estado_filtro == "pagada" %}selected{% endif %}>Pagada</option>
+                            <option value="vencida" {% if estado_filtro == "vencida" %}selected{% endif %}>Vencida</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Tipo de Pago</label>
+                        <select name="tipo_pago" id="filtro_tipo_pago" class="form-select" onchange="aplicarFiltros()">
+                            <option value="">Todos</option>
+                            <option value="principal" {% if tipo_pago_filtro == "principal" %}selected{% endif %}>Capital</option>
+                            <option value="interes" {% if tipo_pago_filtro == "interes" %}selected{% endif %}>Interés</option>
+                            <option value="mora" {% if tipo_pago_filtro == "mora" %}selected{% endif %}>Mora</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- FILA 3: BOTONES (alineados, misma línea) -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="filtros-acciones">
+                            <button type="button" class="btn btn-primary" onclick="aplicarFiltros()">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="limpiarFiltros()">
+                                <i class="fas fa-times"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- RESUMEN GENERAL -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Total de Cuotas</small>
+                    <h3 class="mb-0">{{ resumen.total_cuotas }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Total Esperado</small>
+                    <h3 class="mb-0">{{ resumen.total_esperado|formato_moneda_co }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Total Pagado</small>
+                    <h3 class="mb-0 text-success">{{ resumen.total_pagado|formato_moneda_co }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Total Pendiente</small>
+                    <h3 class="mb-0 text-warning">{{ resumen.total_pendiente|formato_moneda_co }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BARRA DE PROGRESO -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between mb-2">
+                <strong>Progreso General de Pagos</strong>
+                <span>{{ resumen.porcentaje_pagado|floatformat:1 }}%</span>
+            </div>
+            <div class="progress" style="height: 25px;">
+                <div class="progress-bar bg-success" role="progressbar" 
+                     style="width: {% localize off %}{{ resumen.porcentaje_pagado }}{% endlocalize %}%" 
+                     aria-valuenow="{{ resumen.porcentaje_pagado }}" 
+                     aria-valuemin="0" aria-valuemax="100">
+                    <small>{{ resumen.porcentaje_pagado|floatformat:1 }}%</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TABLA DE CUOTAS -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Detalle de Cuotas ({{ resumen.total_cuotas }} total)</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 15%">Cliente</th>
+                        <th style="width: 8%">Préstamo</th>
+                        <th style="width: 8%">Cuota</th>
+                        <th style="width: 12%">Vencimiento</th>
+                        <th style="width: 10%">Principal</th>
+                        <th style="width: 10%">Interés</th>
+                        <th style="width: 10%">Pagado</th>
+                        <th style="width: 10%">Pendiente</th>
+                        <th style="width: 10%">Estado</th>
+                        <th style="width: 7%" class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cuota in cuotas %}
+                        {% with total_cuota=cuota.monto_original|add:cuota.interes_normal %}
+                        {% with total_pagado=cuota.monto_pagado_principal|add:cuota.monto_pagado_interes|add:cuota.monto_pagado_mora %}
+                        {% with total_pendiente=cuota.monto_pendiente|add:cuota.monto_pendiente_interes %}
+                        
+                        <tr class="cliente-row" 
+                            data-nombre="{{ cuota.prestamo.cliente.nombre|lower }}" 
+                            data-cedula="{{ cuota.prestamo.cliente.cedula }}"
+                            data-celular="{{ cuota.prestamo.cliente.celular }}"
+                            data-monto="{{ total_pendiente }}"
+                            data-estado="{% if total_pendiente <= 0 %}pagada{% elif cuota.fecha_vencimiento < ahora %}vencida{% else %}pendiente{% endif %}"
+                            data-tipo="{% if cuota.interes_normal > 0 %}interes{% elif cuota.monto_original > 0 %}principal{% else %}mora{% endif %}"
+                        >
+                            <!-- Cliente -->
+                            <td>
+                                <strong>{{ cuota.prestamo.cliente.nombre }}</strong>
+                                <br>
+                                <small class="text-muted">{{ cuota.prestamo.cliente.celular }}</small>
+                            </td>
+
+                            <!-- Préstamo -->
+                            <td>
+                                <a href="{% url 'detalles_prestamo' cuota.prestamo.id %}">
+                                    #{{ cuota.prestamo.id }}
+                                </a>
+                                <br>
+                                <small class="text-muted">
+                                    {{ cuota.prestamo.monto_total|formato_moneda_co }}
+                                </small>
+                            </td>
+
+                            <!-- Número de Cuota -->
+                            <td class="text-center">
+                                <span class="badge bg-info">{{ cuota.numero_cuota }}</span>
+                            </td>
+
+                            <!-- Vencimiento -->
+                            <td>
+                                {{ cuota.fecha_pago_esperada|date:"d/m/Y" }}
+                                {% if cuota.pagado %}
+                                    <br>
+                                    <small class="text-success">✓ {{ cuota.fecha_pago_real|date:"d/m/Y" }}</small>
+                                {% elif cuota.fecha_pago_esperada < now %}
+                                    <br>
+                                    <small class="text-danger">⚠️ Vencida</small>
+                                {% endif %}
+                            </td>
+
+                            <!-- Principal -->
+                            <td>
+                                <strong>{{ cuota.monto_original|formato_moneda_co }}</strong>
+                                {% if cuota.monto_pagado_principal > 0 %}
+                                    <br>
+                                    <small class="text-success">✓ {{ cuota.monto_pagado_principal|formato_moneda_co }}</small>
+                                {% endif %}
+                            </td>
+
+                            <!-- Interés -->
+                            <td>
+                                <strong>{{ cuota.interes_normal|formato_moneda_co }}</strong>
+                                {% if cuota.monto_pagado_interes > 0 %}
+                                    <br>
+                                    <small class="text-success">✓ {{ cuota.monto_pagado_interes|formato_moneda_co }}</small>
+                                {% endif %}
+                            </td>
+
+                            <!-- Total Pagado -->
+                            <td class="text-success">
+                                <strong>{{ total_pagado|formato_moneda_co }}</strong>
+                            </td>
+
+                            <!-- Total Pendiente -->
+                            <td class="text-warning">
+                                <strong>{{ total_pendiente|formato_moneda_co }}</strong>
+                            </td>
+
+                            <!-- Estado -->
+                            <td>
+                                {% if cuota.pagado %}
+                                    <span class="badge bg-success">✅ PAGADA</span>
+                                {% elif total_pagado > 0 and total_pendiente > 0 %}
+                                    <span class="badge bg-info">⚠️ PARCIAL</span>
+                                {% elif cuota.fecha_pago_esperada < now %}
+                                    <span class="badge bg-danger">❌ VENCIDA</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">⏳ PENDIENTE</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Acciones -->
+                            <td class="text-center">
+                                <a href="{% url 'pagar_cuota_especifica' cuota.id %}" 
+                                   class="btn btn-sm {% if cuota.pagado %}btn-secondary{% else %}btn-success{% endif %}" title="Ver detalles y registrar pago">
+                                    {% if cuota.pagado %}
+                                        <i class="fas fa-eye"></i>
+                                    {% else %}
+                                        <i class="fas fa-money-bill-wave"></i>
+                                    {% endif %}
+                                </a>
+                            </td>
+                        </tr>
+                        {% endwith %}
+                        {% endwith %}
+                        {% endwith %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- PAGINACIÓN -->
+        {% if cuotas.has_other_pages %}
+        <div class="card-footer bg-light">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if cuotas.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% if cliente_id_filtro %}&cliente_id={{ cliente_id_filtro }}{% endif %}{% if estado_filtro %}&estado={{ estado_filtro }}{% endif %}{% if tipo_pago_filtro %}&tipo_pago={{ tipo_pago_filtro }}{% endif %}">
+                                Primera
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ cuotas.previous_page_number }}{% if cliente_id_filtro %}&cliente_id={{ cliente_id_filtro }}{% endif %}{% if estado_filtro %}&estado={{ estado_filtro }}{% endif %}{% if tipo_pago_filtro %}&tipo_pago={{ tipo_pago_filtro }}{% endif %}">
+                                ← Anterior
+                            </a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in cuotas.paginator.page_range %}
+                        {% if cuotas.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% elif num > cuotas.number|add:'-3' and num < cuotas.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% if cliente_id_filtro %}&cliente_id={{ cliente_id_filtro }}{% endif %}{% if estado_filtro %}&estado={{ estado_filtro }}{% endif %}{% if tipo_pago_filtro %}&tipo_pago={{ tipo_pago_filtro }}{% endif %}">
+                                    {{ num }}
+                                </a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if cuotas.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ cuotas.next_page_number }}{% if cliente_id_filtro %}&cliente_id={{ cliente_id_filtro }}{% endif %}{% if estado_filtro %}&estado={{ estado_filtro }}{% endif %}{% if tipo_pago_filtro %}&tipo_pago={{ tipo_pago_filtro }}{% endif %}">
+                                Siguiente →
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ cuotas.paginator.num_pages }}{% if cliente_id_filtro %}&cliente_id={{ cliente_id_filtro }}{% endif %}{% if estado_filtro %}&estado={{ estado_filtro }}{% endif %}{% if tipo_pago_filtro %}&tipo_pago={{ tipo_pago_filtro }}{% endif %}">
+                                Última
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            <div class="text-center text-muted">
+                Página {{ cuotas.number }} de {{ cuotas.paginator.num_pages }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 123, 255, 0.05);
+    }
+    
+    .progress {
+        background-color: #e9ecef;
+    }
+</style>
+
+<script>
+// ✅ Cargar clientes
+let clientesGlobales_reporte_cuotas = [];
+
+async function cargarClientes_reporte_cuotas() {
+    try {
+        const response = await fetch('{% url "lista_clientes_api" %}');
+        const data = await response.json();
+        clientesGlobales_reporte_cuotas = data.clientes || [];
+        console.log('✅ Clientes cargados:', clientesGlobales_reporte_cuotas.length);
+    } catch (error) {
+        console.error('❌ Error cargando clientes:', error);
+    }
+}
+
+// ✅ Inicializar dropdown
+document.addEventListener('DOMContentLoaded', function() {
+    cargarClientes_reporte_cuotas();
+
+    const input = document.getElementById('cliente_search_cuotas');
+
+    if (!input) {
+        console.error('❌ Input no encontrado');
+        return;
+    }
+
+    // Crear dropdown dinámicamente al final del body
+    const resultados = document.createElement('div');
+    resultados.id = 'cliente_resultados_cuotas';
+    resultados.className = 'dropdown-results';
+    document.body.appendChild(resultados);
+
+    console.log('✅ Sistema de búsqueda iniciado en reporte_cuotas');
+
+    function posicionarDropdown() {
+        const rect = input.getBoundingClientRect();
+        resultados.style.top = (rect.bottom + 5) + 'px';
+        resultados.style.left = rect.left + 'px';
+        resultados.style.width = rect.width + 'px';
+        resultados.style.zIndex = '99999';
+    }
+
+    let debounceTimer;
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim().toLowerCase();
+
+        if (query.length < 1) {
+            resultados.classList.remove('show');
+            return;
+        }
+
+        debounceTimer = setTimeout(function() {
+            const filtered = clientesGlobales_reporte_cuotas.filter(c =>
+                c.nombre.toLowerCase().includes(query) ||
+                (c.cedula && c.cedula.toLowerCase().includes(query)) ||
+                (c.celular && c.celular.toLowerCase().includes(query))
+            );
+
+            resultados.innerHTML = '';
+
+            if (filtered.length === 0) {
+                resultados.innerHTML = '<div class="list-group-item text-muted">No encontrado</div>';
+                posicionarDropdown();
+                resultados.classList.add('show');
+                return;
+            }
+
+            filtered.forEach(cliente => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action text-start';
+                btn.innerHTML = `
+                    <strong>${cliente.nombre}</strong><br>
+                    <small class="text-muted">
+                        <i class="fas fa-id-card"></i> ${cliente.cedula || '-'} | 
+                        <i class="fas fa-phone"></i> ${cliente.celular || '-'}
+                    </small>
+                `;
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    input.value = cliente.nombre;
+                    document.getElementById('cliente_id_hidden').value = cliente.id;
+                    resultados.classList.remove('show');
+                    aplicarFiltros();
+                });
+                resultados.appendChild(btn);
+            });
+
+            posicionarDropdown();
+            resultados.classList.add('show');
+        }, 300);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target !== input && !resultados.contains(e.target)) {
+            resultados.classList.remove('show');
+        }
+    });
+
+    window.addEventListener('scroll', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    }, true);
+
+    window.addEventListener('resize', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    });
+
+    // Event listeners adicionales
+    document.getElementById('filtro_estado').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro_tipo_pago').addEventListener('change', aplicarFiltros);
+});
+
+// ✅ APLICAR FILTROS
+function aplicarFiltros() {
+    const estado = document.getElementById('filtro_estado').value;
+    const tipoPago = document.getElementById('filtro_tipo_pago').value;
+    
+    // Obtener cliente seleccionado
+    const inputCliente = document.getElementById('cliente_search_cuotas').value.toLowerCase().trim();
+    
+    let filasVisibles = 0;
+    const rows = document.querySelectorAll('.cliente-row');
+
+    rows.forEach(row => {
+        let mostrar = true;
+
+        // Filtro por cliente (si hay búsqueda)
+        if (inputCliente) {
+            const nombre = row.dataset.nombre || '';
+            const cedula = row.dataset.cedula || '';
+            const celular = row.dataset.celular || '';
+            
+            if (!nombre.includes(inputCliente) && 
+                !cedula.includes(inputCliente) && 
+                !celular.includes(inputCliente)) {
+                mostrar = false;
+            }
+        }
+
+        // Filtro por estado (si está seleccionado)
+        if (mostrar && estado) {
+            const rowEstado = row.dataset.estado || '';
+            if (rowEstado !== estado) {
+                mostrar = false;
+            }
+        }
+
+        // Filtro por tipo de pago
+        if (mostrar && tipoPago) {
+            const rowTipo = row.dataset.tipo || '';
+            if (rowTipo !== tipoPago) {
+                mostrar = false;
+            }
+        }
+
+        if (mostrar) {
+            row.classList.remove('hidden');
+            filasVisibles++;
+        } else {
+            row.classList.add('hidden');
+        }
+    });
+
+    // Mostrar mensaje si no hay resultados
+    const tbody = document.querySelector('tbody');
+    let noResults = tbody.querySelector('.no-results');
+    
+    if (filasVisibles === 0 && !noResults) {
+        noResults = document.createElement('tr');
+        noResults.className = 'no-results';
+        noResults.innerHTML = '<td colspan="10" class="text-center text-muted py-4">No se encontraron cuotas con los filtros seleccionados</td>';
+        tbody.appendChild(noResults);
+    } else if (filasVisibles > 0 && noResults) {
+        noResults.remove();
+    }
+}
+
+// ✅ LIMPIAR FILTROS
+function limpiarFiltros() {
+    document.getElementById('cliente_search_cuotas').value = '';
+    document.getElementById('cliente_id_hidden').value = '';
+    document.getElementById('filtro_estado').value = '';
+    document.getElementById('filtro_tipo_pago').value = '';
+    
+    const dropdown = document.getElementById('cliente_resultados_cuotas');
+    if (dropdown) {
+        dropdown.classList.remove('show');
+    }
+    
+    document.querySelectorAll('.cliente-row').forEach(row => {
+        row.classList.remove('hidden');
+    });
+    
+    const noResults = document.querySelector('.no-results');
+    if (noResults) noResults.remove();
+}
+</script>
+
+{% endblock %}

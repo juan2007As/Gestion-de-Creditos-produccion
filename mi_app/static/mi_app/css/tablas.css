@@ -1,0 +1,460 @@
+/**
+ * TABLAS.CSS
+ * ============================================================================
+ * Propósito: Estilos para tablas y elementos de datos tabulares
+ * ============================================================================
+ */
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: var(--spacing-lg);
+}
+
+thead th {
+  background-color: var(--color-gray-100);
+  border-bottom: 2px solid var(--color-gray-300);
+  color: var(--color-gray-900);
+  font-weight: var(--font-weight-bold);
+  text-align: left;
+  padding: var(--spacing-md);
+}
+
+tbody td {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+tbody tr:hover {
+  background-color: var(--color-gray-50);
+  transition: background-color var(--transition-normal);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* TABLE STYLES */
+.table {
+  width: 100%;
+  margin-bottom: var(--spacing-lg);
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: var(--spacing-md);
+  vertical-align: middle;
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.table thead th {
+  background-color: var(--color-gray-100);
+  border-bottom: 2px solid var(--color-gray-300);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-900);
+}
+
+.table tbody + tbody {
+  border-top: 2px solid var(--color-gray-300);
+}
+
+.table.table-hover tbody tr:hover {
+  background-color: var(--color-gray-50);
+  cursor: pointer;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.table-striped tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* TABLE COLORS */
+.table-primary { background-color: #b8daff; }
+.table-secondary { background-color: #d6d8db; }
+.table-success { background-color: #d1e7dd; }
+.table-danger { background-color: #f8d7da; }
+.table-warning { background-color: #fff3cd; }
+.table-info { background-color: #d1ecf1; }
+.table-light { background-color: #f8f9fa; }
+.table-dark { background-color: #d3d3d3; }
+
+.table-primary th,
+.table-primary td,
+.table-primary thead th {
+  border-color: #9fcdff;
+}
+
+/* RESPONSIVE TABLE */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive > .table {
+  margin-bottom: 0;
+}
+
+/* MIGRACIÓN DESDE style.css - SOPORTE DARK MODE */
+body .table {
+  color: var(--text-color);
+  background-color: var(--card-bg);
+}
+
+body .table thead {
+  background-color: rgba(102, 126, 234, 0.15);
+  color: var(--text-color);
+}
+
+body .table th {
+  border-color: var(--card-border);
+  color: var(--text-color);
+  font-weight: var(--font-weight-bold);
+  border-bottom: 2px solid var(--color-primary);
+}
+
+body .table td {
+  border-color: var(--card-border);
+  color: var(--text-color);
+}
+
+body .table tbody tr:hover {
+  background-color: var(--table-hover);
+  transition: background-color var(--transition-normal);
+}
+
+body .table tbody tr:nth-child(even) {
+  background-color: rgba(102, 126, 234, 0.05);
+}
+
+[data-theme="dark"] .table {
+  color: var(--text-color);
+}
+
+[data-theme="dark"] .table thead {
+  background-color: rgba(102, 126, 234, 0.2);
+}
+
+[data-theme="dark"] .table th,
+[data-theme="dark"] .table td {
+  border-color: var(--card-border);
+  color: var(--text-color);
+}
+
+
+/* TABLE BORDERS */
+.table-bordered {
+  border: 1px solid var(--color-gray-300);
+}
+
+.table-bordered th,
+.table-bordered td {
+  border: 1px solid var(--color-gray-300);
+}
+
+.table-bordered thead th,
+.table-bordered thead td {
+  border-bottom-width: 2px;
+}
+
+/* TABLE SIZES */
+.table-sm th,
+.table-sm td {
+  padding: 0.25rem 0.5rem;
+  font-size: var(--font-size-sm);
+}
+
+.table-lg th,
+.table-lg td {
+  padding: 1rem 1.5rem;
+  font-size: var(--font-size-lg);
+}
+
+/* TABLE ALIGNMENT */
+.table-center {
+  text-align: center;
+}
+
+.table-right {
+  text-align: right;
+}
+
+/* ACTIONS IN TABLE */
+.table-actions {
+  white-space: nowrap;
+}
+
+.table-actions .btn {
+  margin-right: 0.25rem;
+  margin-left: 0.25rem;
+}
+
+.table-actions .btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: var(--font-size-sm);
+}
+
+/* EMPTY STATE */
+.table-empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--color-gray-600);
+}
+
+.table-empty-state-icon {
+  font-size: 2rem;
+  margin-bottom: var(--spacing-md);
+  opacity: 0.5;
+}
+
+/* PAGINATION */
+.pagination {
+  display: flex;
+  list-style: none;
+  margin: var(--spacing-lg) 0;
+  padding: 0;
+  border-radius: var(--border-radius-lg);
+  gap: 0.25rem;
+}
+
+.pagination-item {
+  display: inline-block;
+}
+
+.pagination-link {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-primary);
+  text-decoration: none;
+  background-color: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  transition: all var(--transition-normal);
+}
+
+.pagination-link:hover {
+  color: var(--color-primary-light);
+  background-color: var(--color-gray-100);
+  border-color: var(--color-primary);
+}
+
+.pagination-item.active .pagination-link {
+  color: var(--color-white);
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  cursor: default;
+}
+
+.pagination-item.disabled .pagination-link {
+  color: var(--color-gray-500);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* RESPONSIVE TABLES - MOBILE (360px) */
+@media (max-width: 390px) {
+  table {
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+  }
+
+  thead th {
+    padding: 8px;
+    font-size: 0.85rem;
+  }
+
+  tbody td {
+    padding: 8px;
+    font-size: 0.85rem;
+  }
+
+  .table th,
+  .table td {
+    padding: 8px;
+    font-size: 0.85rem;
+  }
+
+  .table-sm th,
+  .table-sm td {
+    padding: 6px;
+    font-size: 0.8rem;
+  }
+
+  .table-responsive {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-actions {
+    white-space: nowrap;
+  }
+
+  .table-actions .btn {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    min-height: 28px;
+  }
+
+  .table-empty-state {
+    padding: 2rem 0.75rem;
+    font-size: 0.95rem;
+  }
+
+  .pagination-link {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+  }
+}
+
+/* RESPONSIVE TABLES - TABLET (360px+) */
+@media (min-width: 360px) and (max-width: 768px) {
+  table {
+    font-size: 0.9rem;
+    margin-bottom: 1.25rem;
+  }
+
+  thead th {
+    padding: 10px;
+    font-size: 0.9rem;
+  }
+
+  tbody td {
+    padding: 10px;
+    font-size: 0.9rem;
+  }
+
+  .table th,
+  .table td {
+    padding: 10px;
+    font-size: 0.9rem;
+  }
+
+  .table-sm th,
+  .table-sm td {
+    padding: 7px;
+    font-size: 0.85rem;
+  }
+
+  .table-actions .btn {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    min-height: 30px;
+  }
+
+  .table-empty-state {
+    padding: 2.25rem 1rem;
+    font-size: 1rem;
+  }
+
+  .pagination-link {
+    padding: 0.45rem 0.7rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* RESPONSIVE TABLES - DESKTOP (768px+) */
+@media (min-width: 768px) {
+  table {
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+  }
+
+  thead th {
+    padding: 12px;
+    font-size: 0.95rem;
+  }
+
+  tbody td {
+    padding: 12px;
+    font-size: 0.95rem;
+  }
+
+  .table th,
+  .table td {
+    padding: 12px;
+    font-size: 0.95rem;
+  }
+
+  .table-sm th,
+  .table-sm td {
+    padding: 8px;
+    font-size: 0.9rem;
+  }
+
+  .table-lg th,
+  .table-lg td {
+    padding: 1rem 1.5rem;
+    font-size: 1rem;
+  }
+
+  .table-actions .btn {
+    padding: 6px 12px;
+    font-size: 0.9rem;
+    min-height: 32px;
+  }
+
+  .table-empty-state {
+    padding: 2.5rem 1.25rem;
+    font-size: 1.05rem;
+  }
+
+  .pagination-link {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.95rem;
+  }
+}
+
+/* RESPONSIVE TABLES - LARGE DESKTOP (1440px+) */
+@media (min-width: 1440px) {
+  table {
+    font-size: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  thead th {
+    padding: 14px;
+    font-size: 1rem;
+  }
+
+  tbody td {
+    padding: 14px;
+    font-size: 1rem;
+  }
+
+  .table th,
+  .table td {
+    padding: 14px;
+    font-size: 1rem;
+  }
+
+  .table-sm th,
+  .table-sm td {
+    padding: 10px;
+    font-size: 0.95rem;
+  }
+
+  .table-lg th,
+  .table-lg td {
+    padding: 1.25rem 1.75rem;
+    font-size: 1.05rem;
+  }
+
+  .table-actions .btn {
+    padding: 7px 14px;
+    font-size: 0.95rem;
+    min-height: 34px;
+  }
+
+  .table-empty-state {
+    padding: 3rem 1.5rem;
+    font-size: 1.1rem;
+  }
+
+  .pagination-link {
+    padding: 0.55rem 0.85rem;
+    font-size: 1rem;
+  }
+}

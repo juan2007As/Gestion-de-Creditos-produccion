@@ -1,0 +1,267 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load static %}
+
+{% block title %}Configuración del Sistema{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Header -->
+            <div class="mb-4">
+                <h1 class="h2 mb-2">
+                    <i class="fas fa-cog text-primary"></i>
+                    Configuración Global del Sistema
+                </h1>
+                <p class="text-muted">Ajuste las tasas de interés, mora y otros parámetros que se aplicarán en toda la plataforma</p>
+            </div>
+
+            {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle"></i> {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            <!-- Accesos Rápidos -->
+            <div class="row mb-4">
+                <div class="col-md-6 mb-3">
+                    <div class="card border-left-primary h-100 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-history text-primary fa-2x"></i>
+                                <div class="ms-3">
+                                    <h6 class="mb-0">Auditoría de Cambios</h6>
+                                    <small class="text-muted">Registro de todos los cambios</small>
+                                </div>
+                            </div>
+                            <p class="small text-muted mb-3">
+                                Visualiza, filtra y exporta el historial completo de modificaciones en el sistema.
+                            </p>
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'auditoria_cambios' %}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-list"></i> Ver Auditoría
+                                </a>
+                                <a href="{% url 'auditoria_estadisticas' %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-chart-bar"></i> Estadísticas
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <div class="card border-left-success h-100 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <i class="fas fa-cloud-download-alt text-success fa-2x"></i>
+                                <div class="ms-3">
+                                    <h6 class="mb-0">Backups</h6>
+                                    <small class="text-muted">Copia de seguridad de datos</small>
+                                </div>
+                            </div>
+                            <p class="small text-muted mb-3">
+                                Realiza copias de seguridad y restaura datos automáticamente.
+                            </p>
+                            <div class="d-flex gap-2">
+                                <form method="POST" action="{% url 'backups:crear' %}" style="display: inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="descargar" value="1">
+                                    <input type="hidden" name="descripcion" value="Backup desde Configuración">
+                                    <button type="submit" class="btn btn-sm btn-success">
+                                        <i class="fas fa-download"></i> Hacer Backup Ahora
+                                    </button>
+                                </form>
+                                <a href="{% url 'backups:list' %}" class="btn btn-sm btn-outline-success">
+                                    <i class="fas fa-history"></i> Historial
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Separador -->
+            <hr class="my-4">
+
+            <!-- Formulario -->
+            <form method="POST">
+                {% csrf_token %}
+
+                <!-- Tasas de Interés -->
+                <div class="card mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-percent"></i>
+                            Tasas de Interés Mensual
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.tasa_interes_prestamo_normal.id_for_label }}" class="form-label">
+                                        {{ form.tasa_interes_prestamo_normal.label }}
+                                    </label>
+                                    {{ form.tasa_interes_prestamo_normal }}
+                                    <small class="text-muted d-block mt-2">
+                                        <i class="fas fa-info-circle"></i>
+                                        Se aplica a los préstamos regulares/formales
+                                    </small>
+                                    {% if form.tasa_interes_prestamo_normal.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.tasa_interes_prestamo_normal.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.tasa_interes_prestamo_rapido.id_for_label }}" class="form-label">
+                                        {{ form.tasa_interes_prestamo_rapido.label }}
+                                    </label>
+                                    {{ form.tasa_interes_prestamo_rapido }}
+                                    <small class="text-muted d-block mt-2">
+                                        <i class="fas fa-info-circle"></i>
+                                        Se aplica a los préstamos rápidos/dinero extra
+                                    </small>
+                                    {% if form.tasa_interes_prestamo_rapido.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.tasa_interes_prestamo_rapido.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Información actual -->
+                        <div class="alert alert-light mt-3">
+                            <strong>Tasas Actuales:</strong><br>
+                            • Préstamos Normales: <strong>{{ configuracion.tasa_interes_prestamo_normal }}%</strong><br>
+                            • Préstamos Rápidos: <strong>{{ configuracion.tasa_interes_prestamo_rapido }}%</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mora Diaria -->
+                <div class="card mb-4">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Penalidad por Mora
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="{{ form.tasa_mora_diaria.id_for_label }}" class="form-label">
+                                {{ form.tasa_mora_diaria.label }}
+                            </label>
+                            {{ form.tasa_mora_diaria }}
+                            <small class="text-muted d-block mt-2">
+                                <i class="fas fa-info-circle"></i>
+                                Cantidad que se cobra por cada día de retraso en una cuota
+                            </small>
+                            {% if form.tasa_mora_diaria.errors %}
+                            <div class="invalid-feedback d-block">{{ form.tasa_mora_diaria.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Información actual -->
+                        <div class="alert alert-light">
+                            <strong>Mora Actual:</strong> <strong class="text-danger">{{ configuracion.tasa_mora_diaria|formato_moneda_co}}</strong> por día
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Información de Auditoría -->
+                <div class="card mb-4">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history"></i>
+                            Información del Sistema
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0">
+                            <tr>
+                                <td><strong>Última Actualización:</strong></td>
+                                <td class="text-end">{{ configuracion.fecha_actualizacion|date:"d/m/Y H:i:s" }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Identificador:</strong></td>
+                                <td class="text-end">#{{ configuracion.pk }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Advertencia -->
+                <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                    <strong><i class="fas fa-exclamation-circle"></i> Importante:</strong>
+                    <p class="mb-0">
+                        Los cambios en estas tasas se aplicarán a nuevos préstamos. 
+                        Los préstamos existentes mantendrán sus tasas originales.
+                    </p>
+                </div>
+
+                <!-- Botones -->
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg flex-grow-1">
+                        <i class="fas fa-save"></i> Guardar Cambios
+                    </button>
+                    <a href="{% url 'inicio' %}" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.alert-light {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+/* Tarjetas de acceso rápido */
+.border-left-primary {
+    border-left: 4px solid #667eea !important;
+}
+
+.border-left-success {
+    border-left: 4px solid #28a745 !important;
+}
+
+.card {
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12) !important;
+}
+
+.card .text-primary {
+    color: #667eea !important;
+}
+
+.card .text-success {
+    color: #28a745 !important;
+}
+</style>
+{% endblock %}
+
+
+
+

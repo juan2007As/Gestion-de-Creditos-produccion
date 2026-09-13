@@ -1,0 +1,57 @@
+<!-- Componente: Estadísticas Globales del Sistema -->
+{% load custom_filters %}
+{% if total_clientes or total_prestamos %}
+<div class="row mb-4 mt-2">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm bg-light">
+            <div class="card-body">
+                <div class="row text-center">
+                    <!-- Total de Clientes -->
+                    <div class="col-md-3">
+                        <div class="p-3">
+                            <i class="fas fa-users" style="font-size: 2em; color: #667eea;"></i>
+                            <h6 class="mt-2 mb-0 text-muted">Total de Clientes</h6>
+                            <h3 class="mb-0" style="color: #667eea;">
+                                <strong>{{ total_clientes }}</strong>
+                            </h3>
+                        </div>
+                    </div>
+
+                    <!-- Clientes Activos -->
+                    <div class="col-md-3">
+                        <div class="p-3">
+                            <i class="fas fa-check-circle" style="font-size: 2em; color: #48bb78;"></i>
+                            <h6 class="mt-2 mb-0 text-muted">Clientes Activos</h6>
+                            <h3 class="mb-0" style="color: #48bb78;">
+                                <strong>{{ clientes_activos|default:0 }}</strong>
+                            </h3>
+                        </div>
+                    </div>
+
+                    <!-- Total de Préstamos -->
+                    <div class="col-md-3">
+                        <div class="p-3">
+                            <i class="fas fa-money-bill-wave" style="font-size: 2em; color: #ed8936;"></i>
+                            <h6 class="mt-2 mb-0 text-muted">Total Préstamos</h6>
+                            <h3 class="mb-0" style="color: #ed8936;">
+                                <strong>{{ total_prestamos }}</strong>
+                            </h3>
+                        </div>
+                    </div>
+
+                    <!-- Total Pagado -->
+                    <div class="col-md-3">
+                        <div class="p-3">
+                            <i class="fas fa-chart-line" style="font-size: 2em; color: #38a169;"></i>
+                            <h6 class="mt-2 mb-0 text-muted">Total Pagado</h6>
+                            <h3 class="mb-0" style="color: #38a169;">
+                                <strong>{{ total_pagado|formato_moneda_co }}</strong>
+                            </h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,197 @@
+{% extends 'mi_app/base.html' %}
+{% load static %}
+
+{% block title %}Auto-tagging de Etiquetas{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <!-- Encabezado -->
+            <div class="card border-info mb-4">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">🏷️ Auto-tagging de Etiquetas de Clientes</h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-0">
+                        Clasificar automáticamente a todos los clientes según su comportamiento de pagos:
+                    </p>
+                    <ul class="mt-3 mb-0">
+                        <li><span class="badge bg-success">BUENO</span> - 95%+ cumplimiento, &lt;5 días mora promedio</li>
+                        <li><span class="badge bg-warning">MEDIO</span> - 70-94% cumplimiento, 5-15 días mora</li>
+                        <li><span class="badge bg-danger">MALO</span> - &lt;70% cumplimiento, &gt;15 días mora</li>
+                        <li><span class="badge bg-secondary">SIN HISTORIAL</span> - Sin préstamos o datos insuficientes</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Estadísticas Actuales -->
+            {% if not exito %}
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">📊 Distribución Actual</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="p-3">
+                                <h3 class="text-success">{{ stats.BUENO }}</h3>
+                                <p class="text-muted mb-0">BUENO</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-3">
+                                <h3 class="text-warning">{{ stats.MEDIO }}</h3>
+                                <p class="text-muted mb-0">MEDIO</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-3">
+                                <h3 class="text-danger">{{ stats.MALO }}</h3>
+                                <p class="text-muted mb-0">MALO</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-3">
+                                <h3 class="text-secondary">{{ stats.SIN_HISTORIAL }}</h3>
+                                <p class="text-muted mb-0">SIN HISTORIAL</p>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <p class="text-muted text-center mb-0">
+                        <strong>Total de clientes:</strong> {{ total_clientes }}
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Formulario de Ejecución -->
+            {% if not exito %}
+            <form method="POST" class="mb-4">
+                {% csrf_token %}
+                
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">⚙️ Opciones de Ejecución</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Vista Previa / Ejecutar -->
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <strong>Modo de Ejecución:</strong>
+                            </label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="dry_run" id="dry_run_yes" value="si" checked>
+                                <label class="form-check-label" for="dry_run_yes">
+                                    <strong>📋 Vista Previa</strong> - Mostrar cambios sin aplicar
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="dry_run" id="dry_run_no" value="no">
+                                <label class="form-check-label" for="dry_run_no">
+                                    <strong>✅ Ejecutar</strong> - Aplicar cambios a todos los clientes
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Razón (opcional) -->
+                        <div class="mb-3">
+                            <label for="razon" class="form-label">Razón (opcional):</label>
+                            <input type="text" class="form-control" id="razon" name="razon" 
+                                   placeholder="Ej: Evaluación mensual de clientes">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        🚀 Ejecutar Auto-tagging
+                    </button>
+                </div>
+            </form>
+            {% endif %}
+
+            <!-- Resultados -->
+            {% if exito %}
+            <div class="card {% if fue_dry_run %}border-warning{% else %}border-success{% endif %} mb-4">
+                <div class="card-header {% if fue_dry_run %}bg-warning text-dark{% else %}bg-success text-white{% endif %}">
+                    <h5 class="mb-0">
+                        {% if fue_dry_run %}
+                        📋 Vista Previa Completada
+                        {% else %}
+                        ✅ Etiquetación Aplicada
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Output de Comando -->
+                    <div class="bg-dark p-3 rounded mb-3" style="max-height: 400px; overflow-y: auto;">
+                        <pre class="text-light mb-0" style="font-size: 0.85rem;"><code>{{ output }}</code></pre>
+                    </div>
+
+                    <!-- Estadísticas Post-Ejecución -->
+                    <div class="row text-center mt-3">
+                        <div class="col-md-3">
+                            <div class="p-2">
+                                <h4 class="text-success">{{ stats.BUENO }}</h4>
+                                <p class="text-muted small mb-0">BUENO</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-2">
+                                <h4 class="text-warning">{{ stats.MEDIO }}</h4>
+                                <p class="text-muted small mb-0">MEDIO</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-2">
+                                <h4 class="text-danger">{{ stats.MALO }}</h4>
+                                <p class="text-muted small mb-0">MALO</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-2">
+                                <h4 class="text-secondary">{{ stats.SIN_HISTORIAL }}</h4>
+                                <p class="text-muted small mb-0">SIN HISTORIAL</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if fue_dry_run %}
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <strong>⚠️ Modo Vista Previa:</strong> Los cambios NO fueron aplicados.
+                        Ejecuta nuevamente con "Ejecutar" para aplicar los cambios.
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success mt-3 mb-0">
+                        <strong>✅ Completado:</strong> Todos los cambios fueron aplicados a la BD.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Botón de Retorno -->
+            <div class="mt-3">
+                <a href="{% url 'lista_clientes' %}" class="btn btn-secondary w-100">
+                    ← Volver a Lista de Clientes
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Mensajes Flash -->
+{% if messages %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        {% for message in messages %}
+            console.log('[{{ message.tags }}]', '{{ message }}');
+        {% endfor %}
+    });
+</script>
+{% endif %}
+
+{% endblock %}

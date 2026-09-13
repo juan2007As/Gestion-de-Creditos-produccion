@@ -1,0 +1,1580 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Gestión de Préstamos{% endblock %}</title>
+    
+    <!-- 🌙 BUG FIX #3: Script INLINE para cargar tema ANTES de CSS + MULTI-TAB SYNC -->
+    <!-- Evita "flash" de luz, asegura tema correcto desde inicio, y sincroniza entre tabs -->
+    <script>
+        (function() {
+            // Función para aplicar tema
+            function applyTheme() {
+                const tema = localStorage.getItem('theme') || 'light';
+                document.documentElement.setAttribute('data-theme', tema);
+                // Suppress transiciones durante aplicación inicial
+                document.documentElement.style.transition = 'none';
+                // Re-enable transiciones después de aplicación
+                setTimeout(() => {
+                    document.documentElement.style.transition = '';
+                }, 50);
+            }
+            
+            // Aplicar tema INMEDIATAMENTE (evita flash)
+            applyTheme();
+            
+            // Sincronizar con otros tabs alterando localStorage (sin polling)
+            window.addEventListener('storage', function(e) {
+                if (e.key === 'theme') {
+                    applyTheme();
+                }
+            });
+        })();
+    </script>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- CSS Modular -->
+    <link rel="stylesheet" href="{% static 'mi_app/css/variables.css' %}">
+    <link rel="stylesheet" href="{% static 'mi_app/css/reset.css' %}">
+    <link rel="stylesheet" href="{% static 'mi_app/css/layout.css' %}">
+    <link rel="stylesheet" href="{% static 'mi_app/css/componentes.css' %}">
+    <link rel="stylesheet" href="{% static 'mi_app/css/formularios.css' %}">
+    <link rel="stylesheet" href="{% static 'mi_app/css/tablas.css' %}">
+    <link rel="stylesheet" href="{% static 'mi_app/css/responsive.css' %}">
+    <link rel="stylesheet" href="{% static 'mi_app/css/z-index.css' %}">  <!-- ✅ NUEVA: Jerarquía de z-index (REGLA #3 - Bloque C) -->
+    <link rel="stylesheet" href="{% static 'mi_app/css/input-responsive.css' %}">  <!-- ✅ NUEVA: Input responsive mejorado 320px-2440px (REGLA #3 - Bloque C) -->
+    <link rel="stylesheet" href="{% static 'mi_app/css/temas.css' %}">
+    
+    <!-- CSS Heredado (a migrar gradualmente) -->
+    <link rel="stylesheet" href="{% static 'mi_app/css/style.css' %}">
+    
+    <!-- ✅ CSS Atajos Rápidos - Pagar Cuota (máxima prioridad) -->
+    <link rel="stylesheet" href="{% static 'mi_app/css/atajos-rapidos-cuota.css' %}">
+    
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --danger-color: #dc3545;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --info-color: #17a2b8;
+            --bg-color: #f8f9fa;
+            --text-color: #2c3e50;
+            --text-secondary: #7f8c8d;
+            --card-bg: #ffffff;
+            --card-border: #e0e0e0;
+            --navbar-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --footer-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --input-bg: #ffffff;
+            --table-hover: rgba(102, 126, 234, 0.05);
+        }
+
+        /* MODO OSCURO - Paleta profesional y elegante */
+        [data-theme="dark"] {
+            --bg-color: #111827;
+            --text-color: #f3f4f6;
+            --text-secondary: #d1d5db;
+            --card-bg: #1f2937;
+            --card-border: #374151;
+            --navbar-bg: linear-gradient(135deg, #1a202c 0%, #2d1b4e 100%);
+            --footer-bg: linear-gradient(135deg, #1a202c 0%, #2d1b4e 100%);
+            --input-bg: #111827;
+            --table-hover: rgba(102, 126, 234, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+        }
+
+        /* ===== NAVBAR MEJORADA ===== */
+        .navbar {
+            background: var(--navbar-bg);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            padding: 0.75rem 0;
+            margin: 0;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+        
+        .navbar .container-fluid {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        
+        .navbar-brand {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: white !important;
+            letter-spacing: 0.5px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .navbar-brand i {
+            margin-right: 8px;
+        }
+        
+        .nav-link {
+            color: rgba(255, 255, 255, 0.9) !important;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            padding: 0.5rem 1rem !important;
+            margin: 0 0.25rem;
+            border-radius: 0.375rem;
+        }
+        
+        .nav-link:hover {
+            color: white !important;
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+        
+        .nav-link.active {
+            color: white !important;
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .nav-link i {
+            margin-right: 5px;
+            width: 18px;
+            text-align: center;
+        }
+
+        /* Dark Mode Toggle */
+        .theme-toggle-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            margin-left: 1rem;
+        }
+
+        .theme-toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: rotate(20deg);
+        }
+
+        /* Dropdown mejorado */
+        .dropdown-menu {
+            border: none;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            border-radius: 0.75rem;
+            padding: 0.75rem 0;
+            background-color: var(--card-bg);
+        }
+
+        .dropdown-item {
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            color: var(--text-color);
+            transition: all 0.2s;
+        }
+
+        .dropdown-item:hover {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.25), rgba(118, 75, 162, 0.25));
+            color: #fff;
+            padding-left: 2rem;
+        }
+
+        .dropdown-item.active, .dropdown-item:active {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+        }
+
+        .dropdown-item i {
+            margin-right: 12px;
+            width: 16px;
+            color: var(--primary-color);
+        }
+
+        .dropdown-item:hover i {
+            color: white;
+        }
+
+        .dropdown-divider {
+            border-color: var(--card-border);
+            opacity: 0.5;
+        }
+
+        /* ===== MIGAS DE PAN ===== */
+        .breadcrumb {
+            background-color: transparent;
+            padding: 0.5rem 0;
+            margin-bottom: 1.5rem;
+        }
+
+        .breadcrumb-item {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .breadcrumb-item a {
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .breadcrumb-item a:hover {
+            color: var(--secondary-color);
+            text-decoration: underline;
+        }
+
+        .breadcrumb-item.active {
+            color: var(--text-color);
+            font-weight: 600;
+        }
+
+        /* ===== CONTENIDO PRINCIPAL ===== */
+        main {
+            flex: 1;
+            padding: 1.5rem;
+        }
+
+        /* ===== CARDS ===== */
+        .card {
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
+            background-color: var(--card-bg);
+            color: var(--text-color);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15));
+            border-bottom: 2px solid var(--card-border);
+            color: var(--text-color);
+            padding: 1.2rem;
+            font-weight: 700;
+            font-size: 1.05rem;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+            color: var(--text-color);
+        }
+
+        .card-text {
+            color: var(--text-secondary);
+        }
+
+        .card-title {
+            color: var(--text-color);
+            font-weight: 600;
+        }
+
+        /* ===== BOTONES ===== */
+        .btn {
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: all 0.3s;
+            padding: 0.6rem 1.2rem;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d !important;
+            color: white !important;
+            border-color: #6c757d !important;
+        }
+
+        .btn-secondary:hover {
+            background-color: #5a6268 !important;
+            color: white !important;
+            border-color: #5a6268 !important;
+        }
+
+        .btn-success {
+            background-color: #22c55e;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #16a34a;
+            color: white;
+        }
+
+        .btn-danger {
+            background-color: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #dc2626;
+            color: white;
+        }
+
+        .btn-info {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background-color: #2563eb;
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+        }
+
+        /* Inputs en modo oscuro */
+        .form-control, .form-select {
+            background-color: var(--input-bg);
+            color: var(--text-color);
+            border: 2px solid var(--card-border);
+            transition: all 0.3s;
+            font-size: 1rem;
+        }
+
+        .form-control::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.8;
+        }
+
+        .form-control:focus, .form-select:focus {
+            background-color: var(--input-bg);
+            color: var(--text-color);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(102, 126, 234, 0.25);
+        }
+
+        .form-label {
+            color: var(--text-color);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-text {
+            color: var(--text-secondary);
+        }
+
+        /* Labels */
+        label {
+            color: var(--text-color);
+            font-weight: 500;
+        }
+
+        /* Tables */
+        .table {
+            color: var(--text-color);
+            border-color: var(--card-border);
+        }
+
+        .table thead {
+            border-color: var(--card-border);
+            background-color: rgba(102, 126, 234, 0.1);
+        }
+
+        .table thead th {
+            color: var(--text-color);
+            font-weight: 700;
+            border-color: var(--card-border);
+        }
+
+        .table-light {
+            background-color: var(--table-hover);
+        }
+
+        .table-hover tbody tr:hover {
+            background-color: var(--table-hover);
+        }
+
+        .table td {
+            border-color: var(--card-border);
+            vertical-align: middle;
+        }
+
+        /* Contenedor overlay para alertas - PROBLEMA #5 CORREGIDO */
+        #alerts-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 90%;
+            width: 350px;
+            pointer-events: none;
+        }
+        
+        /* Alerts - Mejor visibilidad en ambos modos */
+        .alert {
+            background-color: var(--card-bg);
+            border: 2px solid var(--card-border);
+            color: var(--text-color);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            animation: slideInAlert 0.3s ease-out;
+            margin: 0 0 10px 0 !important;
+            pointer-events: all;
+        }
+        
+        @keyframes slideInAlert {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOutAlert {
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+
+        .alert-success {
+            background-color: rgba(34, 197, 94, 0.15);
+            border-color: rgba(34, 197, 94, 0.5);
+            color: #22c55e;
+        }
+
+        [data-theme="dark"] .alert-success {
+            color: #86efac;
+            background-color: rgba(34, 197, 94, 0.12);
+        }
+
+        .alert-danger {
+            background-color: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.5);
+            color: #ef4444;
+        }
+
+        [data-theme="dark"] .alert-danger {
+            color: #fca5a5;
+            background-color: rgba(239, 68, 68, 0.12);
+        }
+
+        .alert-info {
+            background-color: rgba(59, 130, 246, 0.15);
+            border-color: rgba(59, 130, 246, 0.5);
+            color: #3b82f6;
+        }
+
+        [data-theme="dark"] .alert-info {
+            color: #93c5fd;
+            background-color: rgba(59, 130, 246, 0.12);
+        }
+
+        .alert-warning {
+            background-color: rgba(251, 146, 60, 0.15);
+            border-color: rgba(251, 146, 60, 0.5);
+            color: #fb923c;
+        }
+
+        [data-theme="dark"] .alert-warning {
+            color: #fed7aa;
+            background-color: rgba(251, 146, 60, 0.12);
+        }
+
+        .alert-heading {
+            color: var(--text-color);
+            font-weight: 700;
+        }
+
+        /* ==================== UNIFIED SEARCH DROPDOWN ==================== */
+        #search_results {
+            position: fixed !important;
+            z-index: 10000 !important;
+            display: none !important;
+            background: white !important;
+            border: 1px solid #dee2e6 !important;
+            border-radius: 0.375rem !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+            max-height: 300px !important;
+            overflow-y: auto !important;
+            min-width: 200px !important;
+            list-style: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
+        #search_results.active {
+            display: block !important;
+        }
+        
+        #search_results .list-group-item {
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            padding: 0.75rem;
+            font-size: 0.95rem;
+            background: white;
+            border: none;
+            margin: 0;
+        }
+        
+        #search_results .list-group-item:hover {
+            background-color: #f8f9fa !important;
+            border-left-color: #0066cc !important;
+        }
+        
+        #search_results .list-group-item:focus {
+            background-color: #e7f3ff !important;
+            border-left-color: #0066cc !important;
+            outline: none;
+        }
+        
+        /* INPUT DE BÚSQUEDA */
+        #search_input {
+            position: relative;
+            z-index: 1050;
+        }
+        }
+        
+        .results-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .result-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--card-border);
+            cursor: pointer;
+            transition: background-color 0.2s;
+            color: var(--text-color);
+        }
+        
+        .result-item:hover {
+            background-color: var(--table-hover);
+        }
+        
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        /* List Group */
+        .list-group-item {
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            border-color: var(--card-border);
+            transition: all 0.2s;
+        }
+
+        .list-group-item:hover {
+            background-color: rgba(102, 126, 234, 0.1);
+            border-color: var(--primary-color);
+            transform: translateX(4px);
+            z-index: 10000 !important;  /* ✅ MANTENER z-index EN HOVER */
+        }
+
+        .list-group-item.active {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-color: var(--primary-color);
+            color: white;
+            z-index: 10000 !important;  /* ✅ MANTENER z-index CUANDO ACTIVO */
+        }
+
+        .list-group {
+            border-color: var(--card-border);
+        }
+
+        /* Badges */
+        .badge {
+            font-weight: 600;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+        }
+
+        .badge-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        }
+
+        /* Headings */
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--text-color);
+            font-weight: 700;
+        }
+
+        /* Links */
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        a:hover {
+            color: var(--secondary-color);
+            text-decoration: underline;
+        }
+
+        /* Borders y divisores */
+        hr {
+            border-color: var(--card-border);
+            opacity: 0.5;
+        }
+
+        .text-muted {
+            color: var(--text-secondary) !important;
+        }
+
+        /* ===== FOOTER ===== */
+        footer {
+            background: var(--footer-bg);
+            color: white;
+            text-align: center;
+            padding: 2rem 1.5rem;
+            margin-top: 2rem;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .footer-text {
+            margin: 0;
+            font-size: 0.95rem;
+            opacity: 0.9;
+        }
+
+        /* Scrollbar personalizado en modo oscuro */
+        [data-theme="dark"] ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        [data-theme="dark"] ::-webkit-scrollbar-track {
+            background: #0f1419;
+        }
+
+        [data-theme="dark"] ::-webkit-scrollbar-thumb {
+            background: #404857;
+            border-radius: 5px;
+        }
+
+        [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+            background: #667eea;
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 991.98px) {
+            .navbar-brand {
+                font-size: 1.1rem;
+            }
+
+            .nav-link {
+                padding: 0.4rem 0.75rem !important;
+            }
+
+            .theme-toggle-btn {
+                margin-left: 0;
+                margin-top: 0.5rem;
+            }
+
+            main {
+                padding: 1rem;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .navbar-brand {
+                font-size: 1rem;
+            }
+
+            main {
+                padding: 0.75rem;
+            }
+
+            .breadcrumb {
+                font-size: 0.85rem;
+            }
+
+            .btn {
+                padding: 0.5rem 0.9rem;
+                font-size: 0.9rem;
+            }
+
+            .dropdown-item {
+                padding: 0.6rem 1rem;
+            }
+        }
+
+        /* Utility Classes */
+        .hide-on-mobile {
+            display: none;
+        }
+
+        @media (min-width: 768px) {
+            .hide-on-mobile {
+                display: revert;
+            }
+        }
+
+        /* ===== DARK MODE OVERRIDE ABSOLUTO - VENCE A BOOTSTRAP ===== */
+        /* Estas reglas son más específicas y usan !important */
+        
+        [data-theme="dark"] body {
+            background-color: #111827 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .card {
+            background-color: #1f2937 !important;
+            border-color: #374151 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .card-header {
+            background-color: #111827 !important;
+            border-color: #374151 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .form-control,
+        [data-theme="dark"] .form-select,
+        [data-theme="dark"] input[type="text"],
+        [data-theme="dark"] input[type="number"],
+        [data-theme="dark"] input[type="email"],
+        [data-theme="dark"] textarea,
+        [data-theme="dark"] select {
+            background-color: #111827 !important;
+            color: #f3f4f6 !important;
+            border-color: #374151 !important;
+        }
+
+        [data-theme="dark"] .form-control::placeholder {
+            color: #9ca3af !important;
+        }
+
+        [data-theme="dark"] .table {
+            color: #f3f4f6 !important;
+            background-color: #1f2937 !important;
+        }
+
+        [data-theme="dark"] .table thead {
+            background-color: #111827 !important;
+        }
+
+        [data-theme="dark"] .table th {
+            color: #f3f4f6 !important;
+            border-color: #374151 !important;
+        }
+
+        [data-theme="dark"] .table td {
+            border-color: #374151 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .table tbody tr:hover {
+            background-color: #374151 !important;
+        }
+
+        [data-theme="dark"] .alert {
+            background-color: #1f2937 !important;
+            color: #f3f4f6 !important;
+            border-color: #374151 !important;
+        }
+
+        [data-theme="dark"] .alert-danger {
+            background-color: rgba(220, 53, 69, 0.15) !important;
+            border-color: #dc3545 !important;
+            color: #ff9999 !important;
+        }
+
+        [data-theme="dark"] .alert-success {
+            background-color: rgba(40, 167, 69, 0.15) !important;
+            border-color: #28a745 !important;
+            color: #90ee90 !important;
+        }
+
+        [data-theme="dark"] .alert-info {
+            background-color: rgba(23, 162, 184, 0.15) !important;
+            border-color: #17a2b8 !important;
+            color: #87ceeb !important;
+        }
+
+        [data-theme="dark"] .alert-warning {
+            background-color: rgba(255, 193, 7, 0.15) !important;
+            border-color: #ffc107 !important;
+            color: #ffeb99 !important;
+        }
+
+        [data-theme="dark"] .btn-secondary {
+            background-color: #374151 !important;
+            border-color: #4b5563 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .btn-secondary:hover {
+            background-color: #4b5563 !important;
+            border-color: #6b7280 !important;
+        }
+
+        [data-theme="dark"] h1,
+        [data-theme="dark"] h2,
+        [data-theme="dark"] h3,
+        [data-theme="dark"] h4,
+        [data-theme="dark"] h5,
+        [data-theme="dark"] h6 {
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .text-secondary {
+            color: #d1d5db !important;
+        }
+
+        [data-theme="dark"] .nav-tabs .nav-link {
+            color: #9ca3af !important;
+        }
+
+        [data-theme="dark"] .nav-tabs .nav-link.active {
+            background-color: #1f2937 !important;
+            color: #f3f4f6 !important;
+            border-color: #667eea !important;
+        }
+
+        [data-theme="dark"] .dropdown-menu {
+            background-color: #1f2937 !important;
+            border-color: #374151 !important;
+        }
+
+        [data-theme="dark"] .dropdown-item {
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .dropdown-item:hover,
+        [data-theme="dark"] .dropdown-item:focus {
+            background-color: #374151 !important;
+            color: #fff !important;
+        }
+
+        [data-theme="dark"] .modal-content {
+            background-color: #1f2937 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .modal-header {
+            background-color: #111827 !important;
+            border-color: #374151 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .close {
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] label {
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .badge {
+            background-color: #667eea !important;
+            color: #fff !important;
+        }
+
+        /* ===== OVERRIDE BOOTSTRAP UTILITY CLASSES ===== */
+        /* bg-light debe ser oscuro en dark mode */
+        [data-theme="dark"] .bg-light {
+            background-color: #1f2937 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .bg-white {
+            background-color: #1f2937 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .bg-secondary {
+            background-color: #374151 !important;
+        }
+
+        [data-theme="dark"] .text-dark {
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .text-light {
+            color: #f3f4f6 !important;
+        }
+
+        /* Todos los container, row, col deben heredar los colores */
+        [data-theme="dark"] .container,
+        [data-theme="dark"] .container-fluid,
+        [data-theme="dark"] .row,
+        [data-theme="dark"] .col,
+        [data-theme="dark"] .col-md-4,
+        [data-theme="dark"] .col-md-6,
+        [data-theme="dark"] .col-md-8,
+        [data-theme="dark"] .col-md-12,
+        [data-theme="dark"] .col-lg-4,
+        [data-theme="dark"] .col-lg-6,
+        [data-theme="dark"] .col-lg-12 {
+            background-color: var(--bg-color) !important;
+        }
+
+        /* Listados (ul, ol, li) */
+        [data-theme="dark"] ul,
+        [data-theme="dark"] ol,
+        [data-theme="dark"] li {
+            color: #f3f4f6 !important;
+        }
+
+        /* Botones en dark mode */
+        [data-theme="dark"] .btn-outline-secondary {
+            color: #f3f4f6 !important;
+            border-color: #9ca3af !important;
+        }
+
+        [data-theme="dark"] .btn-outline-secondary:hover {
+            background-color: #374151 !important;
+            border-color: #d1d5db !important;
+        }
+
+        [data-theme="dark"] .btn-light {
+            background-color: #374151 !important;
+            color: #f3f4f6 !important;
+            border-color: #4b5563 !important;
+        }
+
+        [data-theme="dark"] .btn-light:hover {
+            background-color: #4b5563 !important;
+        }
+
+        /* Progress bars */
+        [data-theme="dark"] .progress {
+            background-color: #111827 !important;
+        }
+
+        /* Badges con colores */
+        [data-theme="dark"] .badge-light {
+            background-color: #374151 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .badge-dark {
+            background-color: #667eea !important;
+            color: #fff !important;
+        }
+
+        /* Bordes */
+        [data-theme="dark"] .border {
+            border-color: #374151 !important;
+        }
+
+        [data-theme="dark"] .border-light {
+            border-color: #374151 !important;
+        }
+
+        /* Separadores (hr) */
+        [data-theme="dark"] hr {
+            border-color: #374151 !important;
+            opacity: 1 !important;
+        }
+
+        /* Popover y tooltips */
+        [data-theme="dark"] .popover {
+            background-color: #1f2937 !important;
+            border-color: #374151 !important;
+        }
+
+        [data-theme="dark"] .popover-header {
+            background-color: #111827 !important;
+            color: #f3f4f6 !important;
+            border-color: #374151 !important;
+        }
+
+        [data-theme="dark"] .popover-body {
+            color: #f3f4f6 !important;
+        }
+
+        /* Breadcrumb */
+        [data-theme="dark"] .breadcrumb {
+            background-color: #1f2937 !important;
+        }
+
+        [data-theme="dark"] .breadcrumb-item {
+            color: #9ca3af !important;
+        }
+
+        [data-theme="dark"] .breadcrumb-item.active {
+            color: #f3f4f6 !important;
+        }
+
+        /* Links */
+        [data-theme="dark"] a {
+            color: #667eea !important;
+        }
+
+        [data-theme="dark"] a:hover {
+            color: #8b9dff !important;
+        }
+
+        /* Specific card body styling */
+        [data-theme="dark"] .card-body {
+            background-color: #1f2937 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .card-title {
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .card-text {
+            color: #d1d5db !important;
+        }
+
+        /* Bien específico para tabla en pagos */
+        [data-theme="dark"] table {
+            background-color: #1f2937 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] tbody {
+            background-color: #1f2937 !important;
+        }
+
+        [data-theme="dark"] tr {
+            background-color: #1f2937 !important;
+            border-color: #374151 !important;
+        }
+
+        [data-theme="dark"] td {
+            background-color: #1f2937 !important;
+            color: #f3f4f6 !important;
+            border-color: #374151 !important;
+        }
+
+        [data-theme="dark"] th {
+            background-color: #111827 !important;
+            color: #f3f4f6 !important;
+            border-color: #374151 !important;
+        }
+
+        /* Div genéricos con background */
+        [data-theme="dark"] .panel,
+        [data-theme="dark"] .well {
+            background-color: #1f2937 !important;
+            border-color: #374151 !important;
+            color: #f3f4f6 !important;
+        }
+
+        /* Boxes de estadísticas */
+        [data-theme="dark"] .box {
+            background-color: #1f2937 !important;
+            border-color: #374151 !important;
+        }
+
+        /* Shadow effects - mantener pero ajustar para dark */
+        [data-theme="dark"] .shadow,
+        [data-theme="dark"] .shadow-sm {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.5) !important;
+        }
+
+        [data-theme="dark"] .shadow-lg {
+            box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.5) !important;
+        }
+
+        /* ===== BOTONES - CONTRASTE MEJORADO ===== */
+        /* Botones primarios */
+        [data-theme="dark"] .btn-primary {
+            background-color: #667eea !important;
+            border-color: #667eea !important;
+            color: #fff !important;
+        }
+
+        [data-theme="dark"] .btn-primary:hover {
+            background-color: #8b9dff !important;
+            border-color: #8b9dff !important;
+        }
+
+        [data-theme="dark"] .btn-primary:disabled {
+            background-color: #4f46e5 !important;
+            border-color: #4f46e5 !important;
+        }
+
+        /* Botones secundarios */
+        [data-theme="dark"] .btn-secondary {
+            background-color: #6b7280 !important;
+            border-color: #6b7280 !important;
+            color: #fff !important;
+        }
+
+        [data-theme="dark"] .btn-secondary:hover {
+            background-color: #9ca3af !important;
+            border-color: #9ca3af !important;
+        }
+
+        /* Botones success */
+        [data-theme="dark"] .btn-success {
+            background-color: #10b981 !important;
+            border-color: #10b981 !important;
+            color: #fff !important;
+        }
+
+        [data-theme="dark"] .btn-success:hover {
+            background-color: #34d399 !important;
+            border-color: #34d399 !important;
+        }
+
+        /* Botones danger */
+        [data-theme="dark"] .btn-danger {
+            background-color: #ef4444 !important;
+            border-color: #ef4444 !important;
+            color: #fff !important;
+        }
+
+        [data-theme="dark"] .btn-danger:hover {
+            background-color: #f87171 !important;
+            border-color: #f87171 !important;
+        }
+
+        /* Botones warning */
+        [data-theme="dark"] .btn-warning {
+            background-color: #f59e0b !important;
+            border-color: #f59e0b !important;
+            color: #000 !important;
+        }
+
+        [data-theme="dark"] .btn-warning:hover {
+            background-color: #fbbf24 !important;
+            border-color: #fbbf24 !important;
+        }
+
+        /* Botones info */
+        [data-theme="dark"] .btn-info {
+            background-color: #06b6d4 !important;
+            border-color: #06b6d4 !important;
+            color: #000 !important;
+        }
+
+        [data-theme="dark"] .btn-info:hover {
+            background-color: #22d3ee !important;
+            border-color: #22d3ee !important;
+        }
+
+        /* Botones outline */
+        [data-theme="dark"] .btn-outline-primary {
+            color: #667eea !important;
+            border-color: #667eea !important;
+        }
+
+        [data-theme="dark"] .btn-outline-primary:hover {
+            background-color: #667eea !important;
+            color: #fff !important;
+        }
+
+        [data-theme="dark"] .btn-outline-secondary {
+            color: #9ca3af !important;
+            border-color: #9ca3af !important;
+        }
+
+        [data-theme="dark"] .btn-outline-secondary:hover {
+            background-color: #9ca3af !important;
+            color: #000 !important;
+        }
+
+        [data-theme="dark"] .btn-outline-success {
+            color: #10b981 !important;
+            border-color: #10b981 !important;
+        }
+
+        [data-theme="dark"] .btn-outline-success:hover {
+            background-color: #10b981 !important;
+            color: #fff !important;
+        }
+
+        [data-theme="dark"] .btn-outline-danger {
+            color: #ef4444 !important;
+            border-color: #ef4444 !important;
+        }
+
+        [data-theme="dark"] .btn-outline-danger:hover {
+            background-color: #ef4444 !important;
+            color: #fff !important;
+        }
+
+        [data-theme="dark"] .btn-outline-warning {
+            color: #f59e0b !important;
+            border-color: #f59e0b !important;
+        }
+
+        [data-theme="dark"] .btn-outline-warning:hover {
+            background-color: #f59e0b !important;
+            color: #000 !important;
+        }
+
+        [data-theme="dark"] .btn-outline-info {
+            color: #06b6d4 !important;
+            border-color: #06b6d4 !important;
+        }
+
+        [data-theme="dark"] .btn-outline-info:hover {
+            background-color: #06b6d4 !important;
+            color: #000 !important;
+        }
+
+        /* Botones de grupo */
+        [data-theme="dark"] .btn-group > .btn {
+            border-color: #374151 !important;
+        }
+
+        /* Small buttons */
+        [data-theme="dark"] .btn-sm {
+            padding: 0.25rem 0.5rem !important;
+        }
+
+        /* Todos los botones genéricos */
+        [data-theme="dark"] button {
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] button:not(.btn) {
+            background-color: #374151 !important;
+            border-color: #4b5563 !important;
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] button:not(.btn):hover {
+            background-color: #4b5563 !important;
+        }
+
+        /* ===== CUSTOM CARDS (menu-card, etc) ===== */
+        [data-theme="dark"] .menu-card {
+            background: #1f2937 !important;
+            color: #f3f4f6 !important;
+            border-color: #374151 !important;
+        }
+
+        [data-theme="dark"] .menu-card-title {
+            color: #f3f4f6 !important;
+        }
+
+        [data-theme="dark"] .menu-card-text {
+            color: #d1d5db !important;
+        }
+
+        [data-theme="dark"] .menu-card-btn {
+            color: #f3f4f6 !important;
+        }
+
+        /* Cards genéricas con clase .card que puedan tener inline style o clase explícita */
+        [data-theme="dark"] .card[style*="background-color: rgb(255"],
+        [data-theme="dark"] .card[style*="background-color: white"] {
+            background-color: #1f2937 !important;
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- NAVBAR MEJORADA -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-fluid">
+            <!-- Logo y Brand -->
+            <a class="navbar-brand" href="{% url 'inicio' %}">
+                <i class="fas fa-university"></i> GestiónPréstamos
+            </a>
+            
+            <!-- Toggle Button (Mobile) -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <!-- Menu Principal -->
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <!-- Inicio -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'inicio' %}">
+                            <i class="fas fa-home"></i> Inicio
+                        </a>
+                    </li>
+
+                    <!-- OPERACIONES (Crear) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-plus-circle"></i> Crear
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{% url 'crear_prestamo' %}">
+                                <i class="fas fa-money-bill-wave"></i> Nuevo Préstamo
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'crear_prestamo_rapido' %}">
+                                <i class="fas fa-bolt"></i> Préstamo Rápido
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'crear_cliente' %}">
+                                <i class="fas fa-user-plus"></i> Nuevo Cliente
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'importar_excel' %}">
+                                <i class="fas fa-file-upload"></i> Importar Excel
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    <!-- GESTIÓN (Ver, Listar) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-folder-open"></i> Gestión
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{% url 'lista_clientes' %}">
+                                <i class="fas fa-users"></i> Todos los Clientes
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'clientes_importados' %}">
+                                <i class="fas fa-cloud-download-alt"></i> Clientes Importados
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'listar_prestamos_rapidos' %}">
+                                <i class="fas fa-list"></i> Préstamos Rápidos
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'buscar_cliente_pago' %}">
+                                <i class="fas fa-cash-register"></i> Registrar Pago
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    <!-- REPORTES -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-chart-bar"></i> Reportes
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{% url 'reporte_estadisticas' %}">
+                                <i class="fas fa-chart-pie"></i> Estadísticas
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'reporte_clientes' %}">
+                                <i class="fas fa-users-cog"></i> Clientes
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'reporte_prestamos' %}">
+                                <i class="fas fa-handshake"></i> Préstamos
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'reporte_prestamos_rapidos' %}">
+                                <i class="fas fa-bolt"></i> Préstamos Rápidos
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'historico_pagos' %}">
+                                <i class="fas fa-history"></i> Histórico de Pagos
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'reporte_cuotas_vencidas' %}">
+                                <i class="fas fa-exclamation-triangle"></i> Cuotas Vencidas
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'reporte_cuotas' %}">
+                                <i class="fas fa-list-check"></i> Todas las Cuotas
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'reporte_interes_mensual' %}">
+                                <i class="fas fa-money-bill-wave"></i> Interés Mensual
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'centro_exportaciones' %}">
+                                <i class="fas fa-download"></i> Centro de Exportaciones
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    <!-- CONFIGURACIÓN -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-cog"></i> Más
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{% url 'editar_configuracion' %}">
+                                <i class="fas fa-sliders-h"></i> Configuración
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'limpieza_prestamos' %}">
+                                <i class="fas fa-broom"></i> Limpieza de Préstamos
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'auto_tagging_lista_negra' %}">
+                                <i class="fas fa-ban"></i> Auto-tagging Lista Negra
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'auto_tagging_etiquetas' %}">
+                                <i class="fas fa-tag"></i> Etiquetar Clientes
+                            </a></li>
+                            <li><a class="dropdown-item" href="/backups/">
+                                <i class="fas fa-database"></i> Gestión de Backups
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'auditoria_cambios' %}">
+                                <i class="fas fa-history"></i> Auditoría de Cambios
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'auditoria_estadisticas' %}">
+                                <i class="fas fa-chart-bar"></i> Estadísticas de Auditoría
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="/admin/" target="_blank">
+                                <i class="fas fa-key"></i> Panel Admin
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="{% url 'logout' %}">
+                                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    <!-- TEMA OSCURO -->
+                    <li class="nav-item">
+                        <button id="themeToggle" class="theme-toggle-btn" title="Cambiar tema">
+                            <i class="fas fa-moon"></i>
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MIGAS DE PAN (Breadcrumb) -->
+    {% if breadcrumbs %}
+    <div class="container-fluid">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                {% for breadcrumb in breadcrumbs %}
+                    {% if breadcrumb.url %}
+                        <li class="breadcrumb-item">
+                            <a href="{{ breadcrumb.url }}">{{ breadcrumb.label }}</a>
+                        </li>
+                    {% else %}
+                        <li class="breadcrumb-item active" aria-current="page">{{ breadcrumb.label }}</li>
+                    {% endif %}
+                {% endfor %}
+            </ol>
+        </nav>
+    </div>
+    {% endif %}
+
+    <!-- CONTENEDOR GLOBAL PARA ALERTAS (Overlay) -->
+    <div id="alerts-container"></div>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="container-fluid">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- FOOTER -->
+    <footer>
+        <p class="footer-text">
+            <i class="fas fa-copyright"></i> 2024 - Gestión de Préstamos | 
+            <strong>Fase 2</strong> | Todos los derechos reservados
+        </p>
+    </footer>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Dark Mode Script - CONSOLA Y BOTÓN UNIFICADOS -->
+    <script>
+        // ===== SISTEMA UNIFICADO DE TEMA OSCURO =====
+        // Este script solo carga el tema inicial
+        // El toggle se maneja en eventHandlers.js para evitar conflictos
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // 1. Conectar botón de tema al sistema de eventHandlers
+            const themeToggle = document.getElementById('themeToggle');
+            if (themeToggle) {
+                themeToggle.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    // Usar el toggleDarkMode centralizado de eventHandlers
+                    if (typeof EventHandlers !== 'undefined' && EventHandlers.toggleDarkMode) {
+                        EventHandlers.toggleDarkMode();
+                        // Actualizar icono del botón
+                        updateThemeToggleIcon();
+                    }
+                });
+            }
+            
+            // 2. Escuchar cambios de tema para actualizar icono
+            document.addEventListener('themeChanged', updateThemeToggleIcon);
+            
+            // Actualizar icono del botón según el tema actual
+            function updateThemeToggleIcon() {
+                const themeToggle = document.getElementById('themeToggle');
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                
+                if (themeToggle) {
+                    if (isDark) {
+                        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+                        themeToggle.title = 'Cambiar a modo claro';
+                    } else {
+                        themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+                        themeToggle.title = 'Cambiar a modo oscuro';
+                    }
+                }
+            }
+            
+            // 3. Inicializar icono en la carga
+            updateThemeToggleIcon();
+            
+            // PROBLEMA #5 - Mover alertas al contenedor overlay global
+            setTimeout(() => {
+                const alertsContainer = document.getElementById('alerts-container');
+                const alerts = document.querySelectorAll('.alert:not(#alerts-container .alert)');
+                
+                alerts.forEach(alert => {
+                    // Mover (no clonar) la alerta al contenedor overlay
+                    if (alertsContainer) {
+                        alertsContainer.appendChild(alert);
+                        
+                        // Auto-cerrar después de 5 segundos
+                        setTimeout(() => {
+                            alert.style.animation = 'slideOutAlert 0.3s ease-out forwards';
+                            setTimeout(() => alert.remove(), 300);
+                        }, 5000);
+                    }
+                });
+            }, 100);
+        });
+    </script>
+    
+    <!-- Script para formateo de moneda colombiana -->
+    <script src="{% static 'mi_app/js/formato_moneda.js' %}"></script>
+    
+    <!-- JavaScript Modular -->
+    <script src="{% static 'mi_app/js/config.js' %}"></script>
+    <script src="{% static 'mi_app/js/utils.js' %}"></script>
+    <script src="{% static 'mi_app/js/validadores.js' %}"></script>
+    <script src="{% static 'mi_app/js/modales.js' %}"></script>
+    <script src="{% static 'mi_app/js/dropdowns.js' %}"></script>
+    <script src="{% static 'mi_app/js/formularios.js' %}"></script>
+    <script src="{% static 'mi_app/js/ajax.js' %}"></script>
+    <script src="{% static 'mi_app/js/eventHandlers.js' %}"></script>
+    <script src="{% static 'mi_app/js/main.js' %}"></script>
+
+    <!-- ✅ BÚSQUEDA AJAX LIMPIA - Implementación CRÍTICA #2 -->
+    <script src="{% static 'mi_app/js/client_search_v2.js' %}"></script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

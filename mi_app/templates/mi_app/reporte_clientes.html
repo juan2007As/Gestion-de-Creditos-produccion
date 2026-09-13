@@ -1,0 +1,570 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load static %}
+
+{% block title %}Reporte de Clientes{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 report-page">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="fas fa-users"></i> Reporte de Clientes</h2>
+            <p class="text-muted">Información general y contacto de todos los clientes</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'exportar_clientes' %}" class="btn btn-success btn-sm">
+                <i class="fas fa-download"></i> Exportar Excel
+            </a>
+        </div>
+    </div>
+
+    <!-- FILTROS Y BÚSQUEDA -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Filtros Avanzados</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" id="filtrosForm">
+                <!-- FILA 1: BÚSQUEDA DINÁMICA -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold mb-2">
+                            <i class="fas fa-search"></i> Buscar Cliente
+                        </label>
+                        <div class="search-wrapper">
+                            <input 
+                                type="text" 
+                                id="cliente_search_reporte_clientes" 
+                                placeholder="Busca por nombre, cédula o celular..." 
+                                class="form-control cliente-search-input"
+                                autocomplete="off"
+                            >
+                        </div>
+                        <input type="hidden" name="cliente_id" id="cliente_id_hidden" value="">
+                    </div>
+                </div>
+
+                <!-- FILA 2: FILTROS ADICIONALES -->
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Estado</label>
+                        <select name="estado" class="form-select">
+                            <option value="">Todos</option>
+                            <option value="ACTIVO" {% if estado == 'ACTIVO' %}selected{% endif %}>Activos</option>
+                            <option value="INACTIVO" {% if estado == 'INACTIVO' %}selected{% endif %}>Inactivos</option>
+                            <option value="NUEVO" {% if estado == 'NUEVO' %}selected{% endif %}>Nuevos</option>
+                            <option value="BUENO" {% if estado == 'BUENO' %}selected{% endif %}>BUENO</option>
+                            <option value="MEDIO" {% if estado == 'MEDIO' %}selected{% endif %}>MEDIO</option>
+                            <option value="MALO" {% if estado == 'MALO' %}selected{% endif %}>MALO</option>
+                            <option value="LISTA_NEGRA" {% if estado == 'LISTA_NEGRA' %}selected{% endif %}>Lista Negra</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Desde</label>
+                        <input type="date" name="fecha_desde" class="form-control" value="{{ fecha_desde }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Hasta</label>
+                        <input type="date" name="fecha_hasta" class="form-control" value="{{ fecha_hasta }}">
+                    </div>
+                </div>
+
+                <!-- FILA 3: BOTONES (alineados, misma línea) -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="filtros-acciones">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            <a href="{% url 'reporte_clientes' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> Limpiar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TABLA DE CLIENTES -->
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 20%">Nombre</th>
+                        <th style="width: 15%">Cédula</th>
+                        <th style="width: 20%">Contacto</th>
+                        <th style="width: 12%">Rating</th>
+                        <th style="width: 13%">Préstamos</th>
+                        <th style="width: 10%">Estado</th>
+                        <th style="width: 10%" class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in clientes %}
+                        {% with cliente=item.cliente en_lista_negra=item.en_lista_negra estado_visual=item.estado_visual %}
+                        <tr class="cliente-row" data-nombre="{{ cliente.nombre|lower }}" data-cedula="{{ cliente.cedula|default:''|lower }}" data-celular="{{ cliente.celular|lower }}">
+                            <td>
+                                <strong>{{ cliente.nombre }}</strong>
+                                <br>
+                                <small class="text-muted">{{ cliente.fecha_creacion|date:"d/m/Y" }}</small>
+                            </td>
+                            <td>{{ cliente.cedula }}</td>
+                            <td>
+                                <small>
+                                    <div><i class="fas fa-phone text-primary"></i> {{ cliente.celular|default:"-" }}</div>
+                                    <div><i class="fas fa-envelope text-info"></i> {{ cliente.email|default:"-" }}</div>
+                                </small>
+                            </td>
+                            <td>
+                                {% with rating=cliente.calcular_rating %}
+                                    {% if rating == 5 %}
+                                        <span class="badge bg-success">⭐⭐⭐⭐⭐ Excelente</span>
+                                    {% elif rating == 4 %}
+                                        <span class="badge bg-info">⭐⭐⭐⭐ Muy Bueno</span>
+                                    {% elif rating == 3 %}
+                                        <span class="badge bg-warning">⭐⭐⭐ Bueno</span>
+                                    {% elif rating == 2 %}
+                                        <span class="badge" style="background-color: #FF9800;">⭐⭐ Regular</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">⭐ Bajo</span>
+                                    {% endif %}
+                                {% endwith %}
+                            </td>
+                            <td>
+                                <small>
+                                    <div><strong>Total:</strong> {{ cliente.prestamo_set.all|length }}</div>
+                                    <div><strong>Activos:</strong> {% with activos=cliente.prestamo_set.all|dictsort:"estado" %}{% for p in activos %}{% if p.estado == 'ACTIVO' %}1{% endif %}{% endfor %}{% endwith %}</div>
+                                </small>
+                            </td>
+                            <td>
+                                {% if estado_visual == 'LISTA_NEGRA' %}
+                                    <span class="badge bg-dark"><i class="fas fa-ban"></i> Lista Negra</span>
+                                {% elif estado_visual == 'NUEVO' %}
+                                    <span class="badge bg-secondary"><i class="fas fa-circle-question"></i> Nuevo</span>
+                                {% elif estado_visual == 'BUENO' %}
+                                    <span class="badge bg-success"><i class="fas fa-star"></i> BUENO</span>
+                                {% elif estado_visual == 'MEDIO' %}
+                                    <span class="badge bg-warning text-dark"><i class="fas fa-triangle-exclamation"></i> MEDIO</span>
+                                {% elif estado_visual == 'MALO' %}
+                                    <span class="badge bg-danger"><i class="fas fa-exclamation"></i> MALO</span>
+                                {% elif cliente.estado == 'ACTIVO' %}
+                                    <span class="badge bg-success">✓ Activo</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">✗ Inactivo</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'perfil_cliente' cliente.id %}" class="btn btn-sm btn-info">
+                                    <i class="fas fa-eye"></i> Ver
+                                </a>
+                                <a href="{% url 'editar_cliente' cliente.id %}" class="btn btn-sm btn-warning">
+                                    <i class="fas fa-edit"></i> Editar
+                                </a>
+                            </td>
+                        </tr>
+                        {% endwith %}
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                <i class="fas fa-search"></i> No se encontraron clientes
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- RESUMEN GENERAL -->
+    <div class="row mt-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Total de Clientes</small>
+                    <h3 class="mb-0">{{ total }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Clientes Activos</small>
+                    <h3 class="mb-0">{{ activos_count }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">Rating Promedio</small>
+                    <h3 class="mb-0">{{ rating_promedio|formato_porcentaje}} ⭐</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <small class="text-muted d-block">💰 Capital Prestado</small>
+                    <h3 class="mb-0">{{ capital_prestado|formato_moneda_co }}</h3>
+                    <small class="text-muted d-block mt-2">📈 Total Crédito: {{ total_credito|formato_moneda_co }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BUG #5: ESTADÍSTICAS DE PRÉSTAMOS RÁPIDOS -->
+    {% if total_rapidos > 0 %}
+    <div class="row mt-3">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm border-left border-info border-4">
+                <div class="card-body">
+                    <small class="text-muted d-block"><i class="fas fa-bolt text-info"></i> Total Préstamos Rápidos</small>
+                    <h3 class="mb-0 text-info">{{ total_rapidos }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm border-left border-warning border-4">
+                <div class="card-body">
+                    <small class="text-muted d-block"><i class="fas fa-hourglass-end text-warning"></i> Préstamos Rápidos Pendientes</small>
+                    <h3 class="mb-0 text-warning">{{ total_rapidos_pendiente|formato_moneda_co }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script src="{% static 'mi_app/js/position_dropdowns.js' %}"></script>
+
+<style>
+    /* BÚSQUEDA */
+    .search-wrapper {
+        position: relative;
+        z-index: 100;
+    }
+
+    #cliente_search {
+        height: 44px;
+        font-size: 1rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 0.5rem;
+        padding: 10px 14px;
+        width: 100%;
+        transition: all 0.2s ease;
+    }
+
+    #cliente_search:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+    }
+
+    /* DROPDOWN */
+    .dropdown-results {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        right: 0;
+        display: none;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        max-height: 450px;
+        overflow-y: auto;
+        z-index: 99999;
+    }
+
+    .dropdown-results.show {
+        display: block;
+    }
+
+    .dropdown-results .list-group-item {
+        display: block;
+        width: 100%;
+        padding: 16px 18px;
+        border: none;
+        border-bottom: 1px solid #f5f5f5;
+        background: white;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.15s ease;
+    }
+
+    .dropdown-results .list-group-item:first-child {
+        border-top-left-radius: 0.75rem;
+        border-top-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:last-child {
+        border-bottom: none;
+        border-bottom-left-radius: 0.75rem;
+        border-bottom-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:hover {
+        background: linear-gradient(135deg, #f7f8fc 0%, #f0f2f7 100%);
+        padding-left: 22px;
+        border-left: 3px solid #667eea;
+    }
+
+    .dropdown-results .list-group-item strong {
+        display: block;
+        color: #212529;
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .dropdown-results .list-group-item small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .dropdown-results .list-group-item small i {
+        color: #667eea;
+        margin-right: 4px;
+    }
+</style>
+
+<script>
+// ✅ Cargar clientes desde servidor
+let clientesGlobales = [];
+
+async function cargarClientes() {
+    try {
+        const response = await fetch('{% url "lista_clientes_api" %}');
+        const data = await response.json();
+        clientesGlobales = data.clientes || [];
+        console.log('✅ Clientes cargados:', clientesGlobales.length);
+    } catch (error) {
+        console.error('❌ Error cargando clientes:', error);
+    }
+}
+
+// ✅ CSS ESTÁNDAR DROPDOWN
+const styleDropdown = document.createElement('style');
+styleDropdown.textContent = `
+    .cliente-search-input {
+        height: 48px;
+        font-size: 1rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 0.5rem;
+        padding: 10px 14px;
+        width: 100%;
+        transition: all 0.2s ease;
+    }
+
+    .cliente-search-input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+    }
+
+    .dropdown-results {
+        position: fixed;
+        top: auto;
+        left: auto;
+        right: auto;
+        display: none;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        max-height: 450px;
+        overflow-y: auto;
+        z-index: 99999;
+        width: 300px;
+    }
+
+    .dropdown-results.show {
+        display: block;
+    }
+
+    .dropdown-results .list-group-item {
+        display: block;
+        width: 100%;
+        padding: 16px 18px;
+        border: none;
+        border-bottom: 1px solid #f5f5f5;
+        background: white;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.15s ease;
+    }
+
+    .dropdown-results .list-group-item:first-child {
+        border-top-left-radius: 0.75rem;
+        border-top-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:last-child {
+        border-bottom: none;
+        border-bottom-left-radius: 0.75rem;
+        border-bottom-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:hover {
+        background: linear-gradient(135deg, #f7f8fc 0%, #f0f2f7 100%);
+        padding-left: 22px;
+        border-left: 3px solid #667eea;
+    }
+
+    .dropdown-results .list-group-item strong {
+        display: block;
+        color: #212529;
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .dropdown-results .list-group-item small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .dropdown-results .list-group-item small i {
+        color: #667eea;
+        margin-right: 4px;
+    }
+`;
+document.head.appendChild(styleDropdown);
+
+// ✅ Cargar clientes
+let clientesGlobales_reporte_clientes = [];
+
+async function cargarClientes_reporte_clientes() {
+    try {
+        const response = await fetch('{% url "lista_clientes_api" %}');
+        const data = await response.json();
+        clientesGlobales_reporte_clientes = data.clientes || [];
+        console.log('✅ Clientes cargados:', clientesGlobales_reporte_clientes.length);
+    } catch (error) {
+        console.error('❌ Error cargando clientes:', error);
+    }
+}
+
+// ✅ Inicializar dropdown
+document.addEventListener('DOMContentLoaded', function() {
+    cargarClientes_reporte_clientes();
+
+    const input = document.getElementById('cliente_search_reporte_clientes');
+
+    if (!input) {
+        console.error('❌ Input no encontrado');
+        return;
+    }
+
+    // Crear dropdown dinámicamente al final del body
+    const resultados = document.createElement('div');
+    resultados.id = 'cliente_resultados_reporte_clientes';
+    resultados.className = 'dropdown-results';
+    document.body.appendChild(resultados);
+
+    console.log('✅ Sistema de búsqueda iniciado en reporte_clientes');
+
+    function posicionarDropdown() {
+        const rect = input.getBoundingClientRect();
+        resultados.style.top = (rect.bottom + 5) + 'px';
+        resultados.style.left = rect.left + 'px';
+        resultados.style.width = rect.width + 'px';
+        resultados.style.zIndex = '99999';
+    }
+
+    let debounceTimer;
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim().toLowerCase();
+
+        if (query.length < 1) {
+            resultados.classList.remove('show');
+            return;
+        }
+
+        debounceTimer = setTimeout(function() {
+            const filtered = clientesGlobales_reporte_clientes.filter(c =>
+                c.nombre.toLowerCase().includes(query) ||
+                (c.cedula && c.cedula.toLowerCase().includes(query)) ||
+                (c.celular && c.celular.toLowerCase().includes(query))
+            );
+
+            resultados.innerHTML = '';
+
+            if (filtered.length === 0) {
+                resultados.innerHTML = '<div class="list-group-item text-muted">No encontrado</div>';
+                posicionarDropdown();
+                resultados.classList.add('show');
+                return;
+            }
+
+            filtered.forEach(cliente => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action text-start';
+                btn.innerHTML = `
+                    <strong>${cliente.nombre}</strong><br>
+                    <small class="text-muted">
+                        <i class="fas fa-id-card"></i> ${cliente.cedula || '-'} | 
+                        <i class="fas fa-phone"></i> ${cliente.celular || '-'}
+                    </small>
+                `;
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    input.value = cliente.nombre;
+                    document.getElementById('cliente_id_hidden').value = cliente.id;
+                    resultados.classList.remove('show');
+                    document.querySelector('form').submit();
+                });
+                resultados.appendChild(btn);
+            });
+
+            posicionarDropdown();
+            resultados.classList.add('show');
+        }, 300);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target !== input && !resultados.contains(e.target)) {
+            resultados.classList.remove('show');
+        }
+    });
+
+    window.addEventListener('scroll', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    }, true);
+
+    window.addEventListener('resize', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    });
+});
+
+// ✅ Función para filtrar la tabla de clientes
+function filtrarTablaClientes(query) {
+    const filas = document.querySelectorAll('tbody .cliente-row');
+    
+    filas.forEach(fila => {
+        const nombre = fila.dataset.nombre || '';
+        const cedula = fila.dataset.cedula || '';
+        const celular = fila.dataset.celular || '';
+        
+        const coincide = nombre.includes(query) || cedula.includes(query) || celular.includes(query);
+        fila.style.display = coincide ? '' : 'none';
+    });
+}
+</script>
+
+{% endblock %}
+
+
+

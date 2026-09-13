@@ -1,0 +1,20 @@
+[Unit]
+Description=Gunicorn daemon para Proyecto John
+After=network.target
+
+[Service]
+User=root
+Group=www-data
+WorkingDirectory=/root/Gestion-de-Creditos
+Environment="PATH=/root/Gestion-de-Creditos/venv/bin"
+ExecStart=/root/Gestion-de-Creditos/venv/bin/gunicorn \
+    --workers 3 \
+    --worker-class sync \
+    --bind unix:/root/Gestion-de-Creditos/gunicorn.sock \
+    --timeout 300 \
+    --access-logfile - \
+    --error-logfile - \
+    proyecto_john.wsgi:application
+
+[Install]
+WantedBy=multi-user.target

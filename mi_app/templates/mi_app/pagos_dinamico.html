@@ -1,0 +1,604 @@
+{% extends 'mi_app/base.html' %}
+{% load custom_filters %}
+{% load numeros_colombianos %}
+
+{% block title %}Registrar Pagos{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" id="pagos-container">
+    <!-- HEADER -->
+    <div class="row mb-4">
+        <div class="col">
+            <h2><i class="fas fa-cash-register"></i> Registrar Pagos</h2>
+            <p class="text-muted">Flujo dinámico: Selecciona cliente → Préstamo → Cuota</p>
+        </div>
+    </div>
+
+    <!-- PASOS INDICADORES -->
+    <div class="row mb-4">
+        <div class="col-md-8 mx-auto">
+            <div class="progress mb-3" style="height: 30px;">
+                <div class="progress-bar bg-primary" role="progressbar" style="width: {% if paso == 1 %}33{% elif paso == 2 %}66{% else %}100{% endif %}%">
+                    Paso {{ paso }} de 3
+                </div>
+            </div>
+            <div class="row text-center">
+                <div class="col-4">
+                    <a href="{% url 'buscar_cliente_pago' %}" class="text-decoration-none">
+                        <div class="{% if paso >= 1 %}badge bg-primary cursor-pointer{% else %}badge bg-secondary{% endif %}" style="font-size: 0.9rem; padding: 0.5rem 1rem;">
+                            <i class="fas fa-user"></i> Cliente
+                        </div>
+                    </a>
+                </div>
+                <div class="col-4">
+                    {% if paso >= 2 %}
+                        <a href="{% url 'buscar_cliente_pago' %}?cliente_id={{ cliente.id }}" class="text-decoration-none">
+                            <div class="badge bg-primary cursor-pointer" style="font-size: 0.9rem; padding: 0.5rem 1rem;">
+                                <i class="fas fa-handshake"></i> Préstamo
+                            </div>
+                        </a>
+                    {% else %}
+                        <div class="badge bg-secondary" style="font-size: 0.9rem; padding: 0.5rem 1rem;">
+                            <i class="fas fa-handshake"></i> Préstamo
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-4">
+                    <div class="{% if paso >= 3 %}badge bg-success{% else %}badge bg-secondary{% endif %}" style="font-size: 0.9rem; padding: 0.5rem 1rem;">
+                        <i class="fas fa-money-bill"></i> Pago
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PASO 1: BÚSQUEDA DE CLIENTE -->
+    {% if paso == 1 %}
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-search"></i> Paso 1: Selecciona un Cliente</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" class="mb-4" id="search-form-pagos">
+                <div class="input-group input-group-lg">
+                    <input type="text" id="cliente_search_pagos" name="q" class="cliente-search-input" placeholder="Buscar por nombre, cédula..." value="{{ busqueda }}" autocomplete="off">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                </div>
+            </form>
+
+            {% if clientes_data %}
+                <div class="row g-3">
+                    {% for item in clientes_data %}
+                        <div class="col-md-6">
+                            <div class="card border-left-primary h-100 shadow-sm cursor-pointer"
+                                 onclick="window.location.href='?cliente_id={{ item.cliente.id }}'">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-9">
+                                            <h6 class="card-title mb-1">
+                                                <i class="fas fa-user-circle"></i> {{ item.cliente.nombre }}
+                                            </h6>
+                                            <small class="text-muted d-block">
+                                                <i class="fas fa-id-card"></i> {{ item.cliente.cedula }}
+                                            </small>
+                                            <small class="text-muted d-block">
+                                                <i class="fas fa-phone"></i> {{ item.cliente.celular|default:"-" }}
+                                            </small>
+                                        </div>
+                                        <div class="col-3 text-end">
+                                            <div class="badge bg-success">
+                                                {{ item.prestamos_activos_count }} 
+                                                <i class="fas fa-handshake"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> {% if busqueda %}No se encontraron clientes con ese criterio{% else %}No hay clientes con préstamos activos{% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- PASO 2: SELECCIONAR PRÉSTAMO -->
+    {% elif paso == 2 %}
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body bg-light">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user"></i> Cliente: <strong>{{ cliente.nombre }}</strong>
+                    </h5>
+                    <small class="text-muted">Cédula: {{ cliente.cedula }}</small>
+                </div>
+                <div class="col-auto">
+                    <a href="{% url 'buscar_cliente_pago' %}" class="btn btn-sm btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Cambiar Cliente
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-handshake"></i> Paso 2: Selecciona un Préstamo Activo</h5>
+        </div>
+        <div class="card-body">
+            {% if prestamos %}
+                <div class="row g-3">
+                    {% for item in prestamos %}
+                        <div class="col-md-6">
+                            <div class="card border-left-warning h-100 shadow-sm cursor-pointer"
+                                 onclick="window.location.href='?cliente_id={{ cliente.id }}&prestamo_id={{ item.prestamo.id }}'">
+                                <div class="card-body">
+                                    <h6 class="card-title mb-2">
+                                        <i class="fas fa-handshake"></i> Préstamo #{{ item.prestamo.id }}
+                                    </h6>
+                                    <small class="text-muted d-block">
+                                        Fecha: {{ item.prestamo.fecha_inicio|date:"d/m/Y" }}
+                                    </small>
+                                    <small class="text-muted d-block">
+                                        Tasa: 15% mensual (7.5% quincena)
+                                    </small>
+                                    <hr class="my-2">
+                                    <div class="row text-center">
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Total Crédito</small>
+                                            <strong class="text-primary">{{ item.total_credito|formato_moneda_co}}</strong>
+                                        </div>
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Por Pagar</small>
+                                            <strong class="text-danger">{{ item.total_pendiente|formato_moneda_co}}</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle"></i> Este cliente no tiene préstamos activos
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- PASO 3: SELECCIONAR Y PAGAR CUOTA -->
+    {% elif paso == 3 %}
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body bg-light">
+            <div class="row align-items-center">
+                <div class="col-8">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user"></i> {{ cliente.nombre }} | 
+                        <i class="fas fa-handshake"></i> Préstamo #{{ prestamo.id }}
+                    </h5>
+                    <small class="text-muted">Monto: {{ prestamo.monto_total|formato_moneda_co}} | Pendiente: {% if resumen %}{{ resumen.total_pendiente_principal|add:resumen.total_pendiente_interes|formato_moneda_co}}{% endif %}</small>
+                </div>
+                <div class="col-4 text-end">
+                    <a href="{% url 'buscar_cliente_pago' %}" class="btn btn-sm btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Nuevo Pago
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="fas fa-money-bill"></i> Paso 3: Cuotas Pendientes</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 10%">Cuota</th>
+                        <th style="width: 15%">Vencimiento</th>
+                        <th style="width: 15%">Principal</th>
+                        <th style="width: 15%">Interés</th>
+                        <th style="width: 15%">Mora</th>
+                        <th style="width: 15%">Total</th>
+                        <th style="width: 15%" class="text-end">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cuota in cuotas %}
+                        {% with detalles=cuota.detalles_completos %}
+                        <tr>
+                            <td><strong>#{{ cuota.numero_cuota }}</strong></td>
+                            <td>
+                                {{ cuota.fecha_pago_esperada|date:"d/m/Y" }}
+                                {% if detalles.dias_vencidos_positivo > 0 %}
+                                    <br><small class="text-danger"><strong>-{{ detalles.dias_vencidos_positivo }} días</strong></small>
+                                {% endif %}
+                            </td>
+                            <td>{{ cuota.monto_pendiente|formato_moneda_co}}</td>
+                            <td>{{ cuota.interes_normal|formato_moneda_co}}</td>
+                            <td>{{ cuota.calcular_mora_diaria|formato_moneda_co}}</td>
+                            <td>
+                                <strong class="{% if detalles.dias_vencidos_positivo > 0 %}text-danger{% else %}text-warning{% endif %}">
+                                    {{ cuota.monto_pendiente|add:cuota.interes_normal|add:cuota.calcular_mora_diaria|formato_moneda_co}}
+                                </strong>
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'pagar_cuota_especifica' cuota.id %}" class="btn btn-sm btn-success">
+                                    <i class="fas fa-money-bill-wave"></i> Pagar
+                                </a>
+                            </td>
+                        </tr>
+                        {% endwith %}
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                <i class="fas fa-check-circle"></i> ¡Todas las cuotas pagadas!
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- RESUMEN FINANCIERO -->
+    <div class="row mt-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm border-left-primary">
+                <div class="card-body">
+                    <small class="text-muted d-block">Total a Pagar</small>
+                    <h4 class="mb-0 text-primary">
+                        {% if resumen %}
+                            {{ resumen.total_pendiente_principal|add:resumen.total_pendiente_interes|formato_moneda_co}}
+                        {% else %}
+                            $0.00
+                        {% endif %}
+                    </h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm border-left-warning">
+                <div class="card-body">
+                    <small class="text-muted d-block">Interés Pendiente</small>
+                    <h4 class="mb-0 text-warning">
+                        {% if resumen %}
+                            {{ resumen.total_pendiente_interes|formato_moneda_co}}
+                        {% else %}
+                            $0.00
+                        {% endif %}
+                    </h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm border-left-danger">
+                <div class="card-body">
+                    <small class="text-muted d-block">Mora Acumulada</small>
+                    <h4 class="mb-0 text-danger">
+                        {% if resumen %}
+                            {{ resumen.total_mora_acumulada|formato_moneda_co}}
+                        {% else %}
+                            $0.00
+                        {% endif %}
+                    </h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm border-left-success">
+                <div class="card-body">
+                    <small class="text-muted d-block">Cuotas Pendientes</small>
+                    <h4 class="mb-0 text-success">{{ cuotas|length }}</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<style>
+    /* Dropdown Results CSS */
+    .dropdown-results {
+        position: fixed;
+        top: auto;
+        left: auto;
+        right: auto;
+        display: none;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        max-height: 450px;
+        overflow-y: auto;
+        z-index: 99999;
+        width: 300px;
+    }
+
+    .dropdown-results.show {
+        display: block;
+    }
+
+    .dropdown-results .list-group-item {
+        display: block;
+        width: 100%;
+        padding: 16px 18px;
+        border: none;
+        border-bottom: 1px solid #f5f5f5;
+        background: white;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.15s ease;
+    }
+
+    .dropdown-results .list-group-item:first-child {
+        border-top-left-radius: 0.75rem;
+        border-top-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:last-child {
+        border-bottom: none;
+        border-bottom-left-radius: 0.75rem;
+        border-bottom-right-radius: 0.75rem;
+    }
+
+    .dropdown-results .list-group-item:hover {
+        background: linear-gradient(135deg, #f7f8fc 0%, #f0f2f7 100%);
+        padding-left: 22px;
+        border-left: 3px solid #667eea;
+    }
+
+    .dropdown-results .list-group-item strong {
+        display: block;
+        color: #212529;
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .dropdown-results .list-group-item small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .dropdown-results .list-group-item small i {
+        color: #667eea;
+        margin-right: 4px;
+    }
+
+    .cliente-search-input {
+        height: 38px !important;
+        font-size: 1rem !important;
+        border: 2px solid #e0e0e0 !important;
+        border-radius: 0.375rem 0 0 0.375rem !important;
+        padding: 8px 12px !important;
+        width: 100% !important;
+        transition: all 0.2s ease !important;
+        flex: 1 !important;
+    }
+
+    .cliente-search-input:focus {
+        border-color: #667eea !important;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+        outline: none !important;
+    }
+
+    #pagos-container {
+        background-color: #f8f9fa;
+        padding: 1.5rem;
+    }
+
+    /* Input groups - Alineación PERFECTA */
+    #pagos-container .input-group-lg {
+        display: flex !important;
+        width: 100% !important;
+        gap: 0 !important;
+        align-items: center !important;
+    }
+
+    #pagos-container .input-group-lg .form-control {
+        height: 38px !important;
+        font-size: 1rem !important;
+        border: 1px solid #dee2e6 !important;
+        flex: 1 !important;
+        min-width: 0 !important;
+        padding: 8px 12px !important;
+        border-radius: 0.375rem 0 0 0.375rem !important;
+        line-height: 1.4 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+    }
+
+    #pagos-container .input-group-lg .form-control:focus {
+        border-color: #80bdff !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
+    }
+
+    #pagos-container .input-group-lg .btn {
+        height: 38px !important;
+        font-size: 1rem !important;
+        padding: 8px 20px !important;
+        border: none !important;
+        border-radius: 0 0.375rem 0.375rem 0 !important;
+        font-weight: 600 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.5rem !important;
+        white-space: nowrap !important;
+        line-height: 1.4 !important;
+        margin: 0 !important;
+        flex-shrink: 0 !important;
+    }
+
+    #pagos-container .input-group-lg .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3) !important;
+        transition: all 0.3s !important;
+    }
+
+    #pagos-container .input-group-lg .btn-primary:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
+        color: white !important;
+    }
+
+    #pagos-container .input-group-lg .btn-primary:active {
+        transform: translateY(0) !important;
+        box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3) !important;
+    }
+
+    #pagos-container .input-group-lg .btn i {
+        font-size: 1.1rem;
+    }
+
+    .border-left-primary {
+        border-left: 4px solid #667eea !important;
+    }
+    .border-left-warning {
+        border-left: 4px solid #ffc107 !important;
+    }
+    .border-left-danger {
+        border-left: 4px solid #dc3545 !important;
+    }
+    .border-left-success {
+        border-left: 4px solid #48bb78 !important;
+    }
+    .cursor-pointer {
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    .cursor-pointer:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    }
+</style>
+
+<script>
+// ✅ Cargar clientes
+let clientesGlobales_pagos = [];
+
+async function cargarClientes_pagos() {
+    try {
+        const response = await fetch('{% url "lista_clientes_api" %}');
+        const data = await response.json();
+        clientesGlobales_pagos = data.clientes || [];
+        console.log('✅ Clientes cargados:', clientesGlobales_pagos.length);
+    } catch (error) {
+        console.error('❌ Error cargando clientes:', error);
+    }
+}
+
+// ✅ Inicializar dropdown
+document.addEventListener('DOMContentLoaded', function() {
+    cargarClientes_pagos();
+
+    const input = document.getElementById('cliente_search_pagos');
+
+    if (!input) {
+        console.error('❌ Input no encontrado');
+        return;
+    }
+
+    // Crear dropdown dinámicamente al final del body
+    const resultados = document.createElement('div');
+    resultados.id = 'cliente_resultados_pagos';
+    resultados.className = 'dropdown-results';
+    document.body.appendChild(resultados);
+
+    console.log('✅ Sistema de búsqueda iniciado en pagos_dinamico');
+
+    function posicionarDropdown() {
+        const rect = input.getBoundingClientRect();
+        resultados.style.top = (rect.bottom + 5) + 'px';
+        resultados.style.left = rect.left + 'px';
+        resultados.style.width = rect.width + 'px';
+        resultados.style.zIndex = '99999';
+    }
+
+    let debounceTimer;
+    input.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim().toLowerCase();
+
+        if (query.length < 1) {
+            resultados.classList.remove('show');
+            return;
+        }
+
+        debounceTimer = setTimeout(function() {
+            const filtered = clientesGlobales_pagos.filter(c =>
+                c.nombre.toLowerCase().includes(query) ||
+                (c.cedula && c.cedula.toLowerCase().includes(query)) ||
+                (c.celular && c.celular.toLowerCase().includes(query))
+            );
+
+            resultados.innerHTML = '';
+
+            if (filtered.length === 0) {
+                resultados.innerHTML = '<div class="list-group-item text-muted">No encontrado</div>';
+                posicionarDropdown();
+                resultados.classList.add('show');
+                return;
+            }
+
+            filtered.forEach(cliente => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action text-start';
+                btn.innerHTML = `
+                    <strong>${cliente.nombre}</strong><br>
+                    <small class="text-muted">
+                        <i class="fas fa-id-card"></i> ${cliente.cedula || '-'} | 
+                        <i class="fas fa-phone"></i> ${cliente.celular || '-'}
+                    </small>
+                `;
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    input.value = cliente.nombre;
+                    document.getElementById('search-form-pagos').submit();
+                });
+                resultados.appendChild(btn);
+            });
+
+            posicionarDropdown();
+            resultados.classList.add('show');
+        }, 300);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target !== input && !resultados.contains(e.target)) {
+            resultados.classList.remove('show');
+        }
+    });
+
+    window.addEventListener('scroll', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    }, true);
+
+    window.addEventListener('resize', function() {
+        if (resultados.classList.contains('show')) {
+            posicionarDropdown();
+        }
+    });
+});
+</script>
+
+{% endblock %}
+
+
+
+

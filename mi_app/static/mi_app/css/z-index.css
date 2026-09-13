@@ -1,0 +1,372 @@
+/**
+ * Z-INDEX HIERARCHY
+ * ============================================================================
+ * Establece una jerarquía coherente de z-index para toda la aplicación.
+ * Previene problemas de visibilidad en modales, dropdowns, tooltips, etc.
+ * 
+ * ✅ REGLA #3 COMPLIANCE: Cambio transversal aplicado a todos los componentes
+ * Fecha: 21 de Febrero 2026
+ * ============================================================================
+ */
+
+/* ============================================================================
+   ESCALA DE Z-INDEX ESTÁNDAR
+   Rango: 1 - 10000 para máxima flexibilidad
+   
+   Nivel    Rango      Componente
+   ────────────────────────────────────────────
+   1        0 - 100    Contenido normal
+   2        100 - 500  Efectos/Sombras
+   3        500 - 1000 Popovers/Tooltips fijos
+   4        1000 - 2000 Navegación (navbar, sidebar)
+   5        2000 - 4000 Modales
+   6        4000 - 5000 Dropdowns dentro de modales
+   7        5000 - 6000 Alertas flotantes
+   8        6000 - 7000 Tooltips flotantes
+   9        7000 - 8000 Loading spinners
+   10       8000+ Mensajes de error crítico
+   ============================================================================
+*/
+
+/* ============================================================================
+   NIVEL 1: CONTENIDO NORMAL (z-index: 1-100)
+   ============================================================================
+*/
+
+/* Cards y contenedores normales */
+.card {
+  z-index: 1;
+}
+
+.table-wrapper {
+  z-index: 1;
+}
+
+.form-group {
+  z-index: 1;
+}
+
+/* ============================================================================
+   NIVEL 2: EFECTOS Y SOMBRAS (z-index: 100-500)
+   ============================================================================
+*/
+
+.shadow-effect {
+  z-index: 100;
+}
+
+.overlay-subtle {
+  z-index: 100;
+}
+
+/* ============================================================================
+   NIVEL 3: POPOVERS Y TOOLTIPS FIJOS (z-index: 500-1000)
+   ============================================================================
+*/
+
+.popover {
+  z-index: 600;
+}
+
+.tooltip {
+  z-index: 650;
+}
+
+.bs-tooltip-auto,
+.bs-tooltip-top,
+.bs-tooltip-right,
+.bs-tooltip-bottom,
+.bs-tooltip-left {
+  z-index: 650 !important;
+}
+
+/* ============================================================================
+   NIVEL 4: NAVEGACIÓN (z-index: 1000-2000)
+   ============================================================================
+*/
+
+/* Navbar y sidebar fijos */
+.navbar {
+  z-index: 1030;
+}
+
+.navbar-fixed {
+  z-index: 1030;
+}
+
+.sidebar {
+  z-index: 1040;
+}
+
+.navbar-collapse {
+  z-index: 1030;
+}
+
+.dropdown-menu {
+  z-index: 1050;
+}
+
+.nav-item .dropdown-menu {
+  z-index: 1050;
+}
+
+/* ============================================================================
+   NIVEL 5: MODALES PRINCIPALES (z-index: 2000-4000)
+   ============================================================================
+*/
+
+/* Modal backdrop (oscuridad detrás del modal) */
+.modal-backdrop {
+  z-index: 2040 !important;
+}
+
+.fade.show {
+  z-index: 2040 !important;
+}
+
+/* Modal (caja) */
+.modal {
+  z-index: 2050 !important;
+}
+
+.modal.show {
+  z-index: 2050 !important;
+}
+
+.modal-dialog {
+  z-index: 2050 !important;
+}
+
+.modal-content {
+  z-index: 2050 !important;
+}
+
+/* ============================================================================
+   NIVEL 6: DROPDOWNS Y SELECTS DENTRO DE MODALES (z-index: 4000-5000)
+   ============================================================================
+*/
+
+/* Nota: dentro de modales, necesitan z-index más alto que el modal */
+
+.modal .dropdown-menu {
+  z-index: 4100 !important;
+}
+
+.modal .select2-container--open {
+  z-index: 4100 !important;
+}
+
+.modal .select2-dropdown {
+  z-index: 4100 !important;
+}
+
+/* Dropdown results estándar */
+.dropdown-results {
+  z-index: 4500 !important;
+}
+
+.dropdown-results.show {
+  z-index: 4500 !important;
+}
+
+/* Bootstrap select */
+.bootstrap-select > .dropdown-toggle {
+  z-index: 1050;
+}
+
+.bootstrap-select .dropdown-menu {
+  z-index: 4100 !important;
+}
+
+/* ============================================================================
+   NIVEL 7: ALERTAS FLOTANTES Y TOAST (z-index: 5000-6000)
+   ============================================================================
+*/
+
+/* Bootstrap alerts y toasts */
+.alert {
+  z-index: 5000;
+}
+
+.toast-container {
+  z-index: 5100 !important;
+}
+
+.toast {
+  z-index: 5100 !important;
+}
+
+.notification {
+  z-index: 5100 !important;
+}
+
+.alert-fixed {
+  position: fixed;
+  z-index: 5100 !important;
+}
+
+/* Django messages */
+.messages {
+  z-index: 5100 !important;
+}
+
+.message {
+  z-index: 5100 !important;
+}
+
+/* ============================================================================
+   NIVEL 8: TOOLTIPS FLOTANTES (z-index: 6000-7000)
+   ============================================================================
+*/
+
+.tooltip.show {
+  z-index: 6000 !important;
+}
+
+.tooltip-inner {
+  z-index: 6000 !important;
+}
+
+.popover.show {
+  z-index: 6000 !important;
+}
+
+/* ============================================================================
+   NIVEL 9: LOADING SPINNERS Y OVERLAYS (z-index: 7000-8000)
+   ============================================================================
+*/
+
+.loading-overlay {
+  z-index: 7000;
+}
+
+.spinner-overlay {
+  z-index: 7000;
+}
+
+.loader {
+  z-index: 7000;
+}
+
+.page-loader {
+  z-index: 7000;
+}
+
+/* ============================================================================
+   NIVEL 10: MENSAJES DE ERROR CRÍTICO (z-index: 8000+)
+   ============================================================================
+*/
+
+.modal-error {
+  z-index: 8000 !important;
+}
+
+.error-overlay {
+  z-index: 8000 !important;
+}
+
+.critical-message {
+  z-index: 8000 !important;
+}
+
+.error-notification {
+  z-index: 8000 !important;
+}
+
+/* ============================================================================
+   CASOS ESPECIALES Y CORRECCIONES COMUNES
+   ============================================================================
+*/
+
+/* Crear contexto de stacking para evitar conflictos */
+.modal {
+  position: fixed !important;
+  inset: 0;
+  isolation: isolate;
+}
+
+.navbar {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Asegurar que los selectores de dropdown dentro modales funcionen */
+.modal .btn-group > .dropdown-menu {
+  z-index: 4100 !important;
+}
+
+/* Fix para select2 en modales */
+.modal .select2-container {
+  z-index: auto;
+}
+
+.modal .select2-container--open {
+  z-index: 4100 !important;
+}
+
+/* Fix para datepicker dentro modales */
+.modal .datepicker {
+  z-index: 4100 !important;
+}
+
+.flatpickr-calendar {
+  z-index: 4100 !important;
+}
+
+/* Fix para input-group dentro modales */
+.modal .input-group > .dropdown-menu {
+  z-index: 4100 !important;
+}
+
+/* ============================================================================
+   RESPONSIVE Z-INDEX ADJUSTMENTS
+   Para dispositivos móviles con restricciones de espacio
+   ============================================================================
+*/
+
+@media (max-width: 768px) {
+  /* En mobile, reducir z-index levemente para evitar overflow */
+  .modal {
+    z-index: 2050 !important;
+  }
+  
+  .modal-backdrop {
+    z-index: 2040 !important;
+  }
+  
+  .navbar {
+    z-index: 1030;
+  }
+  
+  .dropdown-menu {
+    z-index: 1050;
+  }
+  
+  /* Asegurar que dropdowns en modales sigan siendo visibles */
+  .modal .dropdown-menu {
+    z-index: 4100 !important;
+  }
+}
+
+/* ============================================================================
+   DOCUMENTACIÓN DE PROBLEMAS CONOCIDOS RESUELTOS
+   ============================================================================
+   
+   PROBLEMA #1: Dropdown oculto detrás del modal
+   CAUSA: Modal backdrop z-index > dropdown z-index
+   SOLUCIÓN: Establecer dropdown z-index > modal backdrop
+   
+   PROBLEMA #2: Tooltip no visible en modal
+   CAUSA: Tooltip z-index < modal content z-index
+   SOLUCIÓN: Establecer tooltip z-index = 6000
+   
+   PROBLEMA #3: Navbar desapareciendo bajo contenido
+   CAUSA: Position: relative en contenedor padre > navbar z-index
+   SOLUCIÓN: Establecer navbar z-index = 1030
+   
+   PROBLEMA #4: Select2/bootstrap-select invisible
+   CAUSA: Dropdown y select container en contextos diferentes
+   SOLUCIÓN: Establecer select2 dropdown z-index > modal z-index
+   
+   ============================================================================
+*/
