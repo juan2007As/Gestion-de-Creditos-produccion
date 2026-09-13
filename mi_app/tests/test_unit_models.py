@@ -492,12 +492,50 @@ class TestCalculosCuota:
     def test_monto_pendiente_disminuye(self, cuota_pendiente):
         """Monto pendiente disminuye al pagar"""
         original_pendiente = cuota_pendiente.monto_pendiente
-        
+
         # Simular pago parcial
         cuota_pendiente.monto_pendiente = original_pendiente / 2
         cuota_pendiente.save()
-        
+
         assert cuota_pendiente.monto_pendiente < original_pendiente
+
+    def test_mora_usa_mora_diaria_pesos_del_prestamo_si_esta_seteada(self, prestamo_activo):
+        """Si el préstamo tiene mora_diaria_pesos propia, se usa esa en vez del default global"""
+        prestamo_activo.mora_diaria_pesos = Decimal('3000')
+        prestamo_activo.save()
+
+        cuota = Cuota.objects.create(
+            prestamo=prestamo_activo,
+            numero_cuota=1,
+            monto_original=Decimal('1000'),
+            monto_pendiente=Decimal('1000'),
+            interes_normal=Decimal('50'),
+            monto_pendiente_interes=Decimal('50'),
+            fecha_pago_esperada=date.today() - timedelta(days=6),
+        )
+
+        config = Configuracion.obtener_configuracion()
+        dias_mora = 6 - config.dias_gracia_mora
+        assert cuota.calcular_mora_diaria() == Decimal(dias_mora) * Decimal('3000')
+
+    def test_mora_usa_default_global_si_prestamo_no_tiene_mora_propia(self, prestamo_activo):
+        """Si el préstamo no tiene mora_diaria_pesos seteada, se usa el default global"""
+        prestamo_activo.mora_diaria_pesos = None
+        prestamo_activo.save()
+
+        cuota = Cuota.objects.create(
+            prestamo=prestamo_activo,
+            numero_cuota=1,
+            monto_original=Decimal('1000'),
+            monto_pendiente=Decimal('1000'),
+            interes_normal=Decimal('50'),
+            monto_pendiente_interes=Decimal('50'),
+            fecha_pago_esperada=date.today() - timedelta(days=6),
+        )
+
+        config = Configuracion.obtener_configuracion()
+        dias_mora = 6 - config.dias_gracia_mora
+        assert cuota.calcular_mora_diaria() == Decimal(dias_mora) * config.tasa_mora_diaria
 
 
 # ============================================================================

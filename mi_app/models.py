@@ -743,8 +743,9 @@ class Cuota(models.Model):
         
         # Después del período de gracia: Cobrar mora
         dias_mora = dias_atraso - config.dias_gracia_mora
-        return Decimal(str(dias_mora)) * config.tasa_mora_diaria
-    
+        tasa_diaria = self.prestamo.mora_diaria_pesos or config.tasa_mora_diaria
+        return Decimal(str(dias_mora)) * tasa_diaria
+
     def obtener_estado_cuota(self):
         """
         Estado visual de la cuota considerando moratoria y período de gracia.
@@ -1239,7 +1240,8 @@ class CuotaRapida(models.Model):
             return Decimal('0')
 
         dias_mora = dias_atraso - config.dias_gracia_mora
-        return Decimal(str(dias_mora)) * config.tasa_mora_diaria
+        tasa_diaria = self.prestamo_rapido.mora_diaria_pesos or config.tasa_mora_diaria
+        return Decimal(str(dias_mora)) * tasa_diaria
 
     def actualizar_estado(self):
         """
