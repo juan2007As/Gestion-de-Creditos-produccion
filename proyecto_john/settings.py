@@ -242,11 +242,16 @@ else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Cache configuration
-if PRODUCTION:
+# Si existe REDIS_URL (Redis real contratado), se usa. Si no, LocMemCache —
+# nunca Redis apuntando a localhost por defecto: no hay ningún Redis ahí y
+# cualquier @ratelimit que lo use (incluido el de login) revienta con 500
+# en vez de fallar de forma segura. Esto ya rompió el login en producción una vez.
+_redis_url = config('REDIS_URL', default=None)
+if PRODUCTION and _redis_url:
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-            'LOCATION': config('REDIS_URL', default='redis://127.0.0.1:6379/1'),
+            'LOCATION': _redis_url,
         }
     }
 else:
