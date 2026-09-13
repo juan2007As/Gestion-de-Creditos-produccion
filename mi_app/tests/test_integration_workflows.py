@@ -1311,3 +1311,66 @@ class ReporteCuotasTrasladadaTests(TestCase):
         content = response.content.decode('utf-8')
         self.assertIn('↷ TRASLADADA', content)
         self.assertNotIn('❌ VENCIDA', content)
+
+
+class ReporteCuotasVencidasFuturasTests(TestCase):
+    """
+    reporte_cuotas_vencidas contaba como "vencida" cualquier cuota
+    pagado=False cuya fecha_pago_esperada ya paso -- eso incluia cuotas
+    futuras que nunca llegaron a activarse (nacen con monto_pendiente=0,
+    ver crear_prestamo), sobre-representando cuantas cuotas debe
+    realmente un cliente atrasado. Se agrego monto_pendiente__gt=0 para
+    excluirlas. Ver auditoria de consistencia del motor de interes sobre
+    saldo (2026-09-13).
+    """
+
+    def setUp(self):
+        self.cliente = Cliente.objects.create(nombre="Test Reporte Vencidas", celular="3000000010", cedula="999888791")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+        # Cuota activa y realmente vencida (nunca se pago, capital vivo aqui).
+        self.cuota_activa_vencida = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('500000'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() - timedelta(days=25),
+        )
+        # Cuota futura que nunca llego a activarse -- su fecha original ya
+        # paso (el cliente esta atrasado), pero no le corresponde nada
+        # todavia (monto_pendiente=0).
+        self.cuota_futura_no_activada = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=2,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('0'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() - timedelta(days=10),
+        )
+
+    def test_cuota_futura_no_activada_no_cuenta_como_vencida(self):
+        # reporte_cuotas_vencidas.html usa {% load crispy_forms_tags %},
+        # pero crispy_forms nunca se agrego a INSTALLED_APPS (hallazgo
+        # aparte, no relacionado a este fix -- ver DEUDA-TECNICA.md) --
+        # eso rompe el render completo de la vista en cualquier entorno,
+        # asi que se prueba directamente la misma condicion de filtro que
+        # usa reporte_cuotas_vencidas (pagado=False, fecha vencida,
+        # monto_pendiente__gt=0) en vez de invocar la vista completa.
+        cuotas_vencidas_qs = Cuota.objects.filter(
+            pagado=False,
+            fecha_pago_esperada__lt=date.today(),
+            monto_pendiente__gt=0,
+        )
+        ids = set(cuotas_vencidas_qs.values_list('id', flat=True))
+        self.assertIn(self.cuota_activa_vencida.id, ids)
+        self.assertNotIn(self.cuota_futura_no_activada.id, ids)

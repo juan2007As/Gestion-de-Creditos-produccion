@@ -1932,17 +1932,24 @@ def reporte_cuotas_vencidas(request):
     """
     form = ReporteCuotasVencidasForm(request.GET or None)
     
-    # Querysets base
+    # Querysets base. monto_pendiente__gt=0 excluye tanto las cuotas
+    # TRASLADADA (saldo ya movido, siempre en 0) como las cuotas futuras
+    # que todavia no le llega su turno (tambien nacen en 0 -- ver
+    # crear_prestamo/_avanzar_a_siguiente_cuota) -- sin este filtro,
+    # una cuota que nunca se activo podia contarse como "vencida" solo
+    # porque su fecha original ya paso, aunque no debe nada todavia.
     cuotas_vencidas_qs = Cuota.objects.filter(
         pagado=False,
-        fecha_pago_esperada__lt=date.today()
+        fecha_pago_esperada__lt=date.today(),
+        monto_pendiente__gt=0,
     ).select_related('prestamo__cliente').order_by('-fecha_pago_esperada')
-    
+
     fecha_limite = date.today() + timedelta(days=7)
     cuotas_proximas_qs = Cuota.objects.filter(
         pagado=False,
         fecha_pago_esperada__gte=date.today(),
-        fecha_pago_esperada__lte=fecha_limite
+        fecha_pago_esperada__lte=fecha_limite,
+        monto_pendiente__gt=0,
     ).select_related('prestamo__cliente').order_by('fecha_pago_esperada')
 
     # Aplicar filtros si el formulario es válido
