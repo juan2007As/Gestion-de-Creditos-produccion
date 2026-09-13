@@ -306,9 +306,15 @@ def centro_exportaciones(request):
         'total_clientes': Cliente.objects.count(),
         'total_prestamos': Prestamo.objects.count(),
         'total_cuotas': Cuota.objects.count(),
+        # No se filtra por estado='PENDIENTE': Cuota.save() lo promueve a
+        # VENCIDA/VENCIDA_PARCIAL en cuanto pasa la fecha, ese filtro
+        # quedaba contradictorio con fecha_pago_esperada__lt=hoy y
+        # devolvia menos de lo real. monto_pendiente__gt=0 excluye
+        # TRASLADADA y cuotas futuras aun no activadas.
         'cuotas_vencidas': Cuota.objects.filter(
-            estado='PENDIENTE',
-            fecha_pago_esperada__lt=date.today()
+            pagado=False,
+            fecha_pago_esperada__lt=date.today(),
+            monto_pendiente__gt=0,
         ).count(),
     }
     return render(request, 'mi_app/centro_exportaciones.html', contexto)
@@ -962,7 +968,10 @@ def buscar_cliente_pago(request):
     
     # PASO 3: Mostrar cuotas del préstamo seleccionado
     prestamo = get_object_or_404(Prestamo, id=prestamo_id, cliente=cliente)
-    cuotas = prestamo.cuotas.filter(pagado=False).order_by('numero_cuota')
+    # TRASLADADA tambien tiene pagado=False (su saldo se movio a la
+    # siguiente cuota, no es que se pago) -- se excluye para no mostrarla
+    # como si todavia hubiera que pagarla.
+    cuotas = prestamo.cuotas.filter(pagado=False).exclude(estado='TRASLADADA').order_by('numero_cuota')
     resumen = prestamo.resumen_financiero()
     
     contexto = {
@@ -3774,7 +3783,7 @@ def exportar_cuotas_excel(request):
         'Capital Original', 'Interés Original', 'Mora Original',
         'Capital Pagado', 'Interés Pagado', 'Mora Pagada',
         'Fecha Esperada', 'Fecha Real Pago',
-        'Total Original', 'Total Pendiente', 'Total Pagado', 'Estado'
+        'Total Original', 'Capital Pendiente', 'Interés Pendiente', 'Total Pagado', 'Estado'
     ]
     ws.append(headers)
     
@@ -3791,10 +3800,17 @@ def exportar_cuotas_excel(request):
     for cuota in cuotas:
         cliente_nombre = cuota.prestamo.cliente.nombre
         
-        # Cálculos de totales
+        # Cálculos de totales. Capital y interes pendiente se reportan
+        # separados (no un "Total Pendiente" combinado) -- bajo el motor
+        # de saldo declinante, el capital completo solo vive en la cuota
+        # activa (0 en las futuras hasta que les toque el turno), y
+        # mezclarlo con el interes en un solo numero de esa cuota daba la
+        # impresion de un monto inflado/inconsistente frente a las demas
+        # filas. Ver mismo fix aplicado en detalles_prestamo.html.
         mora_calculada = cuota.calcular_mora_diaria()
         total_original = float(cuota.monto_original) + float(cuota.interes_normal)
-        total_pendiente = float(cuota.monto_pendiente) + float(cuota.monto_pendiente_interes) + float(mora_calculada)
+        capital_pendiente_cuota = float(cuota.monto_pendiente)
+        interes_pendiente_cuota = float(cuota.monto_pendiente_interes)
         total_pagado = float(cuota.monto_pagado_principal) + float(cuota.monto_pagado_interes) + float(cuota.monto_pagado_mora)
         estado_visual_cliente = 'LISTA_NEGRA' if cuota.prestamo.cliente_id in clientes_lista_negra else (cuota.prestamo.cliente.etiqueta_cliente or 'SIN_HISTORIAL')
         
@@ -3814,9 +3830,10 @@ def exportar_cuotas_excel(request):
             cuota.fecha_pago_esperada.strftime('%d/%m/%Y') if cuota.fecha_pago_esperada else '',
             cuota.fecha_pago_real.strftime('%d/%m/%Y') if cuota.fecha_pago_real else '',
             total_original,
-            total_pendiente,
+            capital_pendiente_cuota,
+            interes_pendiente_cuota,
             total_pagado,
-            'Pagada' if cuota.pagado else 'Pendiente'
+            'Trasladada' if cuota.estado == 'TRASLADADA' else ('Pagada' if cuota.pagado else 'Pendiente')
         ])
         
         # Colorear según estado
@@ -3825,7 +3842,7 @@ def exportar_cuotas_excel(request):
             cell.border = border
             cell.fill = fill_color
             # Alineación especial para números
-            if cell.column in range(6, 12) or cell.column in range(14, 17):  # Columnas de montos
+            if cell.column in range(6, 12) or cell.column in range(14, 18):  # Columnas de montos
                 cell.alignment = Alignment(horizontal='right', vertical='center')
                 if cell.value is not None and isinstance(cell.value, (int, float)):
                     cell.number_format = '#,##0.00'
@@ -3840,11 +3857,11 @@ def exportar_cuotas_excel(request):
     ws.column_dimensions['C'].width = 12  # Lista Negra
     ws.column_dimensions['D'].width = 12  # Préstamo ID
     ws.column_dimensions['E'].width = 10  # Cuota Nº
-    for col in ['F', 'G', 'H', 'I', 'J', 'K', 'N', 'O', 'P']:  # Montos
+    for col in ['F', 'G', 'H', 'I', 'J', 'K', 'N', 'O', 'P', 'Q']:  # Montos
         ws.column_dimensions[col].width = 14
     for col in ['L', 'M']:  # Fechas
         ws.column_dimensions[col].width = 14
-    ws.column_dimensions['Q'].width = 12  # Estado
+    ws.column_dimensions['R'].width = 12  # Estado
     
     # Crear respuesta HTTP
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -4209,15 +4226,29 @@ def exportar_cuotas_vencidas_excel(request):
         ListaNegra.objects.filter(activa=True).values_list('cliente_id', flat=True)
     )
 
+    # No se filtra por estado='PENDIENTE': Cuota.save() promueve
+    # automaticamente PENDIENTE -> VENCIDA (o VENCIDA_PARCIAL) en cuanto
+    # la fecha pasa, asi que ese filtro es contradictorio con
+    # fecha_pago_esperada__lt=hoy y devolvia vacio en la practica (ver
+    # Cuota.actualizar_estado()). monto_pendiente__gt=0 excluye tanto
+    # TRASLADADA (saldo ya movido) como cuotas futuras que nunca se
+    # activaron -- nacen con monto_pendiente=0 (no les toca su turno
+    # todavia), y sin este filtro una cuota futura cuya fecha original ya
+    # paso se contaba como vencida sin deber nada. Mismo criterio que
+    # reporte_cuotas_vencidas (vista HTML, ya corregida).
     cuotas_vencidas = Cuota.objects.filter(
+        pagado=False,
         fecha_pago_esperada__lt=hoy,
-        estado='PENDIENTE'
+        monto_pendiente__gt=0,
     ).select_related('prestamo__cliente').order_by('-fecha_pago_esperada')
-    
+
     for cuota in cuotas_vencidas:
         dias_vencido = (hoy - cuota.fecha_pago_esperada).days
         mora = cuota.calcular_mora_diaria()
-        total_cuota = cuota.monto_original + cuota.interes_normal + mora
+        # Monto Principal/Interes reales pendientes (no el nominal
+        # original) -- el capital completo vive en monto_pendiente de la
+        # cuota activa, no en el monto_original informativo por cuota.
+        total_cuota = cuota.monto_pendiente + cuota.monto_pendiente_interes + mora
         estado_visual_cliente = 'LISTA_NEGRA' if cuota.prestamo.cliente_id in clientes_lista_negra else (cuota.prestamo.cliente.etiqueta_cliente or 'SIN_HISTORIAL')
         ws.append([
             cuota.prestamo.cliente.nombre,
@@ -4226,8 +4257,8 @@ def exportar_cuotas_vencidas_excel(request):
             estado_visual_cliente,
             'Sí' if cuota.prestamo.cliente_id in clientes_lista_negra else 'No',
             cuota.numero_cuota,
-            float(cuota.monto_original),
-            float(cuota.interes_normal),
+            float(cuota.monto_pendiente),
+            float(cuota.monto_pendiente_interes),
             float(mora),
             float(total_cuota),
             cuota.fecha_pago_esperada.strftime('%d/%m/%Y'),
@@ -4278,7 +4309,7 @@ def exportar_estadisticas_excel(request):
         ("Clientes en Lista Negra", ListaNegra.objects.filter(activa=True).count()),
         ("Total Cuotas", Cuota.objects.count()),
         ("Cuotas Pendientes", Cuota.objects.filter(estado='PENDIENTE').count()),
-        ("Cuotas Vencidas", Cuota.objects.filter(estado='PENDIENTE', fecha_pago_esperada__lt=date.today()).count()),
+        ("Cuotas Vencidas", Cuota.objects.filter(pagado=False, fecha_pago_esperada__lt=date.today(), monto_pendiente__gt=0).count()),
         ("Total Pagado (Normal)", total_pagado_normal),
         ("Total Pagado (Rápido)", total_pagado_rapido),
         ("Total Pagado General", total_pagado_general),
@@ -4466,7 +4497,7 @@ def exportar_reporte_general_excel(request):
         ("Clientes en Lista Negra", ListaNegra.objects.filter(activa=True).count()),
         ("Total Cuotas", Cuota.objects.count()),
         ("Cuotas Pendientes", Cuota.objects.filter(estado='PENDIENTE').count()),
-        ("Cuotas Vencidas", Cuota.objects.filter(estado='PENDIENTE', fecha_pago_esperada__lt=date.today()).count()),
+        ("Cuotas Vencidas", Cuota.objects.filter(pagado=False, fecha_pago_esperada__lt=date.today(), monto_pendiente__gt=0).count()),
         ("Total Mora Acumulada", sum(c.calcular_mora_diaria() for c in Cuota.objects.filter(pagado=False))),
         ("Total Capital Prestado", Prestamo.objects.aggregate(Sum('monto_total'))['monto_total__sum'] or 0),
         ("Total Pagado (Normal)", Pago.objects.aggregate(Sum('monto_pagado'))['monto_pagado__sum'] or 0),
@@ -4605,10 +4636,17 @@ def exportar_reporte_general_excel(request):
         cell.font = Font(bold=True, color="FFFFFF")
     
     hoy = date.today()
-    for cuota in Cuota.objects.filter(estado='PENDIENTE', fecha_pago_esperada__lt=hoy).select_related('prestamo__cliente'):
+    # No se filtra por estado='PENDIENTE' (Cuota.save() lo promueve a
+    # VENCIDA/VENCIDA_PARCIAL en cuanto pasa la fecha, ese filtro quedaba
+    # contradictorio con fecha_pago_esperada__lt=hoy). monto_pendiente__gt=0
+    # excluye cuotas futuras que nunca se activaron (sin deber nada
+    # todavia) -- ver mismo fix en exportar_cuotas_vencidas_excel.
+    for cuota in Cuota.objects.filter(
+        pagado=False, fecha_pago_esperada__lt=hoy, monto_pendiente__gt=0
+    ).select_related('prestamo__cliente'):
         dias_vencido = (hoy - cuota.fecha_pago_esperada).days
         mora = cuota.calcular_mora_diaria()
-        total_cuota = cuota.monto_original + cuota.interes_normal + mora
+        total_cuota = cuota.monto_pendiente + cuota.monto_pendiente_interes + mora
         ws_vencidas.append([
             cuota.prestamo.cliente.nombre,
             'LISTA_NEGRA' if cuota.prestamo.cliente_id in clientes_lista_negra else (cuota.prestamo.cliente.etiqueta_cliente or 'SIN_HISTORIAL'),

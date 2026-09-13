@@ -202,11 +202,10 @@
                 <thead class="table-light">
                     <tr>
                         <th style="width: 10%">Cuota</th>
-                        <th style="width: 15%">Vencimiento</th>
-                        <th style="width: 15%">Principal</th>
-                        <th style="width: 15%">Interés</th>
+                        <th style="width: 18%">Vencimiento</th>
+                        <th style="width: 18%">Capital Pendiente</th>
+                        <th style="width: 18%">Interés Pendiente</th>
                         <th style="width: 15%">Mora</th>
-                        <th style="width: 15%">Total</th>
                         <th style="width: 15%" class="text-end">Acción</th>
                     </tr>
                 </thead>
@@ -221,14 +220,15 @@
                                     <br><small class="text-danger"><strong>-{{ detalles.dias_vencidos_positivo }} días</strong></small>
                                 {% endif %}
                             </td>
-                            <td>{{ cuota.monto_pendiente|formato_moneda_co}}</td>
-                            <td>{{ cuota.interes_normal|formato_moneda_co}}</td>
-                            <td>{{ cuota.calcular_mora_diaria|formato_moneda_co}}</td>
                             <td>
-                                <strong class="{% if detalles.dias_vencidos_positivo > 0 %}text-danger{% else %}text-warning{% endif %}">
-                                    {{ cuota.monto_pendiente|add:cuota.interes_normal|add:cuota.calcular_mora_diaria|formato_moneda_co}}
-                                </strong>
+                                {% if cuota.monto_pendiente == 0 %}
+                                    <span class="text-muted">— <small>(aún no vence su turno)</small></span>
+                                {% else %}
+                                    <strong class="text-danger">{{ cuota.monto_pendiente|formato_moneda_co}}</strong>
+                                {% endif %}
                             </td>
+                            <td>{{ cuota.monto_pendiente_interes|formato_moneda_co}}</td>
+                            <td>{{ cuota.calcular_mora_diaria|formato_moneda_co}}</td>
                             <td class="text-end">
                                 <a href="{% url 'pagar_cuota_especifica' cuota.id %}" class="btn btn-sm btn-success">
                                     <i class="fas fa-money-bill-wave"></i> Pagar
@@ -238,7 +238,7 @@
                         {% endwith %}
                     {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center py-4 text-muted">
+                            <td colspan="6" class="text-center py-4 text-muted">
                                 <i class="fas fa-check-circle"></i> ¡Todas las cuotas pagadas!
                             </td>
                         </tr>

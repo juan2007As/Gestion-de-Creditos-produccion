@@ -1477,3 +1477,267 @@ class EstadisticasSistemaPendienteRealTests(TestCase):
         # el capital_pendiente real (500000), no 500000 menos lo pagado
         # de interes (462500, el bug viejo).
         self.assertEqual(stats['dinero']['total_pendiente_capital'], 500000.0)
+
+
+class BuscarClientePagoTrasladadaTests(TestCase):
+    """
+    buscar_cliente_pago (pagos_dinamico.html) Paso 3 listaba cuotas con
+    pagado=False sin excluir TRASLADADA -- una cuota cuyo saldo ya se
+    movio a la siguiente (no pagada, pero tampoco pendiente de verdad)
+    aparecia en la lista de "cuotas a pagar". Ver auditoria de
+    consistencia del motor de interes sobre saldo (2026-09-13).
+    """
+
+    def setUp(self):
+        from django.test import RequestFactory
+        from mi_app.models import Rol, Permiso, RolPermiso, UsuarioProfile
+
+        self.factory = RequestFactory()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        perm, _ = Permiso.objects.get_or_create(
+            codigo='pago.view',
+            defaults={'descripcion': 'pago.view', 'activo': True}
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+
+        self.user = User.objects.create_user(
+            username='testuser_pagos_dinamico',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+
+        self.cliente = Cliente.objects.create(nombre="Test Pagos Dinamico", celular="3000000013", cedula="999888794")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+        self.cuota_trasladada = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('0'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('0'),
+            fecha_pago_esperada=date.today() - timedelta(days=17),
+            estado='TRASLADADA',
+        )
+        self.cuota_activa = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=2,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('500000'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() + timedelta(days=2),
+        )
+
+    def test_paso_3_excluye_cuota_trasladada(self):
+        from mi_app.views_core import buscar_cliente_pago
+
+        request = self.factory.get(f'/pagos/buscar/?cliente_id={self.cliente.id}&prestamo_id={self.prestamo.id}')
+        request.user = self.user
+        response = buscar_cliente_pago(request)
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        fecha_trasladada = self.cuota_trasladada.fecha_pago_esperada.strftime('%d/%m/%Y')
+        fecha_activa = self.cuota_activa.fecha_pago_esperada.strftime('%d/%m/%Y')
+        self.assertNotIn(fecha_trasladada, content)
+        self.assertIn(fecha_activa, content)
+
+
+class ExportarCuotasExcelTests(TestCase):
+    """
+    exportar_cuotas_excel tenia el mismo bug de columna combinada ya
+    arreglado en las tablas HTML (detalles_prestamo.html, etc): "Total
+    Pendiente" mezclaba capital+interes+mora en un solo numero, y "Estado"
+    no distinguia TRASLADADA de "Pendiente". Se separa en columnas
+    "Capital Pendiente"/"Interés Pendiente" y se agrega el estado
+    "Trasladada" explicito. Ver auditoria de consistencia del motor de
+    interes sobre saldo (2026-09-13).
+    """
+
+    def setUp(self):
+        from django.test import RequestFactory
+        from mi_app.models import Rol, Permiso, RolPermiso, UsuarioProfile
+
+        self.factory = RequestFactory()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        perm, _ = Permiso.objects.get_or_create(
+            codigo='reporte.export',
+            defaults={'descripcion': 'reporte.export', 'activo': True}
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+
+        self.user = User.objects.create_user(
+            username='testuser_export_cuotas',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+
+        self.cliente = Cliente.objects.create(nombre="Test Export Cuotas", celular="3000000014", cedula="999888795")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+        self.cuota_trasladada = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('0'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('0'),
+            fecha_pago_esperada=date.today() - timedelta(days=17),
+            estado='TRASLADADA',
+        )
+        self.cuota_activa = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=2,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('500000'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() + timedelta(days=2),
+        )
+
+    def test_columnas_separadas_y_estado_trasladada(self):
+        import io
+        from openpyxl import load_workbook
+        from mi_app.views_core import exportar_cuotas_excel
+
+        request = self.factory.get('/exportar/cuotas/')
+        request.user = self.user
+        response = exportar_cuotas_excel(request)
+
+        self.assertEqual(response.status_code, 200)
+        wb = load_workbook(io.BytesIO(response.content))
+        ws = wb.active
+
+        headers = [cell.value for cell in ws[1]]
+        self.assertIn('Capital Pendiente', headers)
+        self.assertIn('Interés Pendiente', headers)
+        self.assertNotIn('Total Pendiente', headers)
+
+        idx_capital = headers.index('Capital Pendiente') + 1
+        idx_interes = headers.index('Interés Pendiente') + 1
+        idx_estado = headers.index('Estado') + 1
+        idx_cuota_num = headers.index('Cuota Nº') + 1
+
+        filas_por_cuota = {}
+        for row in ws.iter_rows(min_row=2, values_only=False):
+            filas_por_cuota[row[idx_cuota_num - 1].value] = row
+
+        fila_trasladada = filas_por_cuota[1]
+        fila_activa = filas_por_cuota[2]
+
+        self.assertEqual(fila_trasladada[idx_estado - 1].value, 'Trasladada')
+        self.assertEqual(fila_activa[idx_capital - 1].value, 500000.0)
+        self.assertEqual(fila_activa[idx_interes - 1].value, 37500.0)
+
+
+class ExportarCuotasVencidasExcelTests(TestCase):
+    """
+    exportar_cuotas_vencidas_excel contaba cuotas futuras no activadas
+    como vencidas (mismo bug ya arreglado en reporte_cuotas_vencidas), y
+    su columna "Monto Principal" usaba el monto_original nominal en vez
+    del monto_pendiente real (para la cuota activa, el capital real vivo
+    es mucho mayor que el pedacito nominal). Ver auditoria de consistencia
+    del motor de interes sobre saldo (2026-09-13).
+    """
+
+    def setUp(self):
+        from django.test import RequestFactory
+        from mi_app.models import Rol, Permiso, RolPermiso, UsuarioProfile
+
+        self.factory = RequestFactory()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        perm, _ = Permiso.objects.get_or_create(
+            codigo='reporte.export',
+            defaults={'descripcion': 'reporte.export', 'activo': True}
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+
+        self.user = User.objects.create_user(
+            username='testuser_export_vencidas',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+
+        self.cliente = Cliente.objects.create(nombre="Test Export Vencidas", celular="3000000015", cedula="999888796")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+        self.cuota_activa_vencida = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('500000'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() - timedelta(days=5),
+        )
+        self.cuota_futura_no_activada = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=2,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('0'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() - timedelta(days=1),
+        )
+
+    def test_excluye_futura_no_activada_y_usa_monto_real(self):
+        import io
+        from openpyxl import load_workbook
+        from mi_app.views_core import exportar_cuotas_vencidas_excel
+
+        request = self.factory.get('/exportar/cuotas-vencidas/')
+        request.user = self.user
+        response = exportar_cuotas_vencidas_excel(request)
+
+        self.assertEqual(response.status_code, 200)
+        wb = load_workbook(io.BytesIO(response.content))
+        ws = wb.active
+
+        filas = list(ws.iter_rows(min_row=2, values_only=True))
+        self.assertEqual(len(filas), 1)
+        headers = [cell.value for cell in ws[1]]
+        idx_principal = headers.index('Monto Principal')
+        self.assertEqual(filas[0][idx_principal], 500000.0)
