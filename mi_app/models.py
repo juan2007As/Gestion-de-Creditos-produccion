@@ -537,7 +537,18 @@ class Prestamo(models.Model):
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_ultima_modificacion = models.DateTimeField(auto_now=True)
     notas_admin = models.TextField(blank=True)
-    
+    capital_pendiente = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0'),
+        help_text="Saldo de capital vivo. Fuente única de verdad — no se reparte en las cuotas."
+    )
+    mora_diaria_pesos = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Mora fija en pesos por día para este préstamo. Si es null, se usa Configuracion.tasa_mora_diaria."
+    )
+    interes_acumulado_sin_pagar = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0'),
+        help_text="Interés de períodos anteriores que quedó sin pagar y se arrastra."
+    )
 
     def __str__(self):
         return f"Préstamo {self.id} - {self.cliente.nombre} - {self.monto_total}"
@@ -939,7 +950,15 @@ class Pago(models.Model):
     usuario_registra = models.CharField(max_length=100, blank=True)  # Quién registró (nombre o user)
     referencia = models.CharField(max_length=100, blank=True)  # P.ej: número de comprobante, referencia bancaria
     notas = models.TextField(blank=True, null=True)  # Observaciones del pago
-    
+    capital_antes = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Saldo de capital del préstamo justo antes de este pago."
+    )
+    capital_despues = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Saldo de capital del préstamo justo después de este pago."
+    )
+
     @property
     def cliente(self):
         """Retorna el cliente del préstamo asociado a esta cuota"""
@@ -1027,8 +1046,8 @@ class Configuracion(models.Model):
         help_text="Número de cuotas por defecto al crear un préstamo"
     )
     dias_gracia_mora = models.IntegerField(
-        default=5,
-        help_text="Días de gracia antes de empezar a cobrar mora (PROBLEMA #12)"
+        default=2,
+        help_text="Días de gracia antes de empezar a cobrar mora — mora arranca el día 3 de atraso."
     )
     fecha_actualizacion = models.DateTimeField(auto_now=True)
     
@@ -1080,7 +1099,19 @@ class PrestamoRapido(models.Model):
     monto_pagado = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     fecha_pago_real = models.DateField(blank=True, null=True)
     fecha_ultima_modificacion = models.DateTimeField(auto_now=True)
-    
+    capital_pendiente = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0'),
+        help_text="Saldo de capital vivo. Fuente única de verdad — no se reparte en las cuotas."
+    )
+    mora_diaria_pesos = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Mora fija en pesos por día para este préstamo. Si es null, se usa Configuracion.tasa_mora_diaria."
+    )
+    interes_acumulado_sin_pagar = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0'),
+        help_text="Interés de períodos anteriores que quedó sin pagar y se arrastra."
+    )
+
     def __str__(self):
         return f"Préstamo Rápido ${self.monto} - {self.cliente.nombre}"
     
