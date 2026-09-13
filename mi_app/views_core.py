@@ -13,7 +13,7 @@ from django.core.mail import EmailMessage
 from django.conf import settings
 from django.urls import reverse
 from mi_app.forms import ClienteForm, PrestamoForm, ReporteCuotasVencidasForm
-from .models import Cliente, Prestamo, Cuota, Pago, Configuracion, PrestamoRapido, PagoPrestamoRapido, CuotaRapida, ListaNegra, calcular_fechas_pago, AuditoriaBackup
+from .models import Cliente, Prestamo, Cuota, Pago, Configuracion, PrestamoRapido, PagoPrestamoRapido, CuotaRapida, ListaNegra, AuditoriaBackup
 from mi_app.utilities.decorators import (
     require_rol, require_permission, require_any_permission,
     admin_required, gerente_o_admin, no_operario_solamente,
@@ -625,16 +625,7 @@ def crear_prestamo(request, cliente_id=None):
     """
     from decimal import Decimal
     from django.utils.html import escape
-    
-    def obtener_proximas_fechas_pago(fecha_inicio, num_cuotas):
-        """
-        Obtiene las próximas fechas de pago CON GARANTÍA DE 15+ DÍAS entre cada una.
-        Usa el calendario fijo: 5, 15, 20, 30
-        """
-        from mi_app.models import calcular_fechas_pago
-        # Usar la función de models.py que garantiza 15+ días
-        return calcular_fechas_pago('QUINCENAL', num_cuotas, fecha_inicio)
-    
+
     if request.method == 'POST':
         cliente_id_form = request.POST.get('cliente')
         monto_str = request.POST.get('monto_total', '').strip()
@@ -778,11 +769,14 @@ def crear_prestamo(request, cliente_id=None):
             if not interes_str:
                 interes_porcentaje = Decimal(str(config.tasa_interes_prestamo_normal))
             
-            # Calcular fechas automáticamente según calendario: 5, 15, 20, 30
+            from mi_app.services.amortizacion_service import generar_fechas_cuotas, calcular_interes_periodo
+
+            # Calcular fechas automáticamente: primera ancla a mas de 15 dias
+            # del desembolso, siguientes alternando el mismo par (5/20 o 15/30)
             fecha_inicio = date.today()
-            fechas_pago = obtener_proximas_fechas_pago(fecha_inicio, num_cuotas)
+            fechas_pago = generar_fechas_cuotas(fecha_inicio, num_cuotas)
             fecha_fin_estimada = fechas_pago[-1] if fechas_pago else fecha_inicio
-            
+
             # Crear préstamo CON VALIDACIONES APLICADAS
             prestamo = Prestamo.objects.create(
                 cliente=cliente,
@@ -791,37 +785,31 @@ def crear_prestamo(request, cliente_id=None):
                 fecha_inicio=fecha_inicio,
                 fecha_fin_estimada=fecha_fin_estimada,
                 tipo_pago='QUINCENAL',
-                estado='ACTIVO'
+                estado='ACTIVO',
+                capital_pendiente=monto,
             )
-            
-            # Calcular montos de cuotas con estructura QUINCENAL (2 cuotas por mes)
-            cuotas_por_mes = 2
-            num_meses = Decimal(num_cuotas) / Decimal(cuotas_por_mes)
-            
-            # Capital por mes (se divide entre 2 quincenas en cada mes)
-            capital_por_mes = monto / num_meses
-            capital_por_cuota = capital_por_mes / Decimal(cuotas_por_mes)
-            
-            # Interés: se aplica MENSUAL (interes_porcentaje es mensual)
-            # Se divide entre 2 quincenas
-            interes_por_mes = capital_por_mes * (interes_porcentaje / Decimal('100'))
-            interes_por_cuota = interes_por_mes / Decimal(cuotas_por_mes)
-            
-            # Capital por cuota (para consistencia)
-            monto_por_cuota = capital_por_cuota
-            
-            # Crear cuotas SÓLO si num_cuotas es válido (ya fue validado arriba)
+
+            # Capital de referencia por cuota -- solo informativo para la UI,
+            # el capital real vive en prestamo.capital_pendiente (ver spec).
+            capital_por_cuota = (monto / Decimal(num_cuotas)).quantize(Decimal('0.01'))
+
+            # Solo la primera cuota tiene interes calculado ya (se conoce el
+            # capital inicial completo); las demas se calculan cuando les
+            # toque ser la cuota actual (Task 8).
+            interes_primera_cuota = calcular_interes_periodo(monto, interes_porcentaje)
+
             for i, fecha_pago in enumerate(fechas_pago, 1):
+                interes_cuota = interes_primera_cuota if i == 1 else Decimal('0')
                 Cuota.objects.create(
                     prestamo=prestamo,
                     numero_cuota=i,
-                    monto_original=monto_por_cuota,
-                    monto_pendiente=monto_por_cuota,
-                    interes_normal=interes_por_cuota,
-                    monto_pendiente_interes=interes_por_cuota,
+                    monto_original=capital_por_cuota,
+                    monto_pendiente=monto if i == 1 else Decimal('0'),
+                    interes_normal=interes_cuota,
+                    monto_pendiente_interes=interes_cuota,
                     fecha_pago_esperada=fecha_pago
                 )
-            
+
             return redirect('perfil_cliente', cliente_id=cliente.id)
         
         except Exception as e:
@@ -2970,30 +2958,27 @@ def crear_prestamo_rapido(request):
                 if num_cuotas < 1:
                     num_cuotas = 1
 
+                from mi_app.services.amortizacion_service import generar_fechas_cuotas, calcular_interes_periodo
+
                 fecha_inicio = date.today()
-                fechas_pago = calcular_fechas_pago('QUINCENAL', num_cuotas, fecha_inicio)
+                fechas_pago = generar_fechas_cuotas(fecha_inicio, num_cuotas)
 
                 capital_total = Decimal(str(prestamo_rapido.monto))
-                interes_total = Decimal(str(prestamo_rapido.calcular_interes_total()))
+                tasa = Decimal(str(prestamo_rapido.interes_porcentaje))
+
+                prestamo_rapido.capital_pendiente = capital_total
+                prestamo_rapido.save(update_fields=['capital_pendiente'])
 
                 capital_por_cuota = (capital_total / Decimal(num_cuotas)).quantize(Decimal('0.01'))
-                interes_por_cuota = (interes_total / Decimal(num_cuotas)).quantize(Decimal('0.01'))
+                interes_primera_cuota = calcular_interes_periodo(capital_total, tasa)
 
-                for i in range(1, num_cuotas + 1):
-                    capital_cuota = capital_por_cuota
-                    interes_cuota = interes_por_cuota
-
-                    if i == num_cuotas:
-                        capital_cuota = capital_total - (capital_por_cuota * Decimal(num_cuotas - 1))
-                        interes_cuota = interes_total - (interes_por_cuota * Decimal(num_cuotas - 1))
-
-                    fecha_pago = fechas_pago[i - 1] if len(fechas_pago) >= i else None
-
+                for i, fecha_pago in enumerate(fechas_pago, 1):
+                    interes_cuota = interes_primera_cuota if i == 1 else Decimal('0')
                     CuotaRapida.objects.create(
                         prestamo_rapido=prestamo_rapido,
                         numero_cuota=i,
-                        monto_original=capital_cuota,
-                        monto_pendiente=capital_cuota,
+                        monto_original=capital_por_cuota,
+                        monto_pendiente=capital_total if i == 1 else Decimal('0'),
                         interes_normal=interes_cuota,
                         monto_pendiente_interes=interes_cuota,
                         fecha_pago_esperada=fecha_pago,

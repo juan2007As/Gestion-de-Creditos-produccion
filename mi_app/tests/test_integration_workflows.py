@@ -497,5 +497,84 @@ def test_flujo_negocio_completo_nuevo_cliente(cliente_activo):
     pagos_totales = Pago.objects.filter(
         cuota__prestamo=prestamo
     ).count()
-    
+
     assert pagos_totales == cuotas.count()
+
+
+# ============================================================================
+# INTEGRATION TESTS - MOTOR DE INTERES DINAMICO (crear_prestamo)
+# ============================================================================
+
+from django.test import TestCase, Client
+from django.contrib.auth.models import User
+from django.urls import reverse
+from mi_app.models import Rol, Permiso, RolPermiso, UsuarioProfile
+
+
+class CrearPrestamoConMotorNuevoTests(TestCase):
+    """crear_prestamo debe usar el motor de amortizacion dinamica (ver Task 6 del plan)."""
+
+    def setUp(self):
+        self.client_obj = Client()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        perm, _ = Permiso.objects.get_or_create(
+            codigo='prestamo.create',
+            defaults={'descripcion': 'prestamo.create', 'activo': True}
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+
+        self.user = User.objects.create_user(
+            username='testuser_motor',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+        self.client_obj.login(username='testuser_motor', password='testpass123')  # pragma: allowlist secret
+
+    def test_crear_prestamo_setea_capital_pendiente_y_solo_primera_cuota_con_interes(self):
+        cliente = Cliente.objects.create(nombre="Test Motor Nuevo", celular="3000000000", cedula="999888777")
+
+        response = self.client_obj.post(reverse('crear_prestamo'), {
+            'cliente': cliente.id,
+            'monto_total': '500000',
+            'interes_porcentaje': '15',
+            'num_cuotas': '4',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        prestamo = Prestamo.objects.get(cliente=cliente)
+        self.assertEqual(prestamo.capital_pendiente, Decimal('500000'))
+
+        cuotas = list(prestamo.cuotas.order_by('numero_cuota'))
+        self.assertEqual(len(cuotas), 4)
+        self.assertEqual(cuotas[0].interes_normal, Decimal('38000'))  # 500000 * 15% / 2 = 37500, redondea a 38000
+        self.assertEqual(cuotas[1].interes_normal, Decimal('0'))  # todavia no calculada
+        self.assertEqual(cuotas[2].interes_normal, Decimal('0'))
+        self.assertEqual(cuotas[3].interes_normal, Decimal('0'))
+
+    def test_crear_prestamo_rapido_setea_capital_pendiente_y_solo_primera_cuota(self):
+        from mi_app.models import PrestamoRapido
+
+        cliente = Cliente.objects.create(nombre="Test Rapido Motor Nuevo", celular="3000000001", cedula="999888778")
+
+        response = self.client_obj.post(reverse('crear_prestamo_rapido'), {
+            'cliente_id': cliente.id,
+            'monto': '300000',
+            'interes_porcentaje': '15',
+            'usar_cuotas': 'on',
+            'num_cuotas': '2',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        prestamo = PrestamoRapido.objects.get(cliente=cliente)
+        self.assertEqual(prestamo.capital_pendiente, Decimal('300000'))
+
+        cuotas = list(prestamo.cuotas_rapidas.order_by('numero_cuota'))
+        self.assertEqual(cuotas[0].interes_normal, Decimal('23000'))  # 300000 * 15% / 2 = 22500, redondea a 23000
+        self.assertEqual(cuotas[1].interes_normal, Decimal('0'))
