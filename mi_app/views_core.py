@@ -1364,6 +1364,14 @@ def pagar_cuota_especifica(request, cuota_id):
     cuota = get_object_or_404(Cuota, id=cuota_id)
     prestamo = cuota.prestamo
     cliente = prestamo.cliente
+
+    if cuota.estado == 'TRASLADADA':
+        cuota_activa = prestamo.cuotas.exclude(estado='TRASLADADA').order_by('numero_cuota').first()
+        messages.info(request, 'Esta cuota ya no está activa: el saldo se trasladó a la cuota actual.')
+        if cuota_activa:
+            return redirect('pagar_cuota_especifica', cuota_id=cuota_activa.id)
+        return redirect('detalles_prestamo', prestamo_id=prestamo.id)
+
     interes_pendiente = calcular_interes_pendiente_actual(prestamo, cuota)
     mora_actual = cuota.calcular_mora_diaria()
 
@@ -1419,8 +1427,12 @@ def pagar_cuota_especifica(request, cuota_id):
                 capital_despues=resumen['capital_despues'],
             )
 
-            cuota.actualizar_estado()
-            cuota.save()
+            if resumen['cerrado']:
+                cuota.actualizar_estado()
+                cuota.save()
+            else:
+                _avanzar_a_siguiente_cuota(prestamo, cuota)
+
             prestamo.save()
 
         detalles = cuota.detalles_completos()
@@ -1429,6 +1441,8 @@ def pagar_cuota_especifica(request, cuota_id):
             'detalles': detalles,
             'pagos': Pago.objects.filter(cuota=cuota).order_by('-fecha_pago'),
             'comprobante': pago.comprobante_texto(),
+            'capital_pendiente': prestamo.capital_pendiente,
+            'interes_pendiente': prestamo.interes_acumulado_sin_pagar,
             'success': True,
         }
         return render(request, 'mi_app/pagar_cuota_especifica.html', contexto)
@@ -2847,6 +2861,70 @@ def importar_excel(request):
 # FUNCIONES AUXILIARES
 # ===============================================================================
 
+def _avanzar_a_siguiente_cuota(prestamo, cuota_actual):
+    """
+    Cuando un pago sobre `cuota_actual` no cierra el prestamo (queda
+    capital o interes pendiente), esa cuota se marca como TRASLADADA -- el
+    saldo ya vive en prestamo.capital_pendiente/interes_acumulado_sin_pagar,
+    no en ella -- y se activa (o crea, si no existia) la siguiente cuota
+    nominal con un snapshot de interes fresco calculado sobre el capital
+    pendiente en este momento. Ver spec seccion 4.2, paso 7.
+    """
+    from mi_app.services.amortizacion_service import calcular_interes_periodo, inferir_par, siguiente_fecha_en_par
+
+    siguiente = prestamo.cuotas.filter(numero_cuota=cuota_actual.numero_cuota + 1).first()
+    if siguiente is None:
+        par = inferir_par(cuota_actual.fecha_pago_esperada)
+        nueva_fecha = siguiente_fecha_en_par(cuota_actual.fecha_pago_esperada, par)
+        siguiente = Cuota(
+            prestamo=prestamo,
+            numero_cuota=cuota_actual.numero_cuota + 1,
+            monto_original=cuota_actual.monto_original,
+            fecha_pago_esperada=nueva_fecha,
+        )
+
+    nuevo_interes = calcular_interes_periodo(prestamo.capital_pendiente, prestamo.interes_porcentaje)
+    siguiente.interes_normal = nuevo_interes
+    siguiente.monto_pendiente_interes = nuevo_interes + prestamo.interes_acumulado_sin_pagar
+    siguiente.monto_pendiente = prestamo.capital_pendiente
+    siguiente.save()
+
+    cuota_actual.estado = 'TRASLADADA'
+    cuota_actual.monto_pendiente = Decimal('0')
+    cuota_actual.monto_pendiente_interes = Decimal('0')
+    cuota_actual.save()
+
+
+def _avanzar_a_siguiente_cuota_rapida(prestamo, cuota_actual):
+    """
+    Igual que _avanzar_a_siguiente_cuota, pero para PrestamoRapido/CuotaRapida.
+    """
+    from mi_app.services.amortizacion_service import calcular_interes_periodo, inferir_par, siguiente_fecha_en_par
+    from .models import CuotaRapida
+
+    siguiente = prestamo.cuotas_rapidas.filter(numero_cuota=cuota_actual.numero_cuota + 1).first()
+    if siguiente is None:
+        par = inferir_par(cuota_actual.fecha_pago_esperada)
+        nueva_fecha = siguiente_fecha_en_par(cuota_actual.fecha_pago_esperada, par)
+        siguiente = CuotaRapida(
+            prestamo_rapido=prestamo,
+            numero_cuota=cuota_actual.numero_cuota + 1,
+            monto_original=cuota_actual.monto_original,
+            fecha_pago_esperada=nueva_fecha,
+        )
+
+    nuevo_interes = calcular_interes_periodo(prestamo.capital_pendiente, prestamo.interes_porcentaje)
+    siguiente.interes_normal = nuevo_interes
+    siguiente.monto_pendiente_interes = nuevo_interes + prestamo.interes_acumulado_sin_pagar
+    siguiente.monto_pendiente = prestamo.capital_pendiente
+    siguiente.save()
+
+    cuota_actual.estado = 'TRASLADADA'
+    cuota_actual.monto_pendiente = Decimal('0')
+    cuota_actual.monto_pendiente_interes = Decimal('0')
+    cuota_actual.save()
+
+
 def _obtener_estado_visual_cuota(cuota):
     """
     Determina el estado visual de una cuota para mostrar en templates
@@ -2859,7 +2937,15 @@ def _obtener_estado_visual_cuota(cuota):
             'clase': 'badge bg-success',
             'color': 'green',
         }
-    
+
+    if cuota.estado == 'TRASLADADA':
+        return {
+            'estado': 'TRASLADADA',
+            'icono': '↷',
+            'clase': 'badge bg-secondary',
+            'color': 'gray',
+        }
+
     mora = cuota.calcular_mora_diaria()
     if mora > 0:
         return {
@@ -2879,7 +2965,12 @@ def _obtener_estado_visual_cuota(cuota):
             'color': 'red',
         }
     
-    if cuota.monto_pendiente < cuota.monto_original:
+    # NOTA: se chequea pago real (monto_pagado_principal/interes > 0), no
+    # solo "pendiente < original" -- con el motor de interes sobre saldo,
+    # una cuota que todavia no le toca su turno tambien nace en pendiente=0
+    # sin que se le haya pagado nada (ver
+    # docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md).
+    if cuota.monto_pagado_principal > 0 or cuota.monto_pagado_interes > 0:
         return {
             'estado': 'PARCIAL',
             'icono': '◐',
@@ -3082,7 +3173,14 @@ def registrar_pago_rapido(request, cuota_id):
 
     cuota = get_object_or_404(CuotaRapida, pk=cuota_id)
     prestamo = cuota.prestamo_rapido
-    
+
+    if cuota.estado == 'TRASLADADA':
+        cuota_activa = prestamo.cuotas_rapidas.exclude(estado='TRASLADADA').order_by('numero_cuota').first()
+        messages.info(request, 'Esta cuota ya no está activa: el saldo se trasladó a la cuota actual.')
+        if cuota_activa:
+            return redirect('registrar_pago_cuota_rapida', cuota_id=cuota_activa.id)
+        return redirect('detalle_prestamo_rapido', prestamo_id=prestamo.id)
+
     if request.method == 'POST':
         form = PagoPrestamoRapidoForm(request.POST)
         
@@ -3140,11 +3238,13 @@ def registrar_pago_rapido(request, cuota_id):
                 if resumen['cerrado']:
                     prestamo.estado = 'PAGADO'
                     prestamo.fecha_pago_real = date.today()
-                elif prestamo.capital_pendiente < prestamo.monto:
-                    prestamo.estado = 'PARCIALMENTE_PAGADO'
+                    cuota.actualizar_estado()
+                    cuota.save()
+                else:
+                    if prestamo.capital_pendiente < prestamo.monto:
+                        prestamo.estado = 'PARCIALMENTE_PAGADO'
+                    _avanzar_a_siguiente_cuota_rapida(prestamo, cuota)
 
-                cuota.actualizar_estado()
-                cuota.save()
                 prestamo.save()
 
             prestamo.refresh_from_db()

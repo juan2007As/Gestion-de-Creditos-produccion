@@ -9,6 +9,7 @@ from mi_app.services.amortizacion_service import (
     determinar_par_y_primera_fecha,
     siguiente_fecha_en_par,
     generar_fechas_cuotas,
+    inferir_par,
 )
 
 
@@ -97,6 +98,24 @@ class GenerarFechasCuotasTests(SimpleTestCase):
             fechas,
             [date(2026, 2, 5), date(2026, 2, 20), date(2026, 3, 5), date(2026, 3, 20)],
         )
+
+
+class InferirParTests(SimpleTestCase):
+    def test_dia_5_pertenece_al_par_5_20(self):
+        self.assertEqual(inferir_par(date(2026, 2, 5)), (5, 20))
+
+    def test_dia_20_pertenece_al_par_5_20(self):
+        self.assertEqual(inferir_par(date(2026, 2, 20)), (5, 20))
+
+    def test_dia_15_pertenece_al_par_15_30(self):
+        self.assertEqual(inferir_par(date(2026, 2, 15)), (15, 30))
+
+    def test_dia_30_pertenece_al_par_15_30(self):
+        self.assertEqual(inferir_par(date(2026, 1, 30)), (15, 30))
+
+    def test_ultimo_dia_febrero_pertenece_al_par_15_30(self):
+        # 28 de febrero representa el "30" ajustado a fin de mes
+        self.assertEqual(inferir_par(date(2026, 2, 28)), (15, 30))
 
 
 from types import SimpleNamespace

@@ -135,13 +135,17 @@ class FinancialAuditTests(TestCase):
     
     def test_cuota_completamente_pagada(self):
         """Test: Cuota completamente pagada se marca como PAGADA"""
-        # Pago completo -- el capital del prestamo llega a cero
+        # Pago completo -- el capital del prestamo llega a cero. El cierre
+        # real lo decide quien procesa el pago (aplicar_pago, registrar_pago,
+        # etc.), seteando pagado=True explicitamente -- ya no se infiere
+        # solo por tener el saldo en 0 (ver Cuota.actualizar_estado()).
         self.prestamo.capital_pendiente = Decimal('0.00')
         self.prestamo.save()
         self.cuota.monto_pagado_principal = Decimal('5000.00')
         self.cuota.monto_pendiente = Decimal('0.00')
         self.cuota.monto_pagado_interes = Decimal('625.00')
         self.cuota.monto_pendiente_interes = Decimal('0.00')
+        self.cuota.pagado = True
         self.cuota.save()
         
         # Debe estar PAGADA

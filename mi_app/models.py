@@ -606,6 +606,7 @@ class Cuota(models.Model):
         ('PAGADA', 'Completamente Pagada'),
         ('VENCIDA', 'Vencida sin Pago'),
         ('VENCIDA_PARCIAL', 'Vencida Parcialmente Pagada'),
+        ('TRASLADADA', 'Trasladada a la Siguiente Cuota'),
     ]
     
     prestamo = models.ForeignKey(Prestamo, on_delete=models.CASCADE, related_name='cuotas')
@@ -701,11 +702,19 @@ class Cuota(models.Model):
         else:
             self.porcentaje_pagado = 0
 
-        # Determinar estado
-        # PRIMERO: Si monto_pendiente = 0, entonces está PAGADA (mayor prioridad)
-        if self.monto_pendiente <= 0 and self.monto_pendiente_interes <= 0:
-            self.estado = 'PAGADA'
-            self.pagado = True
+        # Determinar estado. NOTA: ya no se infiere PAGADA solo por tener
+        # monto_pendiente/monto_pendiente_interes en 0 -- con el motor de
+        # interes sobre saldo, una cuota que todavia no le toca su turno
+        # tambien queda en 0 (no calculada aun), lo cual es indistinguible
+        # de "ya se pagó" bajo esa regla vieja. El cierre real lo decide
+        # explicitamente quien procesa el pago (aplicar_pago, registrar_pago,
+        # etc.) seteando self.pagado -- ver
+        # docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md.
+        if self.estado == 'TRASLADADA':
+            # Estado terminal explicito: el saldo de esta cuota ya se movio
+            # a la siguiente (ver amortizacion_service / vistas de pago).
+            # No se recalcula automaticamente.
+            pass
         elif self.pagado:
             self.estado = 'PAGADA'
         elif self.porcentaje_pagado > 0 and self.porcentaje_pagado < 100:
@@ -720,9 +729,9 @@ class Cuota(models.Model):
                 self.estado = 'VENCIDA'
             else:
                 self.estado = 'PENDIENTE'
-        
+
         self.save()
-        
+
     def save(self, *args, **kwargs):
         """
         AUTO-CORRECCIÓN: Al guardar una cuota, automáticamente:
@@ -731,11 +740,13 @@ class Cuota(models.Model):
         
         Previene inconsistencias financieras (CRÍTICA #3)
         """
-        # PASO 1: Auto-actualizar mora si no está completamente pagada
-        if not self.pagado and self.fecha_pago_esperada:
+        # PASO 1: Auto-actualizar mora si no está completamente pagada ni
+        # trasladada (una cuota trasladada ya no acumula su propia mora --
+        # la mora sigue en la cuota que ahora esta activa).
+        if not self.pagado and self.estado != 'TRASLADADA' and self.fecha_pago_esperada:
             mora_calculada = self.calcular_mora_diaria()
             self.interes_mora_acumulado = mora_calculada
-        
+
         # PASO 2: Auto-actualizar estado y porcentaje pagado sobre el
         # progreso real del prestamo (ver actualizar_estado más arriba).
         if self.prestamo.monto_total > 0:
@@ -745,10 +756,10 @@ class Cuota(models.Model):
         else:
             self.porcentaje_pagado = 0
 
-        # Determinar estado automáticamente
-        if self.monto_pendiente <= 0 and self.monto_pendiente_interes <= 0:
-            self.estado = 'PAGADA'
-            self.pagado = True
+        # Determinar estado automáticamente. NOTA: ya no se infiere PAGADA
+        # solo por saldo en 0 -- ver actualizar_estado() más arriba.
+        if self.estado == 'TRASLADADA':
+            pass
         elif self.pagado:
             self.estado = 'PAGADA'
         elif self.porcentaje_pagado > 0 and self.porcentaje_pagado < 100:
@@ -761,7 +772,7 @@ class Cuota(models.Model):
                 self.estado = 'VENCIDA'
             else:
                 self.estado = 'PENDIENTE'
-        
+
         # PASO 3: Guardar
         super().save(*args, **kwargs)
     
@@ -1109,6 +1120,7 @@ class CuotaRapida(models.Model):
         ('PAGADA', 'Completamente Pagada'),
         ('VENCIDA', 'Vencida sin Pago'),
         ('VENCIDA_PARCIAL', 'Vencida Parcialmente Pagada'),
+        ('TRASLADADA', 'Trasladada a la Siguiente Cuota'),
     ]
 
     prestamo_rapido = models.ForeignKey(
@@ -1171,15 +1183,21 @@ class CuotaRapida(models.Model):
         """
         from datetime import date
 
-        if self.monto_original > 0:
-            pagado_total = self.monto_pagado_principal
-            self.porcentaje_pagado = (pagado_total / self.monto_original) * 100
+        # Porcentaje pagado sobre el progreso real del prestamo rapido
+        # (el capital vive en prestamo_rapido.capital_pendiente, no en
+        # monto_original de la cuota -- mismo motivo que en Cuota).
+        if self.prestamo_rapido.monto > 0:
+            pagado_total = self.prestamo_rapido.monto - self.prestamo_rapido.capital_pendiente
+            porcentaje = (pagado_total / self.prestamo_rapido.monto) * 100
+            self.porcentaje_pagado = max(Decimal('0'), min(porcentaje, Decimal('100')))
         else:
             self.porcentaje_pagado = 0
 
-        if self.monto_pendiente <= 0 and self.monto_pendiente_interes <= 0:
-            self.estado = 'PAGADA'
-            self.pagado = True
+        # NOTA: ya no se infiere PAGADA solo por saldo en 0 -- ver
+        # Cuota.actualizar_estado() para la explicación completa. TRASLADADA
+        # es un estado terminal explicito, tampoco se recalcula solo.
+        if self.estado == 'TRASLADADA':
+            pass
         elif self.pagado:
             self.estado = 'PAGADA'
         elif self.porcentaje_pagado > 0 and self.porcentaje_pagado < 100:

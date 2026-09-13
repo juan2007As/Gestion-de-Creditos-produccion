@@ -74,6 +74,17 @@ def siguiente_fecha_en_par(fecha_actual, par):
     return ultimo_dia_valido_mes(anio, mes, d1)
 
 
+def inferir_par(fecha):
+    """
+    Dada una fecha ancla ya existente (de una cuota ya creada), infiere a
+    que par pertenece: (5, 20) o (15, 30). Los unicos anclas posibles son
+    {5, 15, 20, 30} (30 ajustado a fin de mes en meses cortos/febrero).
+    """
+    if fecha.day in (5, 20):
+        return (5, 20)
+    return (15, 30)
+
+
 def generar_fechas_cuotas(fecha_desembolso, num_cuotas):
     """Genera las `num_cuotas` fechas de pago siguientes al desembolso."""
     par, primera = determinar_par_y_primera_fecha(fecha_desembolso)

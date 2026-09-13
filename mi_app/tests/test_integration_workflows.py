@@ -558,6 +558,15 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
         self.assertEqual(cuotas[2].interes_normal, Decimal('0'))
         self.assertEqual(cuotas[3].interes_normal, Decimal('0'))
 
+        # Regresion: las cuotas 2-4 nacen con pendiente=0 porque todavia no
+        # les toca su turno (no porque ya se pagaron) -- no deben marcarse
+        # solas como PAGADA/pagado=True.
+        self.assertFalse(cuotas[0].pagado)
+        self.assertEqual(cuotas[0].estado, 'PENDIENTE')
+        for cuota in cuotas[1:]:
+            self.assertFalse(cuota.pagado, f"cuota {cuota.numero_cuota} no deberia estar pagada")
+            self.assertNotEqual(cuota.estado, 'PAGADA', f"cuota {cuota.numero_cuota} no deberia estar PAGADA")
+
     def test_crear_prestamo_rapido_setea_capital_pendiente_y_solo_primera_cuota(self):
         from mi_app.models import PrestamoRapido
 
@@ -578,6 +587,11 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
         cuotas = list(prestamo.cuotas_rapidas.order_by('numero_cuota'))
         self.assertEqual(cuotas[0].interes_normal, Decimal('23000'))  # 300000 * 15% / 2 = 22500, redondea a 23000
         self.assertEqual(cuotas[1].interes_normal, Decimal('0'))
+
+        # Regresion: la cuota 2 nace en 0 porque no le toca su turno, no
+        # porque ya se pago.
+        self.assertFalse(cuotas[1].pagado)
+        self.assertNotEqual(cuotas[1].estado, 'PAGADA')
 
 
 class PagarCuotaEspecificaMotorNuevoTests(TestCase):
@@ -698,3 +712,285 @@ class RegistrarPagoRapidoMotorNuevoTests(TestCase):
         prestamo.refresh_from_db()
         # 19.000 a interes, 61.000 a capital -> capital queda en 189.000
         self.assertEqual(prestamo.capital_pendiente, Decimal('189000'))
+
+
+class EstadoVisualCuotaTests(TestCase):
+    """_obtener_estado_visual_cuota no debe mostrar PARCIAL en cuotas que
+    todavia no le toca su turno (pendiente=0 por diseño, no por pago real)."""
+
+    def test_cuota_sin_pago_real_no_muestra_parcial(self):
+        from mi_app.views_core import _obtener_estado_visual_cuota
+
+        cliente = Cliente.objects.create(nombre="Test Visual Estado", celular="3000000004", cedula="999888781")
+        prestamo = Prestamo.objects.create(
+            cliente=cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+        cuota_no_activa = Cuota.objects.create(
+            prestamo=prestamo,
+            numero_cuota=2,
+            monto_original=Decimal('125000'),
+            monto_pendiente=Decimal('0'),
+            interes_normal=Decimal('0'),
+            monto_pendiente_interes=Decimal('0'),
+            fecha_pago_esperada=date.today() + timedelta(days=30),
+        )
+
+        estado_visual = _obtener_estado_visual_cuota(cuota_no_activa)
+
+        self.assertEqual(estado_visual['estado'], 'PENDIENTE')
+
+    def test_cuota_con_pago_real_muestra_parcial(self):
+        from mi_app.views_core import _obtener_estado_visual_cuota
+
+        cliente = Cliente.objects.create(nombre="Test Visual Estado 2", celular="3000000005", cedula="999888782")
+        prestamo = Prestamo.objects.create(
+            cliente=cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('375000'),
+        )
+        cuota_con_abono = Cuota.objects.create(
+            prestamo=prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('500000'),
+            monto_pendiente=Decimal('375000'),
+            interes_normal=Decimal('38000'),
+            monto_pendiente_interes=Decimal('0'),
+            monto_pagado_principal=Decimal('125000'),
+            monto_pagado_interes=Decimal('38000'),
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+
+        estado_visual = _obtener_estado_visual_cuota(cuota_con_abono)
+
+        self.assertEqual(estado_visual['estado'], 'PARCIAL')
+
+
+class AvanzarCuotaTests(TestCase):
+    """Al procesar un pago que no cierra el prestamo, se debe avanzar a la
+    siguiente cuota nominal con un snapshot de interes fresco (spec
+    seccion 4.2, paso 7).
+
+    NOTA: se invoca la vista directamente via RequestFactory en vez del
+    Client de Django -- en este entorno local (Python 3.14), el Client
+    choca con un bug conocido de Django 4.2 al capturar templates
+    renderizados con status 200 (AttributeError: 'dicts'), no reproducible
+    en CI (Python 3.10/3.12). RequestFactory no tiene ese problema porque
+    no instrumenta el render.
+    """
+
+    def setUp(self):
+        from django.test import RequestFactory
+        self.factory = RequestFactory()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        for codigo in ('prestamo.create', 'pago.create'):
+            perm, _ = Permiso.objects.get_or_create(
+                codigo=codigo,
+                defaults={'descripcion': codigo, 'activo': True}
+            )
+            RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+
+        self.user = User.objects.create_user(
+            username='testuser_avanzar_cuota',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+
+        self.cliente = Cliente.objects.create(nombre="Test Avanzar Cuota", celular="3000000006", cedula="999888783")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+        self.cuota1 = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('125000'),
+            monto_pendiente=Decimal('500000'),
+            interes_normal=Decimal('38000'),
+            monto_pendiente_interes=Decimal('38000'),
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+
+    def _pagar(self, cuota_id, data):
+        from mi_app.views_core import pagar_cuota_especifica
+        request = self.factory.post(f'/cuota/{cuota_id}/pagar/', data)
+        request.user = self.user
+        return pagar_cuota_especifica(request, cuota_id)
+
+    def test_pago_solo_interes_activa_siguiente_cuota_existente(self):
+        self.cuota2 = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=2,
+            monto_original=Decimal('125000'),
+            monto_pendiente=Decimal('0'),
+            interes_normal=Decimal('0'),
+            monto_pendiente_interes=Decimal('0'),
+            fecha_pago_esperada=date.today() + timedelta(days=32),
+        )
+
+        response = self._pagar(self.cuota1.id, {'monto_principal': '0', 'monto_interes': '38000', 'monto_mora': '0'})
+        self.assertEqual(response.status_code, 200)
+
+        self.prestamo.refresh_from_db()
+        self.cuota1.refresh_from_db()
+        self.cuota2.refresh_from_db()
+
+        # El capital no bajo (solo se pago interes)
+        self.assertEqual(self.prestamo.capital_pendiente, Decimal('500000'))
+
+        # La cuota 1 quedo trasladada
+        self.assertEqual(self.cuota1.estado, 'TRASLADADA')
+        self.assertEqual(self.cuota1.monto_pendiente, Decimal('0'))
+        self.assertEqual(self.cuota1.monto_pendiente_interes, Decimal('0'))
+
+        # La cuota 2 se activo con interes fresco sobre el mismo capital
+        self.assertEqual(self.cuota2.interes_normal, Decimal('38000'))  # 500000*15%/2=37500->38000
+        self.assertEqual(self.cuota2.monto_pendiente_interes, Decimal('38000'))
+        self.assertEqual(self.cuota2.monto_pendiente, Decimal('500000'))
+
+    def test_pago_solo_interes_crea_cuota_nueva_si_no_hay_siguiente(self):
+        response = self._pagar(self.cuota1.id, {'monto_principal': '0', 'monto_interes': '38000', 'monto_mora': '0'})
+        self.assertEqual(response.status_code, 200)
+
+        self.cuota1.refresh_from_db()
+        nueva_cuota = self.prestamo.cuotas.filter(numero_cuota=2).first()
+
+        self.assertIsNotNone(nueva_cuota)
+        self.assertEqual(self.cuota1.estado, 'TRASLADADA')
+        self.assertEqual(nueva_cuota.interes_normal, Decimal('38000'))
+        self.assertEqual(nueva_cuota.fecha_pago_esperada, self.cuota1.fecha_pago_esperada + timedelta(days=15))
+
+    def test_pago_que_cierra_prestamo_no_crea_cuota_nueva(self):
+        response = self._pagar(self.cuota1.id, {'monto_principal': '500000', 'monto_interes': '38000', 'monto_mora': '0'})
+        self.assertEqual(response.status_code, 200)
+
+        self.prestamo.refresh_from_db()
+        self.cuota1.refresh_from_db()
+
+        self.assertEqual(self.prestamo.estado, 'COMPLETADO')
+        self.assertTrue(self.cuota1.pagado)
+        self.assertEqual(self.cuota1.estado, 'PAGADA')
+        self.assertEqual(self.prestamo.cuotas.filter(numero_cuota=2).count(), 0)
+
+    def test_pagar_cuota_trasladada_redirige_a_la_activa(self):
+        # Primer pago: solo interes, deja la cuota 1 trasladada y crea la cuota 2
+        self._pagar(self.cuota1.id, {'monto_principal': '0', 'monto_interes': '38000', 'monto_mora': '0'})
+        self.cuota1.refresh_from_db()
+        nueva_cuota = self.prestamo.cuotas.filter(numero_cuota=2).first()
+
+        # Intentar pagar de nuevo sobre la cuota vieja (ya trasladada)
+        from mi_app.views_core import pagar_cuota_especifica
+        request = self.factory.get(f'/cuota/{self.cuota1.id}/pagar/')
+        request.user = self.user
+        # Los messages framework requiere middleware de sesion/mensajes -- se
+        # agrega manualmente ya que RequestFactory no corre middlewares.
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from django.contrib.sessions.backends.db import SessionStore
+        request.session = SessionStore()
+        request._messages = FallbackStorage(request)
+
+        response = pagar_cuota_especifica(request, self.cuota1.id)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(str(nueva_cuota.id), response.url)
+
+
+class AvanzarCuotaRapidaTests(TestCase):
+    """Igual que AvanzarCuotaTests pero para PrestamoRapido/CuotaRapida.
+    registrar_pago_rapido siempre redirige (nunca renderiza un 200), asi
+    que aca si se puede usar el Client normal sin chocar con el bug de
+    entorno de Python 3.14."""
+
+    def setUp(self):
+        self.client_obj = Client()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        for codigo in ('prestamo.create', 'pago.create'):
+            perm, _ = Permiso.objects.get_or_create(
+                codigo=codigo,
+                defaults={'descripcion': codigo, 'activo': True}
+            )
+            RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+
+        self.user = User.objects.create_user(
+            username='testuser_avanzar_rapida',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+        self.client_obj.login(username='testuser_avanzar_rapida', password='testpass123')  # pragma: allowlist secret
+
+        from mi_app.models import PrestamoRapido, CuotaRapida
+        self.cliente = Cliente.objects.create(nombre="Test Avanzar Rapida", celular="3000000007", cedula="999888784")
+        self.prestamo = PrestamoRapido.objects.create(
+            cliente=self.cliente,
+            monto=Decimal('300000'),
+            interes_porcentaje=Decimal('15'),
+            capital_pendiente=Decimal('300000'),
+        )
+        self.cuota1 = CuotaRapida.objects.create(
+            prestamo_rapido=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('150000'),
+            monto_pendiente=Decimal('300000'),
+            interes_normal=Decimal('23000'),
+            monto_pendiente_interes=Decimal('23000'),
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+
+    def test_pago_solo_interes_activa_siguiente_cuota_y_crea_nueva(self):
+        response = self.client_obj.post(
+            reverse('registrar_pago_cuota_rapida', kwargs={'cuota_id': self.cuota1.id}),
+            {'monto_pagado': '23000', 'usuario_registra': 'admin'},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        self.prestamo.refresh_from_db()
+        self.cuota1.refresh_from_db()
+        from mi_app.models import CuotaRapida
+        nueva_cuota = CuotaRapida.objects.filter(prestamo_rapido=self.prestamo, numero_cuota=2).first()
+
+        self.assertEqual(self.prestamo.capital_pendiente, Decimal('300000'))
+        self.assertEqual(self.cuota1.estado, 'TRASLADADA')
+        self.assertIsNotNone(nueva_cuota)
+        self.assertEqual(nueva_cuota.interes_normal, Decimal('23000'))  # 300000*15%/2=22500->23000
+        self.assertEqual(nueva_cuota.fecha_pago_esperada, self.cuota1.fecha_pago_esperada + timedelta(days=15))
+
+    def test_pagar_cuota_rapida_trasladada_redirige_a_la_activa(self):
+        self.client_obj.post(
+            reverse('registrar_pago_cuota_rapida', kwargs={'cuota_id': self.cuota1.id}),
+            {'monto_pagado': '23000', 'usuario_registra': 'admin'},
+        )
+        from mi_app.models import CuotaRapida
+        nueva_cuota = CuotaRapida.objects.filter(prestamo_rapido=self.prestamo, numero_cuota=2).first()
+
+        response = self.client_obj.get(
+            reverse('registrar_pago_cuota_rapida', kwargs={'cuota_id': self.cuota1.id})
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(str(nueva_cuota.id), response.url)
