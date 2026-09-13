@@ -15,7 +15,9 @@ jobs:
     
     strategy:
       matrix:
-        python-version: ['3.11', '3.12']
+        # 3.10 es la versión real de producción (ver runtime.txt) — paridad de entorno.
+        # 3.12 se mantiene para saber con antelación si algo rompe en la próxima migración.
+        python-version: ['3.10', '3.12']
     
     services:
       postgres:
@@ -131,28 +133,53 @@ jobs:
 
   security:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: '3.10'
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install bandit safety
 
-    - name: Run Bandit security check
+    - name: Run Bandit security check (bloquea en severidad media o superior)
       run: |
-        bandit -r mi_app --format json -o bandit-report.json || true
-        bandit -r mi_app || true
+        bandit -r mi_app --format json -o bandit-report.json
+        bandit -r mi_app -ll
 
-    - name: Check dependencies for vulnerabilities
+    - name: Check dependencies for vulnerabilities (bloquea, salvo deuda aceptada)
       run: |
-        safety check --json || true
+        # Ignorados: solo se corrigen subiendo a Django 5.2.15+ (salto de versión mayor,
+        # requiere su propio plan de migración — ver DEUDA-TECNICA.md cajón 2).
+        safety check -r requirements.txt \
+          --ignore SFTY-20260603-18287 \
+          --ignore SFTY-20260603-03325 \
+          --ignore SFTY-20260603-81517 \
+          --ignore SFTY-20260707-60059 \
+          --ignore SFTY-20260707-97267 \
+          --ignore SFTY-20260707-99910
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install detect-secrets
+      run: pip install detect-secrets
+
+    - name: Escanear contra el baseline (config-rules §2) — bloquea si hay secretos nuevos sin auditar
+      run: detect-secrets-hook --baseline .secrets.baseline $(git ls-files | grep -v '^Reglas de desarrollo')
 
   performance:
     runs-on: ubuntu-latest
@@ -184,22 +211,36 @@ jobs:
 
   quality-gate:
     runs-on: ubuntu-latest
-    needs: [tests, linting, security]
-    
+    needs: [tests, linting, security, secrets-scan]
+
     if: always()
-    
+
     steps:
     - name: Check quality gates
       run: |
-        echo "✅ Tests Status: ${{ needs.tests.result }}"
-        echo "✅ Linting Status: ${{ needs.linting.result }}"
-        echo "✅ Security Status: ${{ needs.security.result }}"
-        
+        echo "Tests Status: ${{ needs.tests.result }}"
+        echo "Linting Status: ${{ needs.linting.result }}"
+        echo "Security Status: ${{ needs.security.result }}"
+        echo "Secrets scan Status: ${{ needs.secrets-scan.result }}"
+
+        FAILED=0
         if [ "${{ needs.tests.result }}" = "failure" ]; then
           echo "❌ Tests failed"
+          FAILED=1
+        fi
+        if [ "${{ needs.security.result }}" = "failure" ]; then
+          echo "❌ Security scan (bandit/safety) failed"
+          FAILED=1
+        fi
+        if [ "${{ needs.secrets-scan.result }}" = "failure" ]; then
+          echo "❌ Secret scan found something not in the audited baseline"
+          FAILED=1
+        fi
+
+        if [ "$FAILED" = "1" ]; then
           exit 1
         fi
-        
+
         echo "✅ All quality gates passed!"
 
   notify-slack:

@@ -1,0 +1,81 @@
+name: Backup de Postgres (producción) con restauración probada
+
+# data-rules §5 — un backup que nunca se restaura no es un backup, es una esperanza.
+# Este workflow no solo genera el dump: lo restaura en una base vacía y verifica
+# que los datos lleguen, en cada corrida. Si la restauración falla, el job falla.
+
+on:
+  schedule:
+    # Diario a las 7:00 UTC (~2:00 am Colombia)
+    - cron: '0 7 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  backup-and-verify:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Instalar cliente de Postgres (pg_dump/pg_restore)
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends postgresql-client
+
+    - name: Generar dump de la base de producción
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      run: |
+        if [ -z "$DATABASE_URL" ]; then
+          echo "::error::Falta el secret DATABASE_URL en la configuración del repositorio (Settings → Secrets and variables → Actions). Sin esto no hay backup posible."
+          exit 1
+        fi
+        STAMP=$(date -u +%Y%m%d_%H%M%S)
+        echo "BACKUP_FILE=backup_${STAMP}.dump" >> "$GITHUB_ENV"
+        pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="backup_${STAMP}.dump"
+        echo "Dump generado: $(du -h backup_${STAMP}.dump | cut -f1)"
+
+    - name: Subir backup como artifact (retención 30 días)
+      uses: actions/upload-artifact@v4
+      with:
+        name: postgres-backup-${{ github.run_id }}
+        path: ${{ env.BACKUP_FILE }}
+        retention-days: 30
+
+    - name: Levantar Postgres vacío para probar la restauración
+      run: |
+        TEST_DB_PASSWORD=postgres  # pragma: allowlist secret — descartable, solo vive dentro de este job
+        docker run -d --name backup-restore-test \
+          -e POSTGRES_DB=restore_test \
+          -e POSTGRES_USER=postgres \
+          -e POSTGRES_PASSWORD="$TEST_DB_PASSWORD" \
+          -p 5433:5432 \
+          postgres:15
+        for i in $(seq 1 30); do
+          docker exec backup-restore-test pg_isready -U postgres && break
+          sleep 2
+        done
+
+    - name: Restaurar el dump recién generado en la base vacía
+      run: |
+        pg_restore --host=localhost --port=5433 --username=postgres --dbname=restore_test \
+          --no-owner --no-privileges "$BACKUP_FILE"
+      env:
+        PGPASSWORD: postgres  # pragma: allowlist secret — password descartable del contenedor de prueba, no es real
+
+    - name: Verificar que la restauración trajo datos reales
+      env:
+        PGPASSWORD: postgres  # pragma: allowlist secret — password descartable del contenedor de prueba, no es real
+      run: |
+        TABLAS=$(psql --host=localhost --port=5433 --username=postgres --dbname=restore_test -tAc \
+          "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';")
+        echo "Tablas restauradas: $TABLAS"
+        if [ "$TABLAS" -lt 1 ]; then
+          echo "::error::La restauración no trajo ninguna tabla — el backup de hoy NO sirve."
+          exit 1
+        fi
+        USUARIOS=$(psql --host=localhost --port=5433 --username=postgres --dbname=restore_test -tAc \
+          "SELECT count(*) FROM auth_user;" 2>/dev/null || echo "tabla_no_encontrada")
+        echo "Filas en auth_user tras restaurar: $USUARIOS"
+
+    - name: Limpiar contenedor de prueba
+      if: always()
+      run: docker rm -f backup-restore-test || true

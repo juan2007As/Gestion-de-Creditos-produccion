@@ -13,13 +13,14 @@ python manage.py migrate --noinput || echo "AVISO: migrate fallo (posiblemente B
 
 echo "========== BUILD: Superusuario =========="
 python manage.py shell -c "
+import secrets
 from django.contrib.auth.models import User
 username = 'admin'
 email = 'admin@creditos.com'
-password = 'Admin123!'
 if not User.objects.filter(username=username).exists():
+    password = secrets.token_urlsafe(16)
     User.objects.create_superuser(username, email, password)
-    print(f'Superusuario {username} creado')
+    print(f'Superusuario {username} creado. CONTRASEÑA (solo se muestra esta vez, copiala de este log): {password}')
 else:
     print(f'Superusuario {username} ya existe')
 " || echo "AVISO: No se pudo crear superusuario. Crea uno cuando la BD este disponible."
