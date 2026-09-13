@@ -17,13 +17,15 @@ import secrets
 from django.contrib.auth.models import User
 username = 'admin'
 email = 'admin@creditos.com'
-if not User.objects.filter(username=username).exists():
-    password = secrets.token_urlsafe(16)
-    User.objects.create_superuser(username, email, password)
-    print(f'Superusuario {username} creado. CONTRASEÑA (solo se muestra esta vez, copiala de este log): {password}')
-else:
-    print(f'Superusuario {username} ya existe')
-" || echo "AVISO: No se pudo crear superusuario. Crea uno cuando la BD este disponible."
+password = secrets.token_urlsafe(16)
+user, created = User.objects.get_or_create(username=username, defaults={'email': email, 'is_staff': True, 'is_superuser': True})
+user.set_password(password)
+user.is_staff = True
+user.is_superuser = True
+user.save()
+accion = 'creado' if created else 'existente, contraseña reseteada'
+print(f'Superusuario {username} {accion}. CONTRASEÑA (solo se muestra esta vez, copiala de este log): {password}')
+" || echo "AVISO: No se pudo crear/resetear superusuario. Verifica la conexión a la BD."
 
 echo "========== BUILD: Roles y permisos =========="
 python manage.py setup_admin || echo "AVISO: No se pudo configurar roles. Ejecuta 'python manage.py setup_admin' luego."
