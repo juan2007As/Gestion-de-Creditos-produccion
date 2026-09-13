@@ -332,9 +332,15 @@ class ValidacionesCritica4Tests(TestCase):
     # VALIDACIÓN #7: Pago no puede exceder monto_pendiente
     # =========================================================================
     
-    def test_validacion_7_pago_mayor_cuota_rechazado(self):
-        """V7: No permite pago > monto_pendiente en cuota"""
-        # Crear préstamo y cuota
+    def test_registrar_pago_legacy_redirige_a_pagar_cuota_especifica(self):
+        """
+        V7 (motor nuevo): la ruta legacy 'registrar_pago' descontaba
+        monto_pendiente/interes_normal de la cuota directamente, sin tocar
+        Prestamo.capital_pendiente ni pasar por aplicar_pago() -- dejaba el
+        capital vivo del prestamo desincronizado. Se retiro por completo:
+        ahora solo redirige a pagar_cuota_especifica, la unica vista que
+        aplica el motor de interes sobre saldo correctamente.
+        """
         prestamo = Prestamo.objects.create(
             cliente=self.cliente,
             monto_total=Decimal('10000'),
@@ -342,60 +348,109 @@ class ValidacionesCritica4Tests(TestCase):
             fecha_inicio=date.today(),
             fecha_fin_estimada=date.today() + timedelta(days=60),
             tipo_pago='QUINCENAL',
-            estado='ACTIVO'
+            estado='ACTIVO',
+            capital_pendiente=Decimal('10000'),
         )
-        
+
         cuota = Cuota.objects.create(
             prestamo=prestamo,
             numero_cuota=1,
             monto_original=Decimal('5000'),
-            monto_pendiente=Decimal('5000'),
+            monto_pendiente=Decimal('10000'),
             interes_normal=Decimal('0'),
             monto_pendiente_interes=Decimal('0'),
             fecha_pago_esperada=date.today() + timedelta(days=15)
         )
-        
-        # Intentar pagar más de lo debido
-        response = self.client_obj.post(
-            reverse('registrar_pago', args=[cuota.id]),
-            {'monto_pagado': '10000'}  # > monto_pendiente
-        )
-        
-        # Debe rechazar o indicar error
-        self.assertEqual(response.status_code, 200)  # Form re-rendered con error
-        self.assertContains(response, 'No puede pagar más' or 'excede')
-    
-    def test_validacion_7_pago_valido_aceptado(self):
-        """V7: Acepta pago válido (<= monto_pendiente)"""
-        # Crear préstamo y cuota
-        prestamo = Prestamo.objects.create(
-            cliente=self.cliente,
-            monto_total=Decimal('10000'),
-            interes_porcentaje=Decimal('5.0'),
-            fecha_inicio=date.today(),
-            fecha_fin_estimada=date.today() + timedelta(days=60),
-            tipo_pago='QUINCENAL',
-            estado='ACTIVO'
-        )
-        
-        cuota = Cuota.objects.create(
-            prestamo=prestamo,
-            numero_cuota=1,
-            monto_original=Decimal('5000'),
-            monto_pendiente=Decimal('5000'),
-            interes_normal=Decimal('0'),
-            monto_pendiente_interes=Decimal('0'),
-            fecha_pago_esperada=date.today() + timedelta(days=15)
-        )
-        
-        # Pagar cantidad válida
-        response = self.client_obj.post(
-            reverse('registrar_pago', args=[cuota.id]),
-            {'monto_pagado': '2500'}  # < monto_pendiente
-        )
-        
-        # Debe aceptar (redirige)
+
+        response = self.client_obj.get(reverse('registrar_pago', args=[cuota.id]))
+
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('pagar_cuota_especifica', args=[cuota.id]))
+
+    def test_validacion_7_pago_mayor_al_capital_pendiente_rechazado(self):
+        """
+        V7 (motor nuevo): pagar_cuota_especifica -- la vista que de verdad
+        procesa el pago ahora -- no permite abonar mas capital del que
+        realmente queda vivo en el prestamo (capital_pendiente), no un
+        pedacito fijo por cuota.
+        """
+        from django.test import RequestFactory
+        from mi_app.views_core import pagar_cuota_especifica
+
+        prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('10000'),
+            interes_porcentaje=Decimal('5.0'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            tipo_pago='QUINCENAL',
+            estado='ACTIVO',
+            capital_pendiente=Decimal('10000'),
+        )
+
+        cuota = Cuota.objects.create(
+            prestamo=prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('5000'),
+            monto_pendiente=Decimal('10000'),
+            interes_normal=Decimal('0'),
+            monto_pendiente_interes=Decimal('0'),
+            fecha_pago_esperada=date.today() + timedelta(days=15)
+        )
+
+        factory = RequestFactory()
+        request = factory.post(f'/cuota/{cuota.id}/pagar/', {
+            'monto_principal': '15000',  # > capital_pendiente (10000)
+            'monto_interes': '0',
+            'monto_mora': '0',
+        })
+        request.user = self.user
+
+        response = pagar_cuota_especifica(request, cuota.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Capital pendiente del pr\xc3\xa9stamo', response.content)
+
+        prestamo.refresh_from_db()
+        self.assertEqual(prestamo.capital_pendiente, Decimal('10000'))
+
+    def test_validacion_7_pago_valido_aceptado(self):
+        """V7: Acepta pago valido (<= capital_pendiente) via pagar_cuota_especifica"""
+        from django.test import RequestFactory
+        from mi_app.views_core import pagar_cuota_especifica
+
+        prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('10000'),
+            interes_porcentaje=Decimal('5.0'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            tipo_pago='QUINCENAL',
+            estado='ACTIVO',
+            capital_pendiente=Decimal('10000'),
+        )
+
+        cuota = Cuota.objects.create(
+            prestamo=prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('5000'),
+            monto_pendiente=Decimal('10000'),
+            interes_normal=Decimal('0'),
+            monto_pendiente_interes=Decimal('0'),
+            fecha_pago_esperada=date.today() + timedelta(days=15)
+        )
+
+        factory = RequestFactory()
+        request = factory.post(f'/cuota/{cuota.id}/pagar/', {
+            'monto_principal': '2500', 'monto_interes': '0', 'monto_mora': '0',
+        })
+        request.user = self.user
+
+        response = pagar_cuota_especifica(request, cuota.id)
+
+        self.assertEqual(response.status_code, 200)
+        prestamo.refresh_from_db()
+        self.assertEqual(prestamo.capital_pendiente, Decimal('7500'))
 
 
 class AuditoriaValidacionesTests(TestCase):

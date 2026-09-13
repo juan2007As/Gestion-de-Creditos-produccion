@@ -71,7 +71,7 @@
                             {% if cuota.pagado %}
                                 <button class="btn btn-secondary btn-sm" disabled>Registrar Pago</button>
                             {% else %}
-                                <a href="{% url 'registrar_pago' cuota.id %}" class="btn btn-success btn-sm">Registrar Pago</a>
+                                <a href="{% url 'pagar_cuota_especifica' cuota.id %}" class="btn btn-success btn-sm">Registrar Pago</a>
                             {% endif %}
                         </td>
                     </tr>

@@ -18,7 +18,7 @@ from mi_app.utilities.decorators import (
     require_rol, require_permission, require_any_permission,
     admin_required, gerente_o_admin, no_operario_solamente,
 )
-from mi_app.utilities.transaction_integrity import atomic_payment_view, registrar_pago_atomico  # ✅ CRÍTICA #7
+from mi_app.utilities.transaction_integrity import registrar_pago_atomico  # ✅ CRÍTICA #7
 from mi_app.utils import determinar_estado_cuota_al_crear  # ✅ OPCIÓN C PASO 2: Import centralizado
 import time
 from datetime import date, timedelta
@@ -977,151 +977,18 @@ def cuotas_pendientes(request,cliente_id):
     return render(request, 'mi_app/cuotas_pendientes.html', contexto)
 
 @require_any_permission('pago.create')
-@atomic_payment_view
 @login_required(login_url='login')
 def registrar_pago(request, cuota_id):
     """
-    Registra el pago de una cuota con desglose de capital, interés y mora.
-    
-    Procesa el pago de una cuota específica desagregando el monto en:
-    1. Capital (principal)
-    2. Interés normal
-    3. Mora acumulada
-    
-    Actualiza:
-    - Montos pagados y pendientes en la cuota
-    - Estado de pago (si se completó)
-    - Historial de pagos (tabla Pago)
-    - Cascada de recálculos: etiqueta cliente y lista negra (FASE 2.1)
-    
-    Args:
-        request (HttpRequest): Objeto de solicitud HTTP
-        cuota_id (int): ID de la cuota a pagar
-    
-    Returns:
-        HttpResponse: Formulario de pago (GET/ERROR) o redirección (POST exitoso)
-        
-    Raises:
-        Http404: Si cuota_id no existe
-        
-    Note:
-        FASE 2.1: Bloque A - Cascada de recálculos tras pago
-        REGLA #3: Cambios transversales - Auditoría de usuario actualizada
-        CRÍTICA #7: Transacción atómica para integridad de datos
+    Ruta legacy retirada: descontaba monto_pendiente/interes_normal de la
+    cuota directamente, sin tocar Prestamo.capital_pendiente ni pasar por
+    aplicar_pago()/_avanzar_a_siguiente_cuota() -- un pago por aqui dejaba
+    el capital vivo del prestamo desincronizado contra la cuota (fuente
+    unica de verdad rota). Redirige siempre a pagar_cuota_especifica, la
+    unica vista que aplica el motor de interes sobre saldo correctamente.
     """
-    from .models import Pago
-    from datetime import date
-    
     cuota = get_object_or_404(Cuota, id=cuota_id)
-    
-    if request.method == 'POST':
-        from decimal import Decimal
-        
-        monto_pagado = request.POST.get('monto_pagado')
-        
-        if monto_pagado:
-            monto_pagado = Decimal(monto_pagado)  # Convertir a Decimal
-            
-            # Calcular cuánto debe pagar en total
-            mora = Decimal(str(cuota.calcular_mora_diaria()))  # Convertir a Decimal
-            total_debido = cuota.monto_pendiente + cuota.interes_normal + mora
-            
-            if monto_pagado > total_debido:
-                # Error: pagó más de lo debido
-                contexto = {
-                    'cuota': cuota,
-                    'error': f'No puede pagar más de lo debido. Debe: ${total_debido:.2f}'
-                }
-                return render(request, 'mi_app/registrar_pago.html', contexto)
-            
-            # BUG #9 ARREGLADO: Desglosar el pago de manera proporcional
-            # Primero pagar capital, luego interés, luego mora
-            pendiente_capital = cuota.monto_pendiente
-            pendiente_interes = cuota.interes_normal
-            pendiente_mora = mora
-            
-            monto_pago_capital = Decimal('0')
-            monto_pago_interes = Decimal('0')
-            monto_pago_mora = Decimal('0')
-            
-            monto_restante = monto_pagado
-            
-            # Pagar capital
-            if pendiente_capital > 0 and monto_restante > 0:
-                monto_pago_capital = min(pendiente_capital, monto_restante)
-                monto_restante -= monto_pago_capital
-                cuota.monto_pendiente -= monto_pago_capital
-            
-            # Pagar interés
-            if pendiente_interes > 0 and monto_restante > 0:
-                monto_pago_interes = min(pendiente_interes, monto_restante)
-                monto_restante -= monto_pago_interes
-                cuota.monto_pendiente_interes -= monto_pago_interes
-            
-            # Pagar mora
-            if pendiente_mora > 0 and monto_restante > 0:
-                monto_pago_mora = min(pendiente_mora, monto_restante)
-                monto_restante -= monto_pago_mora
-            
-            # BUG #9: Actualizar desglose de pagos
-            cuota.monto_pagado_principal += monto_pago_capital
-            cuota.monto_pagado_interes += monto_pago_interes
-            cuota.monto_pagado_mora += monto_pago_mora
-            
-            # Registrar mora acumulada
-            cuota.interes_mora_acumulado += mora
-            
-            # Si pagó todo, marcar como pagado
-            if cuota.monto_pendiente <= 0 and cuota.monto_pendiente_interes <= 0:
-                cuota.monto_pendiente = Decimal('0')
-                cuota.monto_pendiente_interes = Decimal('0')
-                cuota.pagado = True
-                cuota.fecha_pago_real = date.today()
-            
-            cuota.save()
-            
-            # Registrar el pago en la tabla Pago
-            Pago.objects.create(
-                cuota=cuota,
-                monto_pagado=monto_pagado,
-                monto_principal=monto_pago_capital,
-                monto_interes=monto_pago_interes,
-                monto_mora=monto_pago_mora,
-                usuario_registra='admin',
-                notas=f'Pago manual de ${monto_pagado}'
-            )
-            
-            # Actualizar estado del préstamo
-            prestamo = cuota.prestamo
-            if prestamo.cuotas.filter(pagado=False).count() == 0:
-                prestamo.estado = 'COMPLETADO'
-                prestamo.save()
-            
-            # BUG #9: Llamar a actualizar_estado para recalcular estado y porcentaje
-            cuota.actualizar_estado()
-            
-            # ✅ NUEVA: Cascada de recalculos (REGLA #3: Cambios Transversales)
-            cliente = cuota.prestamo.cliente
-            cliente.actualizar_etiqueta()
-            cliente.actualizar_lista_negra_automatica(usuario=request.user)
-            
-            # Registrar cambio en auditoría
-            try:
-                from mi_app.auditoria import registrar_cambio_manual
-                registrar_cambio_manual(usuario=request.user, modelo='Cliente', id_objeto=cliente.id, accion='PAGO_REGISTRADO')
-            except Exception as e:
-                import logging
-                logging.warning(f"Error auditoría de pago: {str(e)}")
-            
-            return redirect('cuotas_pendientes', cliente_id=cuota.prestamo.cliente.id)
-    
-    contexto = {
-        'cuota': cuota,
-        'mora_actual': cuota.calcular_mora_diaria(),
-        'total_debido': cuota.total_a_pagar()
-    }
-    
-    return render(request, 'mi_app/registrar_pago.html', contexto)
+    return redirect('pagar_cuota_especifica', cuota_id=cuota.id)
 
 
 # ===============================================================================
