@@ -56,6 +56,13 @@ services:
         value: tu-email@gmail.com        # *** CAMBIAR ***
       - key: EMAIL_HOST_PASSWORD
         sync: false                      # Se configura manual en el dashboard
+
+      # Password fija del superusuario 'admin' (build.sh la usa si existe;
+      # si no, genera una al azar en cada build — y en el plan free, Render
+      # reconstruye la app cada vez que "despierta" de estar inactiva, así
+      # que sin esto la contraseña cambia todo el tiempo). Configurar manual.
+      - key: ADMIN_PASSWORD
+        sync: false
       - key: DEFAULT_FROM_EMAIL
         value: tu-email@gmail.com        # *** CAMBIAR ***
 
