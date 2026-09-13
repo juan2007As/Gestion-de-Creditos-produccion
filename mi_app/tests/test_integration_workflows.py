@@ -1212,3 +1212,102 @@ class PrestamoRapidoSaldoPendienteTests(TestCase):
         self.assertNotEqual(prestamo.estado, 'PAGADO')
         self.assertEqual(prestamo.estado, 'PARCIALMENTE_PAGADO')
         self.assertEqual(prestamo.capital_pendiente, Decimal('280000'))
+
+
+class ReporteCuotasTrasladadaTests(TestCase):
+    """
+    reporte_cuotas_completo (reporte_cuotas.html) filtraba/clasificaba
+    cuotas TRASLADADA (saldo movido a la siguiente, no pagada) como si
+    estuvieran "pendientes" o "vencidas" segun el filtro, y el badge
+    visible caia en VENCIDA en vez de mostrar su estado real. Se agrego
+    un filtro 'trasladada' propio y se excluyo TRASLADADA de 'pendiente'/
+    'vencida'. Ver auditoria de consistencia del motor de interes sobre
+    saldo (2026-09-13).
+    """
+
+    def setUp(self):
+        from django.test import RequestFactory
+        from mi_app.models import Rol, Permiso, RolPermiso, UsuarioProfile
+
+        self.factory = RequestFactory()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        perm, _ = Permiso.objects.get_or_create(
+            codigo='reporte.view',
+            defaults={'descripcion': 'reporte.view', 'activo': True}
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+
+        self.user = User.objects.create_user(
+            username='testuser_reporte_cuotas',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+
+        self.cliente = Cliente.objects.create(nombre="Test Reporte Cuotas", celular="3000000009", cedula="999888790")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+        self.cuota_trasladada = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('0'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('0'),
+            monto_pagado_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() - timedelta(days=20),
+            estado='TRASLADADA',
+        )
+        self.cuota_activa = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=2,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('500000'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() + timedelta(days=10),
+        )
+
+    def _reportar(self, querystring=''):
+        from mi_app.views_core import reporte_cuotas_completo
+        request = self.factory.get(f'/reportes/cuotas/{querystring}')
+        request.user = self.user
+        return reporte_cuotas_completo(request)
+
+    def test_filtro_pendiente_excluye_trasladada(self):
+        # Se distinguen las 2 cuotas por su fecha (unica por fila): la
+        # trasladada no debe aparecer bajo el filtro 'pendiente', la activa si.
+        response = self._reportar('?estado=pendiente')
+        content = response.content.decode('utf-8')
+        fecha_trasladada = self.cuota_trasladada.fecha_pago_esperada.strftime('%d/%m/%Y')
+        fecha_activa = self.cuota_activa.fecha_pago_esperada.strftime('%d/%m/%Y')
+        self.assertNotIn(fecha_trasladada, content)
+        self.assertIn(fecha_activa, content)
+
+    def test_filtro_trasladada_devuelve_solo_esa_cuota(self):
+        from mi_app.views_core import reporte_cuotas_completo
+        request = self.factory.get('/reportes/cuotas/?estado=trasladada')
+        request.user = self.user
+        response = reporte_cuotas_completo(request)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        self.assertIn('↷ TRASLADADA', content)
+
+    def test_badge_visible_muestra_trasladada_no_vencida(self):
+        response = self._reportar('')
+        content = response.content.decode('utf-8')
+        self.assertIn('↷ TRASLADADA', content)
+        self.assertNotIn('❌ VENCIDA', content)
