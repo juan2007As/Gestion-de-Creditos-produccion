@@ -692,6 +692,20 @@ document.addEventListener('DOMContentLoaded', function() {
     interesInput.addEventListener('input', actualizarResumen);
     cuotaCountInput.addEventListener('change', actualizarResumen);
 
+    // El campo real que se envia al servidor es #num_cuotas_input (hidden).
+    // Se sincroniza con el selector apenas cambia, sin depender de que se
+    // haga clic en "Generar Cuotas Automaticamente" -- antes, si el
+    // operario elegia otro numero de cuotas y creaba el prestamo sin
+    // pasar por ese boton, se enviaba silenciosamente el valor default (1).
+    const numCuotasInput = document.getElementById('num_cuotas_input');
+    function sincronizarNumCuotas() {
+        if (cuotaCountInput.value) {
+            numCuotasInput.value = cuotaCountInput.value;
+        }
+    }
+    cuotaCountInput.addEventListener('change', sincronizarNumCuotas);
+    sincronizarNumCuotas();
+
     actualizarResumen();
 });
 

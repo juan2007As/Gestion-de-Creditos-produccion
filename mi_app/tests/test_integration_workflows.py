@@ -994,3 +994,57 @@ class AvanzarCuotaRapidaTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.assertIn(str(nueva_cuota.id), response.url)
+
+
+class PrestamoRapidoSaldoPendienteTests(TestCase):
+    """PrestamoRapido.saldo_pendiente/total_a_pagar/porcentaje_pagado deben
+    usar el motor de interes sobre saldo cuando el prestamo tiene cuotas,
+    y el calculo original cuando no las tiene (flujo "directo" que nunca
+    migro a este motor)."""
+
+    def setUp(self):
+        from mi_app.models import PrestamoRapido, CuotaRapida
+        self.PrestamoRapido = PrestamoRapido
+        self.CuotaRapida = CuotaRapida
+        self.cliente = Cliente.objects.create(nombre="Test Saldo Pendiente Rapido", celular="3000000008", cedula="999888785")
+
+    def test_con_cuotas_usa_capital_pendiente_e_interes_dinamico(self):
+        prestamo = self.PrestamoRapido.objects.create(
+            cliente=self.cliente,
+            monto=Decimal('300000'),
+            interes_porcentaje=Decimal('15'),
+            capital_pendiente=Decimal('223000'),
+            interes_acumulado_sin_pagar=Decimal('0'),
+        )
+        self.CuotaRapida.objects.create(
+            prestamo_rapido=prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('150000'),
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+            estado='TRASLADADA',
+        )
+        cuota_activa = self.CuotaRapida.objects.create(
+            prestamo_rapido=prestamo,
+            numero_cuota=2,
+            monto_original=Decimal('150000'),
+            monto_pendiente=Decimal('223000'),
+            interes_normal=Decimal('17000'),
+            monto_pendiente_interes=Decimal('17000'),
+            fecha_pago_esperada=date.today() + timedelta(days=32),
+        )
+
+        # saldo real: capital_pendiente (223000) + interes de la cuota activa (17000)
+        self.assertEqual(prestamo.saldo_pendiente, Decimal('240000'))
+        self.assertEqual(prestamo.total_a_pagar, Decimal('240000'))
+        # porcentaje pagado sobre progreso de capital: (300000-223000)/300000*100
+        self.assertAlmostEqual(float(prestamo.porcentaje_pagado), 25.67, places=1)
+
+    def test_sin_cuotas_usa_el_calculo_original(self):
+        prestamo = self.PrestamoRapido.objects.create(
+            cliente=self.cliente,
+            monto=Decimal('100000'),
+            interes_porcentaje=Decimal('20'),
+        )
+        # Sin cuotas: total_a_pagar = monto + interes fijo = 100000 + 20000 = 120000
+        self.assertEqual(prestamo.total_a_pagar, 120000.0)
+        self.assertEqual(prestamo.saldo_pendiente, 120000.0)

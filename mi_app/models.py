@@ -531,8 +531,23 @@ class Prestamo(models.Model):
         return total
     @property
     def total_pendiente(self):
-        """total_credito - total_pagado"""
-        return self.total_credito - self.total_pagado
+        """
+        Saldo real pendiente: capital_pendiente + interes actualmente
+        adeudado. NO se calcula como total_credito - total_pagado --
+        total_credito suma monto_original informativo de cada cuota, que
+        con el motor de interes sobre saldo es solo una referencia de UI y
+        no necesariamente cierra exacto contra monto_total (ej. 400000/3
+        cuotas redondeado da 399999.99, no 400000). El saldo real vive en
+        capital_pendiente, no en la suma de las cuotas. Ver
+        docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md.
+        """
+        from mi_app.services.amortizacion_service import calcular_interes_pendiente_actual
+        cuota_activa = self.cuotas.exclude(estado='TRASLADADA').order_by('numero_cuota').first()
+        interes_pendiente = (
+            calcular_interes_pendiente_actual(self, cuota_activa)
+            if cuota_activa else self.interes_acumulado_sin_pagar
+        )
+        return float(self.capital_pendiente + interes_pendiente)
     @property
     def total_mora(self):
         """Suma de mora de todas las cuotas"""
@@ -554,34 +569,39 @@ class Prestamo(models.Model):
                 vencidas += 1
         return vencidas
     def resumen_financiero(self):
-        """Retorna dict con desglose como en el mockup"""
+        """
+        Retorna dict con desglose como en el mockup. El interes/pendiente
+        se calculan sobre el estado real del motor de interes sobre saldo
+        (capital_pendiente + interes de la cuota activa), no sumando
+        interes_normal de todas las cuotas -- una vez que el prestamo
+        avanza mas alla de la primera cuota, esa suma duplicaria interes
+        ya trasladado. Ver
+        docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md.
+        """
         from datetime import date
-        # Calcular interés total sumando interes_normal de TODAS las cuotas
-        interes_total = sum(float(c.interes_normal) for c in self.cuotas.all())
-        # Si no hay cuotas aún, calcular basado en estructura: 2 cuotas por mes
-        if not self.cuotas.exists():
-            num_dias = (self.fecha_fin_estimada - self.fecha_inicio).days
-            num_meses = num_dias / 30.0
-            # Capital por mes
-            capital_por_mes = float(self.monto_total) / num_meses
-            # Interés total: 15% del capital por mes × número de meses
-            interes_total = capital_por_mes * float(self.interes_porcentaje / 100) * num_meses
-        
+        from mi_app.services.amortizacion_service import calcular_interes_pendiente_actual
+
+        cuota_activa = self.cuotas.exclude(estado='TRASLADADA').order_by('numero_cuota').first()
+        interes_pendiente_actual = (
+            calcular_interes_pendiente_actual(self, cuota_activa)
+            if cuota_activa else self.interes_acumulado_sin_pagar
+        )
+
         # Calcular totales pagados por concepto
         total_pagado_principal = sum(float(c.monto_pagado_principal) for c in self.cuotas.all())
         total_pagado_interes = sum(float(c.monto_pagado_interes) for c in self.cuotas.all())
         total_pagado_mora = sum(float(c.monto_pagado_mora) for c in self.cuotas.all())
-    
+
         return {
             'monto_original': float(self.monto_total),
             'tasa_interes_quincena': float(self.interes_porcentaje),
-            'tasa_mora_diaria': 2000,
-            'interes_total_credito': interes_total,
-            'total_credito': float(self.monto_total) + interes_total,
+            'tasa_mora_diaria': float(self.mora_diaria_pesos) if self.mora_diaria_pesos else 2000,
+            'interes_total_credito': float(interes_pendiente_actual),
+            'total_credito': float(self.capital_pendiente + interes_pendiente_actual),
             'total_pagado_principal': total_pagado_principal,
             'total_pagado_interes': total_pagado_interes,
-            'total_pendiente_principal': float(self.monto_total) - total_pagado_principal,
-            'total_pendiente_interes': interes_total - total_pagado_interes,
+            'total_pendiente_principal': float(self.capital_pendiente),
+            'total_pendiente_interes': float(interes_pendiente_actual),
             'total_mora_acumulada': self.total_mora,
         }
     class Meta:
@@ -1048,26 +1068,58 @@ class PrestamoRapido(models.Model):
     def __str__(self):
         return f"Préstamo Rápido ${self.monto} - {self.cliente.nombre}"
     
+    def _interes_pendiente_actual(self):
+        """
+        Interes actualmente adeudado segun el motor de interes sobre saldo:
+        el de la cuota activa (todavia no calculada si nunca se pago nada)
+        mas lo arrastrado. Solo tiene sentido si el prestamo tiene cuotas
+        -- ver docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md.
+        """
+        from mi_app.services.amortizacion_service import calcular_interes_pendiente_actual
+        cuota_activa = self.cuotas_rapidas.exclude(estado='TRASLADADA').order_by('numero_cuota').first()
+        if cuota_activa:
+            return calcular_interes_pendiente_actual(self, cuota_activa)
+        return self.interes_acumulado_sin_pagar
+
     @property
     def saldo_pendiente(self):
-        """Calcula el saldo pendiente de pago"""
+        """
+        Calcula el saldo pendiente de pago. Si el prestamo tiene cuotas
+        (motor de interes sobre saldo), es capital_pendiente + interes
+        actualmente adeudado. Si no tiene cuotas (prestamo directo/sin
+        cuotas, un flujo que nunca migro a este motor), usa el calculo
+        original de monto + interes fijo menos lo pagado.
+        """
+        if self.cuotas_rapidas.exists():
+            return self.capital_pendiente + self._interes_pendiente_actual()
         monto_total = float(self.monto) + self.calcular_interes_total()
         return monto_total - float(self.monto_pagado)
-    
+
     def calcular_interes_total(self):
-        """Calcula el interés total del préstamo rápido"""
+        """Calcula el interés total del préstamo rápido (solo aplica al flujo sin cuotas)"""
         monto_float = float(self.monto)
         interes = (monto_float * float(self.interes_porcentaje)) / 100
         return interes
-    
+
     @property
     def total_a_pagar(self):
-        """Total monto + interés"""
+        """Total monto + interés. Bajo el motor de saldo, coincide con el saldo pendiente actual."""
+        if self.cuotas_rapidas.exists():
+            return self.saldo_pendiente
         return float(self.monto) + self.calcular_interes_total()
-    
+
     @property
     def porcentaje_pagado(self):
-        """Porcentaje del préstamo que ya se pagó"""
+        """
+        Porcentaje del préstamo que ya se pagó. Con cuotas, se mide sobre
+        el progreso real de capital (capital_pendiente vs monto) -- el
+        total_a_pagar fijo viejo ya no representa lo que realmente se debe.
+        """
+        if self.cuotas_rapidas.exists():
+            if self.monto == 0:
+                return Decimal('0')
+            porcentaje = (self.monto - self.capital_pendiente) / self.monto * 100
+            return max(Decimal('0'), min(porcentaje, Decimal('100')))
         if self.total_a_pagar == 0:
             return 0
         return (float(self.monto_pagado) / self.total_a_pagar) * 100

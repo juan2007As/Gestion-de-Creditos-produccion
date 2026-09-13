@@ -1305,11 +1305,23 @@ def detalles_prestamo(request, prestamo_id):
         }
         cuotas_data.append(cuota_info)
     
+    # Progreso sobre el avance real de capital -- total_credito ahora
+    # representa el saldo actual (capital_pendiente + interes pendiente),
+    # no el monto original del credito, asi que ya no sirve como
+    # denominador para medir cuanto se avanzo.
+    if prestamo.monto_total > 0:
+        progreso = max(
+            Decimal('0'),
+            min((prestamo.monto_total - prestamo.capital_pendiente) / prestamo.monto_total * 100, Decimal('100')),
+        )
+    else:
+        progreso = Decimal('0')
+
     contexto = {
         'prestamo': prestamo,
         'resumen': resumen,
         'cuotas_data': cuotas_data,
-        'progreso': ((resumen['total_credito'] - resumen['total_pendiente_principal'] - resumen['total_pendiente_interes']) / resumen['total_credito'] * 100) if resumen['total_credito'] > 0 else 0,
+        'progreso': progreso,
         'num_pagadas': prestamo.num_cuotas_pagadas,
         'num_pendientes': prestamo.cuotas.filter(pagado=False).count(),
         'num_vencidas': prestamo.num_cuotas_vencidas,
@@ -3104,7 +3116,17 @@ def detalle_prestamo_rapido(request, prestamo_id):
     for cuota in cuotas.filter(pagado=False):
         if cuota.fecha_pago_esperada and cuota.fecha_pago_esperada < date.today():
             cuotas_vencidas += 1
-    
+
+    # prestamo.saldo_pendiente/total_a_pagar/porcentaje_pagado ya calculan
+    # el saldo real segun el motor de interes sobre saldo cuando el
+    # prestamo tiene cuotas (ver PrestamoRapido en models.py). Solo se
+    # agrega el interes pendiente por separado para el label de la UI.
+    cuota_activa = cuotas.exclude(estado='TRASLADADA').order_by('numero_cuota').first()
+    if tiene_cuotas:
+        interes_pendiente_actual = prestamo._interes_pendiente_actual() if cuota_activa else Decimal('0')
+    else:
+        interes_pendiente_actual = Decimal(str(prestamo.calcular_interes_total()))
+
     contexto = {
         'prestamo': prestamo,
         'pagos': pagos,
@@ -3116,6 +3138,7 @@ def detalle_prestamo_rapido(request, prestamo_id):
         'porcentaje_pagado': round(prestamo.porcentaje_pagado, 2),
         'saldo_pendiente': prestamo.saldo_pendiente,
         'total_a_pagar': prestamo.total_a_pagar,
+        'interes_pendiente_actual': interes_pendiente_actual,
     }
     
     response = render(request, 'mi_app/detalle_prestamo_rapido.html', contexto)
