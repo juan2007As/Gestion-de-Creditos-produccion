@@ -83,3 +83,52 @@ def generar_fechas_cuotas(fecha_desembolso, num_cuotas):
         actual = siguiente_fecha_en_par(actual, par)
         fechas.append(actual)
     return fechas
+
+
+def calcular_interes_pendiente_actual(prestamo, cuota):
+    """Interes que corresponde pagar ahora: el de esta cuota + lo arrastrado."""
+    return cuota.interes_normal + prestamo.interes_acumulado_sin_pagar
+
+
+def aplicar_pago(prestamo, cuota, capital_pagado, interes_pagado, mora_pagada):
+    """
+    Aplica un pago ya validado sobre `prestamo` y `cuota` (muta los objetos
+    en memoria, no hace .save() -- eso lo decide quien llama, dentro de una
+    transaccion). Devuelve un resumen para registrar en el modelo Pago.
+    """
+    capital_pagado = Decimal(capital_pagado)
+    interes_pagado = Decimal(interes_pagado)
+    mora_pagada = Decimal(mora_pagada)
+
+    capital_antes = prestamo.capital_pendiente
+    interes_pendiente = calcular_interes_pendiente_actual(prestamo, cuota)
+
+    if capital_pagado > capital_antes:
+        raise ValueError(
+            f"capital_pagado ({capital_pagado}) supera el capital pendiente ({capital_antes})"
+        )
+    if interes_pagado > interes_pendiente:
+        raise ValueError(
+            f"interes_pagado ({interes_pagado}) supera el interes pendiente ({interes_pendiente})"
+        )
+
+    prestamo.capital_pendiente = capital_antes - capital_pagado
+    prestamo.interes_acumulado_sin_pagar = interes_pendiente - interes_pagado
+
+    cuota.monto_pagado_principal += capital_pagado
+    cuota.monto_pagado_interes += interes_pagado
+    cuota.monto_pagado_mora += mora_pagada
+    cuota.monto_pendiente = prestamo.capital_pendiente
+    cuota.monto_pendiente_interes = prestamo.interes_acumulado_sin_pagar
+
+    cerrado = prestamo.capital_pendiente <= 0 and prestamo.interes_acumulado_sin_pagar <= 0
+    if cerrado:
+        cuota.pagado = True
+        cuota.fecha_pago_real = date.today()
+        prestamo.estado = 'COMPLETADO'
+
+    return {
+        'capital_antes': capital_antes,
+        'capital_despues': prestamo.capital_pendiente,
+        'cerrado': cerrado,
+    }

@@ -97,3 +97,166 @@ class GenerarFechasCuotasTests(SimpleTestCase):
             fechas,
             [date(2026, 2, 5), date(2026, 2, 20), date(2026, 3, 5), date(2026, 3, 20)],
         )
+
+
+from types import SimpleNamespace
+
+
+def _prestamo_fake(capital_pendiente, interes_acumulado_sin_pagar=Decimal('0')):
+    return SimpleNamespace(
+        capital_pendiente=Decimal(capital_pendiente),
+        interes_acumulado_sin_pagar=Decimal(interes_acumulado_sin_pagar),
+        estado='ACTIVO',
+    )
+
+
+def _cuota_fake(interes_normal):
+    return SimpleNamespace(
+        interes_normal=Decimal(interes_normal),
+        monto_pagado_principal=Decimal('0'),
+        monto_pagado_interes=Decimal('0'),
+        monto_pagado_mora=Decimal('0'),
+        monto_pendiente=Decimal('0'),
+        monto_pendiente_interes=Decimal('0'),
+        pagado=False,
+        fecha_pago_real=None,
+    )
+
+
+from mi_app.services.amortizacion_service import (
+    calcular_interes_pendiente_actual,
+    aplicar_pago,
+)
+
+
+class AplicarPagoTests(SimpleTestCase):
+    def test_pago_normal_interes_primero_resto_a_capital(self):
+        prestamo = _prestamo_fake(capital_pendiente=Decimal('250000'))
+        cuota = _cuota_fake(interes_normal=Decimal('19000'))
+
+        resultado = aplicar_pago(
+            prestamo, cuota,
+            capital_pagado=Decimal('125000'),
+            interes_pagado=Decimal('19000'),
+            mora_pagada=Decimal('0'),
+        )
+
+        self.assertEqual(prestamo.capital_pendiente, Decimal('125000'))
+        self.assertEqual(prestamo.interes_acumulado_sin_pagar, Decimal('0'))
+        self.assertEqual(resultado['capital_antes'], Decimal('250000'))
+        self.assertEqual(resultado['capital_despues'], Decimal('125000'))
+        self.assertFalse(resultado['cerrado'])
+
+    def test_pago_parcial_capital_baja_a_189000(self):
+        prestamo = _prestamo_fake(capital_pendiente=Decimal('250000'))
+        cuota = _cuota_fake(interes_normal=Decimal('19000'))
+
+        aplicar_pago(
+            prestamo, cuota,
+            capital_pagado=Decimal('61000'),
+            interes_pagado=Decimal('19000'),
+            mora_pagada=Decimal('0'),
+        )
+
+        self.assertEqual(prestamo.capital_pendiente, Decimal('189000'))
+
+    def test_solo_pagar_interes_no_baja_el_capital(self):
+        prestamo = _prestamo_fake(capital_pendiente=Decimal('250000'))
+        cuota = _cuota_fake(interes_normal=Decimal('19000'))
+
+        aplicar_pago(
+            prestamo, cuota,
+            capital_pagado=Decimal('0'),
+            interes_pagado=Decimal('19000'),
+            mora_pagada=Decimal('0'),
+        )
+
+        self.assertEqual(prestamo.capital_pendiente, Decimal('250000'))
+        self.assertEqual(prestamo.interes_acumulado_sin_pagar, Decimal('0'))
+
+    def test_abono_extraordinario_reduce_capital(self):
+        prestamo = _prestamo_fake(capital_pendiente=Decimal('300000'))
+        cuota = _cuota_fake(interes_normal=Decimal('22500'))
+
+        aplicar_pago(
+            prestamo, cuota,
+            capital_pagado=Decimal('100000'),
+            interes_pagado=Decimal('22500'),
+            mora_pagada=Decimal('0'),
+        )
+
+        self.assertEqual(prestamo.capital_pendiente, Decimal('200000'))
+
+    def test_interes_pagado_incompleto_se_arrastra(self):
+        prestamo = _prestamo_fake(capital_pendiente=Decimal('250000'))
+        cuota = _cuota_fake(interes_normal=Decimal('19000'))
+
+        aplicar_pago(
+            prestamo, cuota,
+            capital_pagado=Decimal('0'),
+            interes_pagado=Decimal('10000'),
+            mora_pagada=Decimal('0'),
+        )
+
+        self.assertEqual(prestamo.interes_acumulado_sin_pagar, Decimal('9000'))
+
+    def test_interes_pendiente_actual_suma_lo_arrastrado(self):
+        prestamo = _prestamo_fake(capital_pendiente=Decimal('250000'), interes_acumulado_sin_pagar=Decimal('9000'))
+        cuota = _cuota_fake(interes_normal=Decimal('19000'))
+
+        pendiente = calcular_interes_pendiente_actual(prestamo, cuota)
+
+        self.assertEqual(pendiente, Decimal('28000'))
+
+    def test_cierre_cuando_capital_e_interes_llegan_a_cero(self):
+        prestamo = _prestamo_fake(capital_pendiente=Decimal('125000'))
+        cuota = _cuota_fake(interes_normal=Decimal('9000'))
+
+        resultado = aplicar_pago(
+            prestamo, cuota,
+            capital_pagado=Decimal('125000'),
+            interes_pagado=Decimal('9000'),
+            mora_pagada=Decimal('0'),
+        )
+
+        self.assertTrue(resultado['cerrado'])
+        self.assertEqual(prestamo.estado, 'COMPLETADO')
+        self.assertTrue(cuota.pagado)
+
+    def test_no_cierra_si_capital_en_cero_pero_falta_interes(self):
+        prestamo = _prestamo_fake(capital_pendiente=Decimal('125000'))
+        cuota = _cuota_fake(interes_normal=Decimal('9000'))
+
+        resultado = aplicar_pago(
+            prestamo, cuota,
+            capital_pagado=Decimal('125000'),
+            interes_pagado=Decimal('5000'),
+            mora_pagada=Decimal('0'),
+        )
+
+        self.assertFalse(resultado['cerrado'])
+        self.assertEqual(prestamo.interes_acumulado_sin_pagar, Decimal('4000'))
+
+    def test_capital_pagado_no_puede_superar_el_pendiente(self):
+        prestamo = _prestamo_fake(capital_pendiente=Decimal('50000'))
+        cuota = _cuota_fake(interes_normal=Decimal('3750'))
+
+        with self.assertRaises(ValueError):
+            aplicar_pago(
+                prestamo, cuota,
+                capital_pagado=Decimal('60000'),
+                interes_pagado=Decimal('0'),
+                mora_pagada=Decimal('0'),
+            )
+
+    def test_interes_pagado_no_puede_superar_el_pendiente(self):
+        prestamo = _prestamo_fake(capital_pendiente=Decimal('50000'))
+        cuota = _cuota_fake(interes_normal=Decimal('3750'))
+
+        with self.assertRaises(ValueError):
+            aplicar_pago(
+                prestamo, cuota,
+                capital_pagado=Decimal('0'),
+                interes_pagado=Decimal('4000'),
+                mora_pagada=Decimal('0'),
+            )
