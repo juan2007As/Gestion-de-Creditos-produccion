@@ -1173,3 +1173,42 @@ class PrestamoRapidoSaldoPendienteTests(TestCase):
         # Sin cuotas: total_a_pagar = monto + interes fijo = 100000 + 20000 = 120000
         self.assertEqual(prestamo.total_a_pagar, 120000.0)
         self.assertEqual(prestamo.saldo_pendiente, 120000.0)
+
+    def test_actualizar_estado_no_marca_pagado_falso_por_monto_pagado_acumulado(self):
+        """
+        Regresion: bajo el motor de saldo declinante, total_a_pagar
+        (=saldo_pendiente) se ACHICA con el tiempo mientras monto_pagado
+        (acumulado historico de todo lo pagado) solo CRECE -- comparar
+        ambos directamente (diferencia <= 0 => PAGADO) puede marcar el
+        prestamo como pagado en falso si monto_pagado queda desincronizado
+        por encima del saldo actual, aunque el capital siga vivo. El
+        cierre real debe depender del saldo vivo (capital_pendiente +
+        interes pendiente), no de cuanto se ha pagado historicamente.
+        """
+        prestamo = self.PrestamoRapido.objects.create(
+            cliente=self.cliente,
+            monto=Decimal('300000'),
+            interes_porcentaje=Decimal('15'),
+            capital_pendiente=Decimal('280000'),
+            interes_acumulado_sin_pagar=Decimal('0'),
+            # Acumulado historico (ej. muchos periodos pagando solo interes)
+            # mayor al saldo actual -- esto es exactamente lo que antes
+            # disparaba el falso PAGADO.
+            monto_pagado=Decimal('400000'),
+        )
+        self.CuotaRapida.objects.create(
+            prestamo_rapido=prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('150000'),
+            monto_pendiente=Decimal('280000'),
+            interes_normal=Decimal('22500'),
+            monto_pendiente_interes=Decimal('22500'),
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+
+        prestamo.actualizar_estado()
+        prestamo.refresh_from_db()
+
+        self.assertNotEqual(prestamo.estado, 'PAGADO')
+        self.assertEqual(prestamo.estado, 'PARCIALMENTE_PAGADO')
+        self.assertEqual(prestamo.capital_pendiente, Decimal('280000'))

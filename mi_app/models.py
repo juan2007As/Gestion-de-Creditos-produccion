@@ -1142,14 +1142,34 @@ class PrestamoRapido(models.Model):
     def actualizar_estado(self):
         """Actualiza automáticamente el estado según el pago"""
         from decimal import Decimal
-        
+
+        if self.cuotas_rapidas.exists():
+            # Bajo el motor de saldo declinante, total_a_pagar (=saldo_pendiente)
+            # se ACHICA con el tiempo, mientras monto_pagado (acumulado
+            # historico) solo CRECE -- compararlos directamente puede marcar
+            # PAGADO en falso si el cliente lleva muchos periodos pagando
+            # solo interes (permitido indefinidamente por la regla de
+            # negocio) sin tocar el capital. El cierre real depende del
+            # saldo vivo (capital + interes que falta), no de cuanto se ha
+            # pagado historicamente. Ver
+            # docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md.
+            saldo_vivo = self.capital_pendiente + self._interes_pendiente_total_credito()
+            if saldo_vivo <= Decimal('0.01'):
+                self.estado = 'PAGADO'
+            elif self.capital_pendiente < self.monto or self.monto_pagado > 0:
+                self.estado = 'PARCIALMENTE_PAGADO'
+            else:
+                self.estado = 'PENDIENTE'
+            self.save()
+            return
+
         monto_pagado_decimal = Decimal(str(self.monto_pagado))
         total_a_pagar_decimal = Decimal(str(self.total_a_pagar))
-        
+
         # Comparar con tolerancia de 0.01 para redondeos
         # Usar quantize para asegurar precisión
         diferencia = total_a_pagar_decimal - monto_pagado_decimal
-        
+
         if diferencia <= Decimal('0.01'):
             self.estado = 'PAGADO'
         elif monto_pagado_decimal > 0:
