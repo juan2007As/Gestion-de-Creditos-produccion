@@ -184,9 +184,8 @@
                                 <tr>
                                     <th>#</th>
                                     <th>Vencimiento</th>
-                                    <th>Capital</th>
-                                    <th>Interés</th>
-                                    <th>Total Pendiente</th>
+                                    <th>Capital Pendiente</th>
+                                    <th>Interés Pendiente</th>
                                     <th>Estado</th>
                                     <th class="text-end">Acción</th>
                                 </tr>
@@ -202,9 +201,21 @@
                                             <span class="text-muted">Sin fecha</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ cuota.monto_pendiente|formato_moneda_co }}</td>
-                                    <td>{{ cuota.monto_pendiente_interes|formato_moneda_co }}</td>
-                                    <td>{{ cuota.total_a_pagar|formato_moneda_co }}</td>
+                                    <td>
+                                        {% if cuota.estado == 'TRASLADADA' or cuota.pagado %}
+                                            {{ cuota.monto_pendiente|formato_moneda_co }}
+                                        {% elif cuota.monto_pendiente == 0 %}
+                                            <span class="text-muted">— <small>(aún no vence su turno)</small></span>
+                                        {% else %}
+                                            <strong class="text-danger">{{ cuota.monto_pendiente|formato_moneda_co }}</strong>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ cuota.monto_pendiente_interes|formato_moneda_co }}
+                                        {% if cuota.calcular_mora_diaria > 0 %}
+                                            <br><small class="text-danger">+ Mora: {{ cuota.calcular_mora_diaria|formato_moneda_co }}</small>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <span class="badge
                                             {% if cuota.estado == 'PAGADA' %}bg-success
@@ -227,7 +238,7 @@
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted py-3">
+                                    <td colspan="6" class="text-center text-muted py-3">
                                         No hay cuotas generadas para este préstamo rápido.
                                     </td>
                                 </tr>

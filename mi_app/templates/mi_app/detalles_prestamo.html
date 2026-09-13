@@ -118,7 +118,8 @@
                         <th>Vencimiento</th>
                         <th>Estado</th>
                         <th>Monto Original</th>
-                        <th>Pendiente</th>
+                        <th>Capital Pendiente</th>
+                        <th>Interés Pendiente</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
@@ -145,7 +146,21 @@
                                 </span>
                             </td>
                             <td>{{ item.detalles.original_total|formato_moneda_co}}</td>
-                            <td class="text-danger"><strong>{{ item.detalles.pendiente_total|formato_moneda_co}}</strong></td>
+                            <td>
+                                {% if item.cuota.estado == 'TRASLADADA' or item.cuota.pagado %}
+                                    {{ item.detalles.pendiente_principal|formato_moneda_co}}
+                                {% elif item.detalles.pendiente_principal == 0 %}
+                                    <span class="text-muted">— <small>(aún no vence su turno)</small></span>
+                                {% else %}
+                                    <strong class="text-danger">{{ item.detalles.pendiente_principal|formato_moneda_co}}</strong>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ item.detalles.pendiente_interes|formato_moneda_co}}
+                                {% if item.detalles.pendiente_mora > 0 %}
+                                    <br><small class="text-danger">+ Mora: {{ item.detalles.pendiente_mora|formato_moneda_co}}</small>
+                                {% endif %}
+                            </td>
                             <td>
                                 <a href="{% url 'pagar_cuota_especifica' item.cuota.id %}" class="btn btn-sm {% if item.cuota.pagado %}btn-secondary{% else %}btn-success{% endif %}">
                                     {% if item.cuota.pagado %}
