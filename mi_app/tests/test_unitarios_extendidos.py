@@ -18,7 +18,6 @@ from decimal import Decimal
 from mi_app.models import Cliente, Prestamo, Cuota, Pago, ListaNegra, Configuracion, Rol, UsuarioProfile
 from mi_app.forms import ClienteForm, PrestamoForm
 from mi_app.views import obtener_estadisticas_sistema, calcular_fecha_pago_esperada
-from mi_app.utilities.decorators import valida_propiedad_cliente
 
 
 # ===============================================================================

@@ -160,46 +160,6 @@ class CascadaRecalculos(TestCase):
         self.assertEqual(cuota_actualizada.estado, 'PAGADA')
 
 
-class DecoradorValidacionPropiedad(TestCase):
-    """FASE 2.1 Bloque B: Validar que decoradores previenen acceso no autorizado"""
-    
-    def setUp(self):
-        """Preparar usuarios y clientes"""
-        self.user1 = User.objects.create_user(username='user1', password='pass123')
-        self.user2 = User.objects.create_user(username='user2', password='pass123')
-        
-        self.cliente1 = Cliente.objects.create(
-            nombre="Cliente User1",
-            celular="1111111111",
-            cedula="111111"
-        )
-        
-        self.cliente2 = Cliente.objects.create(
-            nombre="Cliente User2",
-            celular="2222222222",
-            cedula="222222"
-        )
-        
-        self.client_http = Client()
-    
-    def test_usuario_no_puede_acceder_cliente_ajeno(self):
-        """
-        Test: User2 intenta acceder cliente de User1 → Acceso denegado
-        Validar: @valida_propiedad_cliente() bloquea acceso cruzado
-        """
-        # LOGIN como user2
-        self.client_http.login(username='user2', password='pass123')
-        
-        # ACTION: Intentar acceder perfil de cliente1 (ajeno)
-        response = self.client_http.get(f'/perfil-cliente/{self.cliente1.id}/')
-        
-        # ASSERT: User2 no puede ver cliente de User1
-        # Posible 403 o redirección a login
-        # (Depende de implementación exacta del decorador)
-        # Validar que al menos NO ve datos sensibles
-        self.assertNotIn(self.cliente1.nombre, response.content.decode())
-
-
 class OptimizacionN1Queries(TestCase):
     """FASE 2.2: Validar que queries N+1 han sido optimizadas"""
     

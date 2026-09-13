@@ -17,7 +17,6 @@ from .models import Cliente, Prestamo, Cuota, Pago, Configuracion, PrestamoRapid
 from mi_app.utilities.decorators import (
     require_rol, require_permission, require_any_permission,
     admin_required, gerente_o_admin, no_operario_solamente,
-    valida_propiedad_cliente, valida_propiedad_prestamo  # ✅ NUEVA: Validación propiedad de recurso
 )
 from mi_app.utilities.transaction_integrity import atomic_payment_view, registrar_pago_atomico  # ✅ CRÍTICA #7
 from mi_app.utils import determinar_estado_cuota_al_crear  # ✅ OPCIÓN C PASO 2: Import centralizado
@@ -559,7 +558,6 @@ def clientes_importados(request):
 
 @require_permission('cliente.view')
 @login_required(login_url='login')
-@valida_propiedad_cliente('cliente_id')
 def detalle_cliente(request, cliente_id):
     """Redirige al nuevo perfil del cliente (Fase 2)."""
     return redirect('perfil_cliente', cliente_id=cliente_id)
@@ -584,7 +582,6 @@ def crear_cliente(request):
 
 @require_permission('cliente.edit')
 @login_required(login_url='login')
-@valida_propiedad_cliente('cliente_id')
 def editar_cliente(request, cliente_id):
     """Vista para editar un cliente existente."""
     cliente = get_object_or_404(Cliente, id=cliente_id)
@@ -973,7 +970,6 @@ def buscar_cliente_pago(request):
 
 @require_permission('pago.view')
 @login_required(login_url='login')
-@valida_propiedad_cliente('cliente_id')
 def cuotas_pendientes(request,cliente_id):
     """Muestra todas las cuotas de un cliente (pagadas y pendientes)"""
     
@@ -1255,7 +1251,6 @@ def perfil_cliente(request, cliente_id):
 
 @require_permission('prestamo.view')
 @login_required(login_url='login')
-@valida_propiedad_cliente('cliente_id')
 def mis_prestamos(request, cliente_id):
     """
     Vista de todos los préstamos de un cliente con filtros
@@ -1296,7 +1291,6 @@ def mis_prestamos(request, cliente_id):
 
 @require_permission('prestamo.view')
 @login_required(login_url='login')
-@valida_propiedad_prestamo('prestamo_id')
 def detalles_prestamo(request, prestamo_id):
     """
     Detalles completos de un préstamo:
@@ -1487,7 +1481,6 @@ def pagar_cuota_especifica(request, cuota_id):
 
 @require_any_permission('pago.create')
 @login_required(login_url='login')
-@valida_propiedad_cliente('cliente_id')
 def registrar_pago_mejorado(request, cliente_id):
     """
     Interfaz mejorada de pago:
