@@ -640,3 +640,61 @@ class PagarCuotaEspecificaMotorNuevoTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn('error', response.context or {})
         self.assertEqual(prestamo.capital_pendiente, Decimal('50000'))
+
+
+class RegistrarPagoRapidoMotorNuevoTests(TestCase):
+    """registrar_pago_rapido debe repartir interes antes que capital (ver Task 9 del plan)."""
+
+    def setUp(self):
+        self.client_obj = Client()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        for codigo in ('prestamo.create', 'pago.create'):
+            perm, _ = Permiso.objects.get_or_create(
+                codigo=codigo,
+                defaults={'descripcion': codigo, 'activo': True}
+            )
+            RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+
+        self.user = User.objects.create_user(
+            username='testuser_rapido_pago_motor',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+        self.client_obj.login(username='testuser_rapido_pago_motor', password='testpass123')  # pragma: allowlist secret
+
+    def test_pago_unico_reparte_interes_primero_luego_capital(self):
+        from mi_app.models import PrestamoRapido, CuotaRapida
+
+        cliente = Cliente.objects.create(nombre="Test Rapido Pago", celular="3000000003", cedula="999888780")
+        prestamo = PrestamoRapido.objects.create(
+            cliente=cliente,
+            monto=Decimal('250000'),
+            interes_porcentaje=Decimal('15'),
+            capital_pendiente=Decimal('250000'),
+        )
+        cuota = CuotaRapida.objects.create(
+            prestamo_rapido=prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('125000'),
+            monto_pendiente=Decimal('250000'),
+            interes_normal=Decimal('19000'),
+            monto_pendiente_interes=Decimal('19000'),
+            fecha_pago_esperada=date.today() + timedelta(days=16),
+        )
+
+        response = self.client_obj.post(
+            reverse('registrar_pago_cuota_rapida', kwargs={'cuota_id': cuota.id}),
+            {'monto_pagado': '80000', 'usuario_registra': 'admin'},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        prestamo.refresh_from_db()
+        # 19.000 a interes, 61.000 a capital -> capital queda en 189.000
+        self.assertEqual(prestamo.capital_pendiente, Decimal('189000'))

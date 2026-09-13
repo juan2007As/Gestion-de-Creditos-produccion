@@ -3087,16 +3087,20 @@ def registrar_pago_rapido(request, cuota_id):
         form = PagoPrestamoRapidoForm(request.POST)
         
         if form.is_valid():
+            from mi_app.services.amortizacion_service import calcular_interes_pendiente_actual, aplicar_pago
+            from django.db import transaction
+
             monto_pagado = form.cleaned_data.get('monto_pagado')
             usuario_registra = form.cleaned_data.get('usuario_registra', 'Sistema')
             referencia = form.cleaned_data.get('referencia', '')
             notas = form.cleaned_data.get('notas', '')
-            
+
             from decimal import Decimal
 
             monto_pagado = Decimal(str(monto_pagado))
             mora = Decimal(str(cuota.calcular_mora_diaria()))
-            total_debido = cuota.monto_pendiente + cuota.monto_pendiente_interes + mora
+            interes_pendiente = calcular_interes_pendiente_actual(prestamo, cuota)
+            total_debido = prestamo.capital_pendiente + interes_pendiente + mora
 
             if monto_pagado > total_debido:
                 form.add_error('monto_pagado', f'El monto no puede ser mayor a {total_debido}')
@@ -3108,60 +3112,40 @@ def registrar_pago_rapido(request, cuota_id):
                     'mora_actual': mora,
                 })
 
-            pendiente_capital = cuota.monto_pendiente
-            pendiente_interes = cuota.monto_pendiente_interes
-            pendiente_mora = mora
-
-            monto_pago_capital = Decimal('0')
-            monto_pago_interes = Decimal('0')
-            monto_pago_mora = Decimal('0')
-
+            # Interes primero, despues capital, despues mora -- con lo que sobre
             monto_restante = monto_pagado
+            interes_a_pagar = min(interes_pendiente, monto_restante)
+            monto_restante -= interes_a_pagar
+            capital_a_pagar = min(prestamo.capital_pendiente, monto_restante)
+            monto_restante -= capital_a_pagar
+            mora_a_pagar = min(mora, monto_restante)
 
-            if pendiente_capital > 0 and monto_restante > 0:
-                monto_pago_capital = min(pendiente_capital, monto_restante)
-                monto_restante -= monto_pago_capital
-                cuota.monto_pendiente -= monto_pago_capital
+            with transaction.atomic():
+                resumen = aplicar_pago(prestamo, cuota, capital_a_pagar, interes_a_pagar, mora_a_pagar)
 
-            if pendiente_interes > 0 and monto_restante > 0:
-                monto_pago_interes = min(pendiente_interes, monto_restante)
-                monto_restante -= monto_pago_interes
-                cuota.monto_pendiente_interes -= monto_pago_interes
+                PagoPrestamoRapido.objects.create(
+                    prestamo_rapido=prestamo,
+                    cuota_rapida=cuota,
+                    monto_pagado=monto_pagado,
+                    usuario_registra=usuario_registra,
+                    referencia=referencia,
+                    notas=notas,
+                )
 
-            if pendiente_mora > 0 and monto_restante > 0:
-                monto_pago_mora = min(pendiente_mora, monto_restante)
-                monto_restante -= monto_pago_mora
+                # PrestamoRapido usa su propio vocabulario de estados
+                # (PENDIENTE/PARCIALMENTE_PAGADO/PAGADO), distinto del
+                # 'COMPLETADO' generico que deja aplicar_pago.
+                total_pagado = prestamo.pagos.aggregate(total=Coalesce(Sum('monto_pagado'), Decimal('0')))
+                prestamo.monto_pagado = total_pagado['total'] or Decimal('0')
+                if resumen['cerrado']:
+                    prestamo.estado = 'PAGADO'
+                    prestamo.fecha_pago_real = date.today()
+                elif prestamo.capital_pendiente < prestamo.monto:
+                    prestamo.estado = 'PARCIALMENTE_PAGADO'
 
-            cuota.monto_pagado_principal += monto_pago_capital
-            cuota.monto_pagado_interes += monto_pago_interes
-            cuota.monto_pagado_mora += monto_pago_mora
-            cuota.interes_mora_acumulado += mora
-
-            if cuota.monto_pendiente <= 0 and cuota.monto_pendiente_interes <= 0:
-                cuota.monto_pendiente = Decimal('0')
-                cuota.monto_pendiente_interes = Decimal('0')
-                cuota.pagado = True
-                cuota.fecha_pago_real = date.today()
-
-            cuota.save()
-
-            PagoPrestamoRapido.objects.create(
-                prestamo_rapido=prestamo,
-                cuota_rapida=cuota,
-                monto_pagado=monto_pagado,
-                usuario_registra=usuario_registra,
-                referencia=referencia,
-                notas=notas,
-            )
-
-            total_pagado = prestamo.pagos.aggregate(total=Coalesce(Sum('monto_pagado'), Decimal('0')))
-            prestamo.monto_pagado = total_pagado['total'] or Decimal('0')
-            prestamo.actualizar_estado()
-            if prestamo.estado == 'PAGADO':
-                prestamo.fecha_pago_real = date.today()
-            prestamo.save()
-
-            cuota.actualizar_estado()
+                cuota.actualizar_estado()
+                cuota.save()
+                prestamo.save()
 
             prestamo.refresh_from_db()
 
