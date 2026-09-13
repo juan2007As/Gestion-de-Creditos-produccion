@@ -529,6 +529,21 @@ class Prestamo(models.Model):
             # Sumar mora pagada
             total += float(cuota.monto_pagado_mora)
         return total
+    @property
+    def porcentaje_pagado(self):
+        """
+        Porcentaje del prestamo que ya se pago, medido sobre el progreso
+        real de CAPITAL (capital_pendiente vs monto_total) -- no sobre
+        total_pagado/total_credito, que mezcla interes servido (que no
+        reduce lo que se debe) con reduccion real de deuda. Bajo el motor
+        de saldo declinante, pagar solo interes durante muchos periodos es
+        normal y no significa "avance" en la deuda. Mismo criterio que
+        detalles_prestamo (vista) y PrestamoRapido.porcentaje_pagado.
+        """
+        if self.monto_total == 0:
+            return Decimal('0')
+        porcentaje = (self.monto_total - self.capital_pendiente) / self.monto_total * 100
+        return max(Decimal('0'), min(porcentaje, Decimal('100')))
     def _interes_pendiente_total_credito(self):
         """
         Interes que falta por cobrar en TODO el credito, no solo el de la

@@ -159,15 +159,9 @@
                                 <strong class="text-warning">{{ prestamo.total_pendiente|formato_moneda_co}}</strong>
                             </td>
                             <td>
-                                {% widthratio prestamo.total_pagado prestamo.total_credito 100 as porcentaje_raw %}
-                                {% if porcentaje_raw > 100 %}
-                                    {% widthratio 100 1 1 as porcentaje %}
-                                {% else %}
-                                    {% widthratio prestamo.total_pagado prestamo.total_credito 100 as porcentaje %}
-                                {% endif %}
                                 <div class="progress" style="height: 20px;">
-                                    <div class="progress-bar bg-success" role="progressbar" style="width: {% if porcentaje_raw > 100 %}100{% else %}{{ porcentaje }}{% endif %}%" aria-valuenow="{{ porcentaje }}" aria-valuemin="0" aria-valuemax="100">
-                                        <small>{% if porcentaje_raw > 100 %}100{% else %}{{ porcentaje }}{% endif %}%</small>
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ prestamo.porcentaje_pagado }}%" aria-valuenow="{{ prestamo.porcentaje_pagado }}" aria-valuemin="0" aria-valuemax="100">
+                                        <small>{{ prestamo.porcentaje_pagado|floatformat:1 }}%</small>
                                     </div>
                                 </div>
                             </td>

@@ -282,9 +282,8 @@
                                     </div>
                                     <div class="mt-2">
                                         <div class="progress" style="height: 20px;">
-                                            {% widthratio prestamo.total_pagado prestamo.total_credito 100 as progreso_raw %}
-                                            <div class="progress-bar bg-success" role="progressbar" style="width: {% if progreso_raw > 100 %}100{% else %}{{ progreso_raw }}{% endif %}%" aria-valuenow="{% if progreso_raw > 100 %}100{% else %}{{ progreso_raw }}{% endif %}" aria-valuemin="0" aria-valuemax="100">
-                                                {% if progreso_raw > 100 %}100{% else %}{{ progreso_raw }}{% endif %}%
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: {{ prestamo.porcentaje_pagado }}%" aria-valuenow="{{ prestamo.porcentaje_pagado }}" aria-valuemin="0" aria-valuemax="100">
+                                                {{ prestamo.porcentaje_pagado|floatformat:1 }}%
                                             </div>
                                         </div>
                                     </div>

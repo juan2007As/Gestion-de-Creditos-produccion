@@ -1374,3 +1374,58 @@ class ReporteCuotasVencidasFuturasTests(TestCase):
         ids = set(cuotas_vencidas_qs.values_list('id', flat=True))
         self.assertIn(self.cuota_activa_vencida.id, ids)
         self.assertNotIn(self.cuota_futura_no_activada.id, ids)
+
+
+class PrestamoPorcentajePagadoTests(TestCase):
+    """
+    perfil_cliente.html y reporte_prestamos.html median el progreso de
+    pago como total_pagado/total_credito (un widthratio en el template),
+    mientras detalles_prestamo (vista) lo calculaba inline como
+    (monto_total - capital_pendiente)/monto_total -- dos formulas
+    distintas para "cuanto ha avanzado" el MISMO prestamo, que pueden dar
+    numeros diferentes (pagar solo interes mueve la primera formula pero
+    no la segunda, ya que el capital sigue igual). Se centraliza en
+    Prestamo.porcentaje_pagado (nueva property) y se usa en los 3 lugares.
+    Ver auditoria de consistencia del motor de interes sobre saldo
+    (2026-09-13).
+    """
+
+    def setUp(self):
+        self.cliente = Cliente.objects.create(nombre="Test Porcentaje Pagado", celular="3000000011", cedula="999888792")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+
+    def test_pagar_solo_interes_no_mueve_el_porcentaje(self):
+        # Pagar solo interes (rutina normal bajo el motor de saldo
+        # declinante) no reduce lo que realmente se debe de capital -- el
+        # porcentaje de avance debe seguir en 0%, no un numero fantasma
+        # basado en cuanto se ha pagado historicamente.
+        Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('500000'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('0'),
+            monto_pagado_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+        self.assertEqual(self.prestamo.porcentaje_pagado, Decimal('0'))
+
+    def test_abono_a_capital_si_mueve_el_porcentaje(self):
+        self.prestamo.capital_pendiente = Decimal('375000')
+        self.prestamo.save()
+        # (500000-375000)/500000*100 = 25
+        self.assertEqual(self.prestamo.porcentaje_pagado, Decimal('25'))
+
+    def test_porcentaje_se_limita_entre_0_y_100(self):
+        self.prestamo.capital_pendiente = Decimal('0')
+        self.prestamo.save()
+        self.assertEqual(self.prestamo.porcentaje_pagado, Decimal('100'))

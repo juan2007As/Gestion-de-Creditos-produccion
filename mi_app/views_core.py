@@ -1172,17 +1172,8 @@ def detalles_prestamo(request, prestamo_id):
         }
         cuotas_data.append(cuota_info)
     
-    # Progreso sobre el avance real de capital -- total_credito ahora
-    # representa el saldo actual (capital_pendiente + interes pendiente),
-    # no el monto original del credito, asi que ya no sirve como
-    # denominador para medir cuanto se avanzo.
-    if prestamo.monto_total > 0:
-        progreso = max(
-            Decimal('0'),
-            min((prestamo.monto_total - prestamo.capital_pendiente) / prestamo.monto_total * 100, Decimal('100')),
-        )
-    else:
-        progreso = Decimal('0')
+    # Progreso sobre el avance real de capital -- ver Prestamo.porcentaje_pagado
+    progreso = prestamo.porcentaje_pagado
 
     contexto = {
         'prestamo': prestamo,
