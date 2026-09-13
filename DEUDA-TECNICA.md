@@ -69,6 +69,50 @@
 
 ---
 
+## Checklist completo de `02-AUTOMATIZABLE.md` (Fase A4 — cada línea tiene decisión)
+
+| Línea | Decisión |
+|---|---|
+| Formateo/linter en pre-commit | Deuda cajón 3 — CI ya avisa (flake8/black/isort no bloqueantes); aplicar formateo real al tocar cada archivo, no de una vez (evita un diff de miles de líneas irrevisable) |
+| Escaneo de secretos en pre-commit | ✅ Hecho |
+| Archivos que nunca deben subirse | ✅ Ya estaba (`.gitignore` cubre `.env`, `db.sqlite3`, `/staticfiles`, `/media`) |
+| Tests en verde (pipeline) | ✅ Ya estaba |
+| Comprobación de tipos/compilación | Deuda cajón 3 — sin type hints/mypy; bajo impacto a este tamaño de equipo |
+| Escaneo de secretos (pipeline) | ✅ Hecho (`secrets-scan` job) |
+| Vulnerabilidades en dependencias | ✅ Hecho (`safety`, bloqueante) |
+| Lockfile presente y coherente | ✅ Hecho — `requirements.txt` con TODAS las versiones fijadas (antes solo 2 de 15 lo estaban); se retiró `pillow` (cero uso real en todo el repo) |
+| Licencias de dependencias permitidas | Deuda cajón 3 — software de uso interno, no se redistribuye |
+| SAST | ✅ Cubierto por `bandit` (ya bloqueante) |
+| Build reproducible | Deuda cajón 3 — depende del build de Render, sin Docker propio |
+| Detección de tests desactivados | Ya documentado: los E2E corren con `\|\| true` a propósito (necesitan Selenium) — deuda cajón 3, conocida y nombrada, no oculta |
+| Validación de configuración al arrancar | ✅ Ya estaba |
+| Sin valores por defecto inseguros | ✅ Ya estaba |
+| Bloqueo de envíos reales fuera de producción | ✅ Ya estaba (`EMAIL_BACKEND` de consola fuera de producción) |
+| Filtro de tenant | No aplica — proyecto confirmado no-multi-tenant en `CONTEXTO.md` |
+| Denegar por defecto | ✅ En general (todas las vistas de negocio llevan `@login_required` + `@require_permission`/`@require_rol`); revisar caso a caso al agregar vistas nuevas |
+| Enmascarado de campos sensibles en logs | Deuda cajón 2 — el middleware de auditoría ya excluye contraseñas/CSRF del payload, pero no enmascara cédula/monto en el resto de logs |
+| Límites de tamaño de petición/página | Deuda cajón 3 — `lista_clientes_api` (`views_core.py:125`) devuelve TODOS los clientes sin paginar; bajo impacto con el volumen actual, revisar si crece |
+| Timeout en cliente HTTP saliente | No aplica — `mi_app/` no hace llamadas HTTP salientes (confirmado por grep) |
+| Restricciones de BD (unicidad, FK, NOT NULL, rangos) | Ya está en gran parte (constraints ya vistas en migraciones); no se auditó campo por campo |
+| Tipo exacto para importes | Ya está a nivel de columna (`DecimalField`); el bug real estaba en los métodos de cálculo, no en el esquema — ver cajón 1 #1 |
+| Tipo consciente de zona horaria | ✅ Ya está (`USE_TZ=True`, confirmado sin mezcla con `datetime.now()` en A3) |
+| Audit log sin permiso de borrado/modificación | ✅ Ya está (confirmado en A3: `AuditLogAdmin` lo bloquea, y no hay `.update()`/`.delete()` desde código de negocio) |
+| Permisos mínimos del usuario de BD | Deuda cajón 2 — no se pudo verificar desde aquí (config de Render), pendiente de revisar en el dashboard |
+| Test "A no puede leer el recurso de B" | No aplica igual que el filtro de tenant — decisión de negocio: todos los operarios ven todos los clientes |
+| Idempotencia en pagos | Deuda cajón 1 — relacionado con la falta de atomicidad ya reportada (cajón 1 #3): sin lock, un doble submit puede duplicar un pago |
+| Contrato de API verificado | No aplica (P2), endpoints internos sin consumidores externos |
+| Migraciones probadas sobre datos representativos | Deuda cajón 2 — no se prueba en CI contra un dataset realista, solo contra BD vacía |
+| Sesiones invalidadas al cambiar contraseña | Deuda cajón 3 — Django lo hace por defecto desde 4.1+ (`django.contrib.auth.password_validation` con `update_session_auth_hash`), no se confirmó que el flujo de cambio de contraseña propio lo use |
+| Vigilancia de tareas programadas (silencio = alerta) | Deuda cajón 2 — `auto_mantenimiento.py` no tiene monitoreo de última ejecución exitosa |
+| Caducidad de certificados/dominios/tokens | Deuda cajón 3 — Render gestiona el certificado; sin vigilancia propia de la key de Comfama ahora retirada |
+| Antigüedad del backup y del último restore probado | ✅ Cubierto por el propio `backup.yml` (falla si no restaura, corre diario) |
+| Tasas de error/latencia, métricas de negocio | Deuda cajón 1 — mismo hueco que observabilidad general |
+| Discrepancias de reconciliación con terceros | No aplica — no hay integración de terceros activa tras retirar `lambda/` |
+| Gasto de infraestructura/logs | Deuda cajón 3 — bajo volumen actual (10 usuarios), revisar si crece |
+| Purga de datos que superan retención | Deuda cajón 2 — no hay política de retención definida (ver cajón 2 de compliance) |
+| Caducidad de feature flags | No aplica — el proyecto no usa feature flags |
+| Recordatorios calendarizados (backup, rotación, accesos, dependencias, auditoría de reglas) | Se dejan para la Fase A5/A6 — se registran como rutina en `reglas/operations-rules.md` especializado |
+
 ## Fuera de alcance de esta auditoría (anotado, no investigado a fondo)
 
 - Front-rules (responsive, accesibilidad, estados de carga): requiere revisión visual en navegador, no solo lectura de templates.
