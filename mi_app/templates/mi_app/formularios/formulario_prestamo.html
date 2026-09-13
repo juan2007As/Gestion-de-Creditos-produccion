@@ -147,7 +147,7 @@
                     <div class="col-md-6 col-lg-3">
                         <div class="card border-0 shadow-sm bg-success bg-opacity-10 h-100">
                             <div class="card-body p-3">
-                                <small class="text-muted d-block">Total Mensual</small>
+                                <small class="text-muted d-block">Total a Pagar (si no hay abonos extra)</small>
                                 <h5 id="resumen_total_mes" class="text-success fw-bold mb-2">$0.00</h5>
                                 <small class="text-muted"><i class="fas fa-plus"></i> Capital + Interés</small>
                             </div>
@@ -156,9 +156,9 @@
                     <div class="col-md-6 col-lg-3">
                         <div class="card border-0 shadow-sm bg-info bg-opacity-10 h-100">
                             <div class="card-body p-3">
-                                <small class="text-muted d-block">Interés x Cuota</small>
+                                <small class="text-muted d-block">Interés 1ª Cuota</small>
                                 <h5 id="resumen_interes_cuota" class="text-info fw-bold mb-2">$0.00</h5>
-                                <small class="text-muted"><i class="fas fa-divide"></i> Por cuota</small>
+                                <small class="text-muted"><i class="fas fa-divide"></i> Baja a la mitad cada mes</small>
                             </div>
                         </div>
                     </div>
@@ -678,14 +678,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const interes = parseFloat(interesInput.value) || 0;
         const numCuotas = parseInt(cuotaCountInput.value) || 2; // Default a 2 si no hay selección
 
-        const interesMensual = (monto * interes) / 100;
-        const totalMensual = monto + interesMensual;
-        const interesPorCuota = numCuotas > 0 ? interesMensual / numCuotas : 0; // ✅ CORREGIDO
+        // Mismo cronograma que arma el backend (mitad de interes cada par
+        // de cuotas, sin redondeo) -- ver generarCronogramaInteres() y
+        // mi_app/services/amortizacion_service.py::generar_cronograma_interes().
+        const intereses = (typeof generarCronogramaInteres === 'function')
+            ? generarCronogramaInteres(monto, interes, numCuotas)
+            : [0];
+        const interesTotalCronograma = intereses.reduce((suma, v) => suma + v, 0);
+        const totalAPagar = monto + interesTotalCronograma;
+        const interesPrimeraCuota = intereses[0] || 0;
 
         document.getElementById('resumen_monto').textContent = formatearMonedaColombia(monto);
-        document.getElementById('resumen_interes_total').textContent = formatearMonedaColombia(interesMensual);
-        document.getElementById('resumen_total_mes').textContent = formatearMonedaColombia(totalMensual);
-        document.getElementById('resumen_interes_cuota').textContent = formatearMonedaColombia(interesPorCuota);
+        document.getElementById('resumen_interes_total').textContent = formatearMonedaColombia(interesTotalCronograma);
+        document.getElementById('resumen_total_mes').textContent = formatearMonedaColombia(totalAPagar);
+        document.getElementById('resumen_interes_cuota').textContent = formatearMonedaColombia(interesPrimeraCuota);
     }
 
     montoInput.addEventListener('input', actualizarResumen);
@@ -805,20 +811,24 @@ function generarFechasPago(numCuotas) {
     return fechas;
 }
 
-// ✅ FUNCIÓN 5: Redondear a múltiplos inteligentes
-function redondearInteligente(valor) {
-    /**
-     * Redondea a múltiplos de 1,000 para montos >= 50,000
-     * Redondea a múltiplos de 100 para montos < 50,000
-     */
-    if (valor >= 50000) {
-        return Math.round(valor / 1000) * 1000;
-    } else {
-        return Math.round(valor / 100) * 100;
+// ✅ FUNCIÓN 5: Cronograma de interes -- mismo cronograma fijo que arma el
+// backend al crear el prestamo (ver generar_cronograma_interes() en
+// mi_app/services/amortizacion_service.py): interes de las primeras 2
+// cuotas (1 mes) = capital_total * tasa% / 2; cada par siguiente es la
+// MITAD del anterior. Sin redondeo (decision explicita del dueno).
+function generarCronogramaInteres(capitalTotal, tasaPorcentaje, numCuotas) {
+    const base = capitalTotal * (tasaPorcentaje / 100) / 2;
+    const intereses = [];
+    for (let i = 0; i < numCuotas; i++) {
+        const parIndex = Math.floor(i / 2);
+        intereses.push(base / Math.pow(2, parIndex));
     }
+    return intereses;
 }
 
-// ✅ FUNCIÓN 6: Generar cuotas con redondeo inteligente
+// ✅ FUNCIÓN 6: Generar cuotas -- mismo calculo que hace el backend al
+// crear el prestamo, para que la vista previa nunca quede desacorde con
+// lo que realmente se guarda.
 function generarCuotas() {
     const clienteId = document.getElementById('cliente_id').value;
     const montoTotalInput = document.getElementById('monto_total');
@@ -844,33 +854,23 @@ function generarCuotas() {
     }
 
     const montoTotal = parseFloat(montoTotalInput.value);
-    const interesPorcentaje = parseFloat(interesInput.value) / 100;
+    const interesPorcentaje = parseFloat(interesInput.value);
     const numCuotas = parseInt(cuotaCountInput.value);
 
     // Generar fechas cada 15 días
     const fechasPago = generarFechasPago(numCuotas);
 
-    // ==================== CÁLCULOS QUINCENAL (2 CUOTAS POR MES) ====================
-    const cuotasPorMes = 2;
-    const numMeses = numCuotas / cuotasPorMes;
-    const capitalPorMes = montoTotal / numMeses;
-    const interesPorMes = capitalPorMes * interesPorcentaje;  // Interés MENSUAL
-    const interesPorCuotaSinRedondeo = interesPorMes / cuotasPorMes;  // Interés por quincena (÷2)
-    
-    const montoCapitalSinRedondeo = capitalPorMes / cuotasPorMes;  // Capital por quincena
+    // Capital por cuota: division simple, sin redondeo especial ni
+    // "ultima cuota absorbe la diferencia" -- el capital real vive en
+    // capital_pendiente, esto es solo referencia informativa (igual que
+    // en crear_prestamo).
+    const capitalPorCuota = montoTotal / numCuotas;
 
-    // ==================== CÁLCULOS CON REDONDEO ====================
-    const montoCapitalRedondeado = redondearInteligente(montoCapitalSinRedondeo);
-    const interesRedondeado = redondearInteligente(interesPorCuotaSinRedondeo);
-
-    // Calcular total de capital redondeado para todas las cuotas excepto la última
-    const capitalTotalRedondeado = montoCapitalRedondeado * (numCuotas - 1);
-    
-    // La última cuota absorbe la diferencia
-    const capitalUltimaCuota = montoTotal - capitalTotalRedondeado;
+    // Cronograma de interes fijo (mitad cada par de cuotas)
+    const intereses = generarCronogramaInteres(montoTotal, interesPorcentaje, numCuotas);
 
     // Actualizar header con el porcentaje de interés por quincena
-    const interesPorcentajePorCuota = (interesPorcentaje * 100 / 2).toFixed(2);  // 50% del interés mensual
+    const interesPorcentajePorCuota = (interesPorcentaje / 2).toFixed(2);  // 50% del interés mensual
     document.getElementById('interes_header').textContent = interesPorcentajePorCuota;
 
     // ==================== GENERAR TABLA ====================
@@ -878,19 +878,9 @@ function generarCuotas() {
     tbody.innerHTML = '';
 
     for (let i = 0; i < numCuotas; i++) {
-        let capital, interes, total;
-        
-        if (i < numCuotas - 1) {
-            // Cuotas normales: con redondeo
-            capital = montoCapitalRedondeado;
-            interes = interesRedondeado;
-        } else {
-            // Última cuota: absorbe la diferencia
-            capital = capitalUltimaCuota;
-            interes = interesRedondeado;
-        }
-        
-        total = capital + interes;
+        const capital = capitalPorCuota;
+        const interes = intereses[i];
+        const total = capital + interes;
         const fecha = fechasPago[i].toLocaleDateString('es-CO');
 
         const row = `<tr>
@@ -906,10 +896,9 @@ function generarCuotas() {
 
     document.getElementById('num_cuotas_input').value = numCuotas;
 
-    console.log('✅ Cuotas generadas con redondeo inteligente!');
-    console.log('📊 Capital sin redondeo:', montoCapitalSinRedondeo);
-    console.log('📊 Capital redondeado:', montoCapitalRedondeado);
-    console.log('📊 Diferencia:', (montoCapitalRedondeado - montoCapitalSinRedondeo).toFixed(2));
+    console.log('✅ Vista previa generada (mismo cronograma que el backend)');
+    console.log('📊 Capital por cuota:', capitalPorCuota);
+    console.log('📊 Cronograma de interes:', intereses);
     console.log('📅 Fechas de pago:', fechasPago.map(f => f.toLocaleDateString('es-CO')));
 }
 </script>
