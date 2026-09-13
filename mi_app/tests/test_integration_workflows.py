@@ -1429,3 +1429,51 @@ class PrestamoPorcentajePagadoTests(TestCase):
         self.prestamo.capital_pendiente = Decimal('0')
         self.prestamo.save()
         self.assertEqual(self.prestamo.porcentaje_pagado, Decimal('100'))
+
+
+class EstadisticasSistemaPendienteRealTests(TestCase):
+    """
+    obtener_estadisticas_sistema() calculaba total_pendiente_capital/
+    total_pendiente_credito como (total historico) - (total_pagado que
+    incluye interes+mora) -- eso mezclaba capital puro contra pagos que
+    tambien cubrian interes, y ademas no seguia un abono extraordinario
+    que recalcula el cronograma restante (capital_pendiente/total_pendiente
+    por prestamo ya son la fuente de verdad correcta desde antes en esta
+    sesion). Se cambia a sumar directamente capital_pendiente/
+    total_pendiente de cada prestamo. Ver auditoria de consistencia del
+    motor de interes sobre saldo (2026-09-13).
+    """
+
+    def setUp(self):
+        self.cliente = Cliente.objects.create(nombre="Test Estadisticas Sistema", celular="3000000012", cedula="999888793")
+
+    def test_pagar_solo_interes_no_reduce_el_pendiente_agregado(self):
+        from mi_app.views_core import obtener_estadisticas_sistema
+
+        prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+        Cuota.objects.create(
+            prestamo=prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('500000'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('0'),
+            monto_pagado_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+
+        stats = obtener_estadisticas_sistema()
+
+        # Pagar solo interes (sin abonar capital) no debe reducir el
+        # capital pendiente agregado del sistema -- debe seguir siendo
+        # el capital_pendiente real (500000), no 500000 menos lo pagado
+        # de interes (462500, el bug viejo).
+        self.assertEqual(stats['dinero']['total_pendiente_capital'], 500000.0)

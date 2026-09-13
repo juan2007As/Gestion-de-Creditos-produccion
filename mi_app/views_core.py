@@ -373,13 +373,33 @@ def obtener_estadisticas_sistema():
     
     # DINERO
     # BUG FIX #1: Calcular AMBOS capital y capital+interés para claridad
+    # (estos dos son volumen HISTORICO total prestado, no saldo vivo)
     capital_prestado = Decimal('0')  # ← Solo capital
     total_credito = Decimal('0')     # ← Capital + Interés
-    
+
+    # Pendiente REAL vivo de cada prestamo -- capital_pendiente y
+    # total_pendiente ya son la fuente de verdad correcta por prestamo
+    # (ver Prestamo.total_pendiente), asi que se suman directo en vez de
+    # reconstruirlos restando total_pagado de un total historico estatico
+    # -- esa resta mezclaba capital puro contra pagos que tambien incluian
+    # interes/mora, y ademas no seguia un abono extraordinario que
+    # recalcula el cronograma restante.
+    total_pendiente_capital = Decimal('0')
+    total_pendiente_credito = Decimal('0')
+
+    from mi_app.services.amortizacion_service import interes_pendiente_total_desde_cuotas
+
     for p in prestamos:
         capital_prestado += Decimal(str(p.monto_total))  # ← Ensure Decimal type
         total_credito += Decimal(str(p.total_credito))   # ← Convert float property to Decimal
-    
+        total_pendiente_capital += p.capital_pendiente
+        # p.cuotas.all() reutiliza el cache de prefetch_related (sin
+        # queries nuevas); p.total_pendiente (la property) SI generaria
+        # N+1 aqui porque su .exclude()/.filter() interno no usa ese cache.
+        cuotas_prefetched = list(p.cuotas.all())
+        interes_pendiente = interes_pendiente_total_desde_cuotas(p, cuotas_prefetched)
+        total_pendiente_credito += p.capital_pendiente + interes_pendiente
+
     # ✅ OPTIMIZACIÓN N+1 #2: Usar agregación en lugar de loops sobre propiedades
     from django.db.models import Sum
     from django.db.models.functions import Coalesce
@@ -389,9 +409,6 @@ def obtener_estadisticas_sistema():
         mora=Coalesce(Sum('monto_pagado_mora'), Decimal('0'))
     )
     total_pagado = total_pagado_result['principal'] + total_pagado_result['interes'] + total_pagado_result['mora']
-    
-    total_pendiente_capital = capital_prestado - total_pagado
-    total_pendiente_credito = total_credito - total_pagado
     
     # CUOTAS
     total_cuotas = cuotas.count()

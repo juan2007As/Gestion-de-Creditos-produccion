@@ -115,6 +115,33 @@ def calcular_interes_pendiente_actual(prestamo, cuota):
     return cuota.interes_normal + prestamo.interes_acumulado_sin_pagar
 
 
+def interes_pendiente_total_desde_cuotas(prestamo, cuotas):
+    """
+    Igual que Prestamo._interes_pendiente_total_credito()/
+    PrestamoRapido._interes_pendiente_total_credito() (interes de la cuota
+    activa + todas las futuras aun no TRASLADADA), pero operando en
+    Python puro sobre un iterable de cuotas YA CARGADO (por ejemplo via
+    prefetch_related), sin lanzar queries nuevas. Usar esta version en
+    contextos masivos/agregados (reportes sobre muchos prestamos a la
+    vez) donde llamar la property de cada instancia causaria N+1 -- el
+    .exclude()/.filter() de la property no reutiliza el cache de
+    prefetch_related, cada llamada golpea la base de datos de nuevo.
+    """
+    activas = sorted(
+        (c for c in cuotas if c.estado != 'TRASLADADA'),
+        key=lambda c: c.numero_cuota,
+    )
+    if not activas:
+        return prestamo.interes_acumulado_sin_pagar
+    cuota_activa = activas[0]
+    interes_pendiente_actual = cuota_activa.interes_normal + prestamo.interes_acumulado_sin_pagar
+    interes_futuro = sum(
+        (c.interes_normal for c in activas if c.numero_cuota > cuota_activa.numero_cuota),
+        Decimal('0'),
+    )
+    return interes_pendiente_actual + interes_futuro
+
+
 def aplicar_pago(prestamo, cuota, capital_pagado, interes_pagado, mora_pagada):
     """
     Aplica un pago ya validado sobre `prestamo` y `cuota` (muta los objetos
