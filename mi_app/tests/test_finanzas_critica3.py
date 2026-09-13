@@ -36,7 +36,8 @@ class FinancialAuditTests(TestCase):
             fecha_inicio=date.today(),
             fecha_fin_estimada=date.today() + timedelta(days=60),
             tipo_pago='QUINCENAL',
-            estado='ACTIVO'
+            estado='ACTIVO',
+            capital_pendiente=Decimal('5000.00'),
         )
         
         self.cuota = Cuota.objects.create(
@@ -118,7 +119,10 @@ class FinancialAuditTests(TestCase):
     
     def test_cuota_pagada_parcialmente_actualiza_estado(self):
         """Test: Cuota con pago parcial se marca como PARCIALMENTE_PAGADA"""
-        # Pago parcial
+        # Pago parcial -- el porcentaje se calcula sobre el progreso real
+        # del prestamo (capital_pendiente), no sobre la cuota puntual.
+        self.prestamo.capital_pendiente = Decimal('2500.00')
+        self.prestamo.save()
         self.cuota.monto_pagado_principal = Decimal('2500.00')
         self.cuota.monto_pendiente = Decimal('2500.00')
         self.cuota.fecha_pago_esperada = date.today()  # Sin vencer
@@ -131,7 +135,9 @@ class FinancialAuditTests(TestCase):
     
     def test_cuota_completamente_pagada(self):
         """Test: Cuota completamente pagada se marca como PAGADA"""
-        # Pago completo
+        # Pago completo -- el capital del prestamo llega a cero
+        self.prestamo.capital_pendiente = Decimal('0.00')
+        self.prestamo.save()
         self.cuota.monto_pagado_principal = Decimal('5000.00')
         self.cuota.monto_pendiente = Decimal('0.00')
         self.cuota.monto_pagado_interes = Decimal('625.00')
@@ -163,7 +169,9 @@ class FinancialAuditTests(TestCase):
     
     def test_porcentaje_pagado_correcto(self):
         """Test: Porcentaje pagado se calcula correctamente"""
-        # 30% pagado
+        # 30% pagado del prestamo (capital_pendiente baja a 3500 de 5000)
+        self.prestamo.capital_pendiente = Decimal('3500.00')
+        self.prestamo.save()
         self.cuota.monto_pagado_principal = Decimal('1500.00')
         self.cuota.save()
         

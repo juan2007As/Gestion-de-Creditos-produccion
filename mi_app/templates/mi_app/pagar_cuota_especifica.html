@@ -225,13 +225,13 @@
                                     placeholder="0.00"
                                     step="0.01"
                                     min="0"
-                                    max="{{ detalles.pendiente_principal }}"
+                                    max="{{ capital_pendiente }}"
                                     value="0"
                                     style="border-left: none; border-radius: 0 0.375rem 0.375rem 0; flex: 1;"
                                 >
                             </div>
                             <button type="button" class="btn btn-sm btn-link text-primary p-0 mt-1" onclick="adicionarPrincipal()">
-                                Máximo: {{ detalles.pendiente_principal|formato_colombiano }}
+                                Máximo: {{ capital_pendiente|formato_colombiano }}
                             </button>
                         </div>
 
@@ -248,13 +248,13 @@
                                     placeholder="0.00"
                                     step="0.01"
                                     min="0"
-                                    max="{{ detalles.pendiente_interes }}"
+                                    max="{{ interes_pendiente }}"
                                     value="0"
                                     style="border-left: none; border-radius: 0 0.375rem 0.375rem 0; flex: 1;"
                                 >
                             </div>
                             <button type="button" class="btn btn-sm btn-link text-warning p-0 mt-1" onclick="adicionarInteres()">
-                                Máximo: {{ detalles.pendiente_interes|formato_colombiano }}
+                                Máximo: {{ interes_pendiente|formato_colombiano }}
                             </button>
                         </div>
 
@@ -425,8 +425,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const resumenT = document.getElementById('resumen_total');
 
     // Valores máximos (forzar punto decimal para JavaScript)
-    const maxPrincipal = {{ detalles.pendiente_principal|stringformat:".2f"|default:0 }};
-    const maxInteres = {{ detalles.pendiente_interes|stringformat:".2f"|default:0 }};
+    const maxPrincipal = {{ capital_pendiente|stringformat:".2f"|default:0 }};
+    const maxInteres = {{ interes_pendiente|stringformat:".2f"|default:0 }};
     const maxMora = {{ detalles.pendiente_mora|stringformat:".2f"|default:0 }};
 
     function formatearMoneda(valor) {
@@ -448,7 +448,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Funciones para botones rápidos (ADITIVOS - suman en lugar de reemplazar)
 function adicionarPrincipal() {
-    const maxP = {{ detalles.pendiente_principal|stringformat:".2f"|default:0 }};
+    const maxP = {{ capital_pendiente|stringformat:".2f"|default:0 }};
     const actual = parseFloat(document.getElementById('monto_principal').value) || 0;
     const nuevo = Math.min(actual + maxP, maxP);
     document.getElementById('monto_principal').value = nuevo.toFixed(2);
@@ -456,7 +456,7 @@ function adicionarPrincipal() {
 }
 
 function adicionarInteres() {
-    const maxI = {{ detalles.pendiente_interes|stringformat:".2f"|default:0 }};
+    const maxI = {{ interes_pendiente|stringformat:".2f"|default:0 }};
     const actual = parseFloat(document.getElementById('monto_interes').value) || 0;
     const nuevo = Math.min(actual + maxI, maxI);
     document.getElementById('monto_interes').value = nuevo.toFixed(2);
@@ -472,8 +472,8 @@ function adicionarMora() {
 }
 
 function rellenarAmbos() {
-    const maxP = {{ detalles.pendiente_principal|stringformat:".2f"|default:0 }};
-    const maxI = {{ detalles.pendiente_interes|stringformat:".2f"|default:0 }};
+    const maxP = {{ capital_pendiente|stringformat:".2f"|default:0 }};
+    const maxI = {{ interes_pendiente|stringformat:".2f"|default:0 }};
     document.getElementById('monto_principal').value = maxP.toFixed(2);
     document.getElementById('monto_interes').value = maxI.toFixed(2);
     document.getElementById('monto_mora').value = 0;
@@ -481,7 +481,7 @@ function rellenarAmbos() {
 }
 
 function rellenarSoloPrincipal() {
-    const max = {{ detalles.pendiente_principal|stringformat:".2f"|default:0 }};
+    const max = {{ capital_pendiente|stringformat:".2f"|default:0 }};
     document.getElementById('monto_principal').value = max.toFixed(2);
     document.getElementById('monto_interes').value = 0;
     document.getElementById('monto_mora').value = 0;
@@ -489,7 +489,7 @@ function rellenarSoloPrincipal() {
 }
 
 function rellenarSoloInteres() {
-    const max = {{ detalles.pendiente_interes|stringformat:".2f"|default:0 }};
+    const max = {{ interes_pendiente|stringformat:".2f"|default:0 }};
     document.getElementById('monto_principal').value = 0;
     document.getElementById('monto_interes').value = max.toFixed(2);
     document.getElementById('monto_mora').value = 0;

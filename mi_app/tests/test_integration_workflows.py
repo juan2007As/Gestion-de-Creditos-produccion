@@ -578,3 +578,65 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
         cuotas = list(prestamo.cuotas_rapidas.order_by('numero_cuota'))
         self.assertEqual(cuotas[0].interes_normal, Decimal('23000'))  # 300000 * 15% / 2 = 22500, redondea a 23000
         self.assertEqual(cuotas[1].interes_normal, Decimal('0'))
+
+
+class PagarCuotaEspecificaMotorNuevoTests(TestCase):
+    """pagar_cuota_especifica debe usar los topes dinamicos del prestamo (ver Task 8 del plan)."""
+
+    def setUp(self):
+        self.client_obj = Client()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        for codigo in ('prestamo.create', 'pago.create'):
+            perm, _ = Permiso.objects.get_or_create(
+                codigo=codigo,
+                defaults={'descripcion': codigo, 'activo': True}
+            )
+            RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+
+        self.user = User.objects.create_user(
+            username='testuser_pago_motor',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+        self.client_obj.login(username='testuser_pago_motor', password='testpass123')  # pragma: allowlist secret
+
+    def test_puede_pagar_mas_capital_del_que_decia_la_cuota_vieja(self):
+        # Reproduce la queja original: prestamo de 200.000, el operario
+        # quiere poder abonar mucho mas capital del que la cuota puntual
+        # decia (topada antes a un pedacito fijo).
+        cliente = Cliente.objects.create(nombre="Test Abono Grande", celular="3000000002", cedula="999888779")
+        prestamo = Prestamo.objects.create(
+            cliente=cliente,
+            monto_total=Decimal('200000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('200000'),
+        )
+        cuota = Cuota.objects.create(
+            prestamo=prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('50000'),
+            monto_pendiente=Decimal('200000'),
+            interes_normal=Decimal('15000'),  # 200000 * 15% / 2
+            monto_pendiente_interes=Decimal('15000'),
+            fecha_pago_esperada=date.today() + timedelta(days=16),
+        )
+
+        response = self.client_obj.post(
+            reverse('pagar_cuota_especifica', kwargs={'cuota_id': cuota.id}),
+            {'monto_principal': '150000', 'monto_interes': '15000', 'monto_mora': '0'},
+        )
+
+        prestamo.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('error', response.context or {})
+        self.assertEqual(prestamo.capital_pendiente, Decimal('50000'))

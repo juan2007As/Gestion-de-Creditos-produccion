@@ -691,13 +691,16 @@ class Cuota(models.Model):
         """
         from datetime import date
         
-        # Calcular porcentaje pagado
-        if self.monto_original > 0:
-            pagado_total = self.monto_pagado_principal
-            self.porcentaje_pagado = (pagado_total / self.monto_original) * 100
+        # Calcular porcentaje pagado sobre el progreso real del prestamo
+        # (el capital vive en prestamo.capital_pendiente, no en monto_original
+        # de la cuota -- ver docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md).
+        if self.prestamo.monto_total > 0:
+            pagado_total = self.prestamo.monto_total - self.prestamo.capital_pendiente
+            porcentaje = (pagado_total / self.prestamo.monto_total) * 100
+            self.porcentaje_pagado = max(Decimal('0'), min(porcentaje, Decimal('100')))
         else:
             self.porcentaje_pagado = 0
-        
+
         # Determinar estado
         # PRIMERO: Si monto_pendiente = 0, entonces está PAGADA (mayor prioridad)
         if self.monto_pendiente <= 0 and self.monto_pendiente_interes <= 0:
@@ -733,12 +736,15 @@ class Cuota(models.Model):
             mora_calculada = self.calcular_mora_diaria()
             self.interes_mora_acumulado = mora_calculada
         
-        # PASO 2: Auto-actualizar estado y porcentaje pagado
-        if self.monto_original > 0:
-            self.porcentaje_pagado = (self.monto_pagado_principal / self.monto_original) * 100
+        # PASO 2: Auto-actualizar estado y porcentaje pagado sobre el
+        # progreso real del prestamo (ver actualizar_estado más arriba).
+        if self.prestamo.monto_total > 0:
+            pagado_total = self.prestamo.monto_total - self.prestamo.capital_pendiente
+            porcentaje = (pagado_total / self.prestamo.monto_total) * 100
+            self.porcentaje_pagado = max(Decimal('0'), min(porcentaje, Decimal('100')))
         else:
             self.porcentaje_pagado = 0
-        
+
         # Determinar estado automáticamente
         if self.monto_pendiente <= 0 and self.monto_pendiente_interes <= 0:
             self.estado = 'PAGADA'

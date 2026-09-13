@@ -1352,120 +1352,97 @@ def detalles_cuota(request, cuota_id):
 @login_required(login_url='login')
 def pagar_cuota_especifica(request, cuota_id):
     """
-    BUG #7 FIX: Nueva vista dedicada al pago de una cuota ESPECÍFICA.
-    Interfaz limpia y enfocada, mostrando SOLO los detalles de esa cuota.
-    
-    GET: Muestra formulario de pago
-    POST: Procesa el pago
+    Vista dedicada al pago de una cuota especifica, con capital/interes/mora
+    en 3 campos manuales separados. Los topes de referencia se calculan de
+    forma dinamica sobre el capital_pendiente real del prestamo (no un
+    pedacito fijo por cuota) -- ver docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md
     """
     from .models import Pago
-    
+    from mi_app.services.amortizacion_service import calcular_interes_pendiente_actual, aplicar_pago
+    from django.db import transaction
+
     cuota = get_object_or_404(Cuota, id=cuota_id)
     prestamo = cuota.prestamo
     cliente = prestamo.cliente
-    detalles = cuota.detalles_completos()
-    
+    interes_pendiente = calcular_interes_pendiente_actual(prestamo, cuota)
+    mora_actual = cuota.calcular_mora_diaria()
+
     if request.method == 'POST':
         monto_principal = Decimal(request.POST.get('monto_principal', '0').strip() or '0')
         monto_interes = Decimal(request.POST.get('monto_interes', '0').strip() or '0')
         monto_mora = Decimal(request.POST.get('monto_mora', '0').strip() or '0')
         referencia = request.POST.get('referencia', '')
         notas = request.POST.get('notas', '')
-        
+
         monto_total = monto_principal + monto_interes + monto_mora
-        
-        # Validaciones
+
         if monto_total <= 0:
             contexto = {
-                'cuota': cuota,
-                'prestamo': prestamo,
-                'cliente': cliente,
-                'detalles': detalles,
+                'cuota': cuota, 'prestamo': prestamo, 'cliente': cliente,
+                'capital_pendiente': prestamo.capital_pendiente,
+                'interes_pendiente': interes_pendiente, 'mora_actual': mora_actual,
                 'error': '❌ El monto debe ser mayor a $0',
             }
             return render(request, 'mi_app/pagar_cuota_especifica.html', contexto)
-        
-        # Validar que no supere lo pendiente
-        if monto_principal > cuota.monto_pendiente:
+
+        if monto_principal > prestamo.capital_pendiente:
             contexto = {
-                'cuota': cuota,
-                'prestamo': prestamo,
-                'cliente': cliente,
-                'detalles': detalles,
-                'error': f'❌ Principal pendiente: ${cuota.monto_pendiente}',
+                'cuota': cuota, 'prestamo': prestamo, 'cliente': cliente,
+                'capital_pendiente': prestamo.capital_pendiente,
+                'interes_pendiente': interes_pendiente, 'mora_actual': mora_actual,
+                'error': f'❌ Capital pendiente del préstamo: ${prestamo.capital_pendiente}',
             }
             return render(request, 'mi_app/pagar_cuota_especifica.html', contexto)
-        
-        if monto_interes > cuota.monto_pendiente_interes:
+
+        if monto_interes > interes_pendiente:
             contexto = {
-                'cuota': cuota,
-                'prestamo': prestamo,
-                'cliente': cliente,
-                'detalles': detalles,
-                'error': f'❌ Interés pendiente: ${cuota.monto_pendiente_interes}',
+                'cuota': cuota, 'prestamo': prestamo, 'cliente': cliente,
+                'capital_pendiente': prestamo.capital_pendiente,
+                'interes_pendiente': interes_pendiente, 'mora_actual': mora_actual,
+                'error': f'❌ Interés pendiente: ${interes_pendiente}',
             }
             return render(request, 'mi_app/pagar_cuota_especifica.html', contexto)
-        
-        # Crear registro de pago
-        pago = Pago.objects.create(
-            cuota=cuota,
-            monto_pagado=monto_total,
-            monto_principal=monto_principal,
-            monto_interes=monto_interes,
-            monto_mora=monto_mora,
-            usuario_registra=request.user.username,  # ✅ SOLUCIONADO: Obtener del usuario logueado
-            referencia=referencia,
-            notas=notas
-        )
-        
-        # Actualizar cuota (igual que en registrar_pago_mejorado)
-        cuota.monto_pagado_principal += monto_principal
-        cuota.monto_pagado_interes += monto_interes
-        cuota.monto_pagado_mora += monto_mora
-        cuota.monto_pendiente = max(cuota.monto_original - cuota.monto_pagado_principal, Decimal('0'))
-        cuota.monto_pendiente_interes = max(cuota.interes_normal - cuota.monto_pagado_interes, Decimal('0'))
-        
-        if cuota.monto_pendiente == 0 and cuota.monto_pendiente_interes == 0:
-            cuota.pagado = True
-            cuota.fecha_pago_real = date.today()
-        
-        cuota.actualizar_estado()
-        cuota.save()  # IMPORTANTE: Guardar los cambios en la BD
-        
-        # Actualizar préstamo si todas las cuotas están pagadas
-        if prestamo.cuotas.filter(pagado=False).count() == 0:
-            prestamo.estado = 'COMPLETADO'
+
+        with transaction.atomic():
+            resumen = aplicar_pago(prestamo, cuota, monto_principal, monto_interes, monto_mora)
+
+            pago = Pago.objects.create(
+                cuota=cuota,
+                monto_pagado=monto_total,
+                monto_principal=monto_principal,
+                monto_interes=monto_interes,
+                monto_mora=monto_mora,
+                usuario_registra=request.user.username,
+                referencia=referencia,
+                notas=notas,
+                capital_antes=resumen['capital_antes'],
+                capital_despues=resumen['capital_despues'],
+            )
+
+            cuota.actualizar_estado()
+            cuota.save()
             prestamo.save()
-        
-        # Recargar detalles después del pago para mostrar valores actualizados
+
         detalles = cuota.detalles_completos()
-        
-        # Mostrar comprobante
         contexto = {
-            'pago': pago,
-            'cuota': cuota,
-            'prestamo': prestamo,
-            'cliente': cliente,
+            'pago': pago, 'cuota': cuota, 'prestamo': prestamo, 'cliente': cliente,
             'detalles': detalles,
             'pagos': Pago.objects.filter(cuota=cuota).order_by('-fecha_pago'),
             'comprobante': pago.comprobante_texto(),
             'success': True,
         }
-        
         return render(request, 'mi_app/pagar_cuota_especifica.html', contexto)
-    
+
     else:  # GET
-        # Obtener historial de pagos
         pagos = Pago.objects.filter(cuota=cuota).order_by('-fecha_pago')
-        
+        detalles = cuota.detalles_completos()
         contexto = {
-            'cuota': cuota,
-            'prestamo': prestamo,
-            'cliente': cliente,
-            'detalles': detalles,
-            'pagos': pagos,
+            'cuota': cuota, 'prestamo': prestamo, 'cliente': cliente,
+            'detalles': detalles, 'pagos': pagos,
+            'capital_pendiente': prestamo.capital_pendiente,
+            'interes_pendiente': interes_pendiente,
+            'mora_actual': mora_actual,
         }
-        
         return render(request, 'mi_app/pagar_cuota_especifica.html', contexto)
 
 @require_any_permission('pago.create')
