@@ -769,7 +769,7 @@ def crear_prestamo(request, cliente_id=None):
             if not interes_str:
                 interes_porcentaje = Decimal(str(config.tasa_interes_prestamo_normal))
             
-            from mi_app.services.amortizacion_service import generar_fechas_cuotas, calcular_interes_periodo
+            from mi_app.services.amortizacion_service import generar_fechas_cuotas, generar_cronograma_interes
 
             # Calcular fechas automáticamente: primera ancla a mas de 15 dias
             # del desembolso, siguientes alternando el mismo par (5/20 o 15/30)
@@ -793,13 +793,13 @@ def crear_prestamo(request, cliente_id=None):
             # el capital real vive en prestamo.capital_pendiente (ver spec).
             capital_por_cuota = (monto / Decimal(num_cuotas)).quantize(Decimal('0.01'))
 
-            # Solo la primera cuota tiene interes calculado ya (se conoce el
-            # capital inicial completo); las demas se calculan cuando les
-            # toque ser la cuota actual (Task 8).
-            interes_primera_cuota = calcular_interes_periodo(monto, interes_porcentaje)
+            # Cronograma de interes completo: el interes de las primeras 2
+            # cuotas (1 mes) es capital*tasa/2; cada par siguiente es la
+            # mitad del anterior, fijo, salvo abono extraordinario a capital
+            # (ver _avanzar_a_siguiente_cuota).
+            intereses = generar_cronograma_interes(monto, interes_porcentaje, num_cuotas)
 
-            for i, fecha_pago in enumerate(fechas_pago, 1):
-                interes_cuota = interes_primera_cuota if i == 1 else Decimal('0')
+            for i, (fecha_pago, interes_cuota) in enumerate(zip(fechas_pago, intereses), 1):
                 Cuota.objects.create(
                     prestamo=prestamo,
                     numero_cuota=i,
@@ -1443,7 +1443,7 @@ def pagar_cuota_especifica(request, cuota_id):
                 cuota.actualizar_estado()
                 cuota.save()
             else:
-                _avanzar_a_siguiente_cuota(prestamo, cuota)
+                _avanzar_a_siguiente_cuota(prestamo, cuota, monto_principal)
 
             prestamo.save()
 
@@ -2873,32 +2873,60 @@ def importar_excel(request):
 # FUNCIONES AUXILIARES
 # ===============================================================================
 
-def _avanzar_a_siguiente_cuota(prestamo, cuota_actual):
+def _avanzar_a_siguiente_cuota(prestamo, cuota_actual, capital_pagado):
     """
-    Cuando un pago sobre `cuota_actual` no cierra el prestamo (queda
-    capital o interes pendiente), esa cuota se marca como TRASLADADA -- el
-    saldo ya vive en prestamo.capital_pendiente/interes_acumulado_sin_pagar,
-    no en ella -- y se activa (o crea, si no existia) la siguiente cuota
-    nominal con un snapshot de interes fresco calculado sobre el capital
-    pendiente en este momento. Ver spec seccion 4.2, paso 7.
-    """
-    from mi_app.services.amortizacion_service import calcular_interes_periodo, inferir_par, siguiente_fecha_en_par
+    Cuando un pago sobre `cuota_actual` no cierra el prestamo, esa cuota se
+    marca como TRASLADADA -- el saldo ya vive en
+    prestamo.capital_pendiente/interes_acumulado_sin_pagar, no en ella -- y
+    se activa (o crea, si no existia) la siguiente cuota nominal.
 
-    siguiente = prestamo.cuotas.filter(numero_cuota=cuota_actual.numero_cuota + 1).first()
-    if siguiente is None:
+    El interes de la siguiente cuota NO se recalcula dinamicamente en cada
+    avance: sigue el cronograma fijo armado al crear el prestamo (mismo
+    valor si sigue en el mismo par de cuotas -- 1 mes --, la mitad del
+    anterior si cruza a un par nuevo). Solo si hubo un ABONO EXTRA de
+    capital (capital_pagado > cuota_actual.monto_original, el pedacito
+    nominal de esa cuota puntual) se recalcula desde cero el cronograma de
+    todas las cuotas restantes, arrancando un par nuevo sobre el capital
+    real que queda. Ver docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md.
+    """
+    from mi_app.services.amortizacion_service import generar_cronograma_interes, inferir_par, siguiente_fecha_en_par
+
+    hubo_abono_extra = capital_pagado > cuota_actual.monto_original
+    futuras = list(prestamo.cuotas.filter(numero_cuota__gt=cuota_actual.numero_cuota).order_by('numero_cuota'))
+
+    if hubo_abono_extra:
+        if not futuras:
+            par = inferir_par(cuota_actual.fecha_pago_esperada)
+            nueva_fecha = siguiente_fecha_en_par(cuota_actual.fecha_pago_esperada, par)
+            futuras = [Cuota(prestamo=prestamo, numero_cuota=cuota_actual.numero_cuota + 1, fecha_pago_esperada=nueva_fecha)]
+
+        nuevo_capital_por_cuota = (prestamo.capital_pendiente / len(futuras)).quantize(Decimal('0.01'))
+        nuevos_intereses = generar_cronograma_interes(prestamo.capital_pendiente, prestamo.interes_porcentaje, len(futuras))
+        for cuota_futura, interes in zip(futuras, nuevos_intereses):
+            cuota_futura.monto_original = nuevo_capital_por_cuota
+            cuota_futura.interes_normal = interes
+            cuota_futura.save()
+        siguiente = futuras[0]
+    elif futuras:
+        siguiente = futuras[0]
+    else:
+        # No hubo abono extra pero se acabaron las cuotas nominales --
+        # extender el cronograma continuando el patron fijo (mismo valor si
+        # sigue en el mismo par, mitad si cruza a un par nuevo).
+        mismo_par = cuota_actual.numero_cuota % 2 == 1
+        interes_nuevo = cuota_actual.interes_normal if mismo_par else (cuota_actual.interes_normal / Decimal('2'))
         par = inferir_par(cuota_actual.fecha_pago_esperada)
         nueva_fecha = siguiente_fecha_en_par(cuota_actual.fecha_pago_esperada, par)
         siguiente = Cuota(
             prestamo=prestamo,
             numero_cuota=cuota_actual.numero_cuota + 1,
             monto_original=cuota_actual.monto_original,
+            interes_normal=interes_nuevo,
             fecha_pago_esperada=nueva_fecha,
         )
 
-    nuevo_interes = calcular_interes_periodo(prestamo.capital_pendiente, prestamo.interes_porcentaje)
-    siguiente.interes_normal = nuevo_interes
-    siguiente.monto_pendiente_interes = nuevo_interes + prestamo.interes_acumulado_sin_pagar
     siguiente.monto_pendiente = prestamo.capital_pendiente
+    siguiente.monto_pendiente_interes = siguiente.interes_normal + prestamo.interes_acumulado_sin_pagar
     siguiente.save()
 
     cuota_actual.estado = 'TRASLADADA'
@@ -2907,28 +2935,44 @@ def _avanzar_a_siguiente_cuota(prestamo, cuota_actual):
     cuota_actual.save()
 
 
-def _avanzar_a_siguiente_cuota_rapida(prestamo, cuota_actual):
-    """
-    Igual que _avanzar_a_siguiente_cuota, pero para PrestamoRapido/CuotaRapida.
-    """
-    from mi_app.services.amortizacion_service import calcular_interes_periodo, inferir_par, siguiente_fecha_en_par
+def _avanzar_a_siguiente_cuota_rapida(prestamo, cuota_actual, capital_pagado):
+    """Igual que _avanzar_a_siguiente_cuota, pero para PrestamoRapido/CuotaRapida."""
+    from mi_app.services.amortizacion_service import generar_cronograma_interes, inferir_par, siguiente_fecha_en_par
     from .models import CuotaRapida
 
-    siguiente = prestamo.cuotas_rapidas.filter(numero_cuota=cuota_actual.numero_cuota + 1).first()
-    if siguiente is None:
+    hubo_abono_extra = capital_pagado > cuota_actual.monto_original
+    futuras = list(prestamo.cuotas_rapidas.filter(numero_cuota__gt=cuota_actual.numero_cuota).order_by('numero_cuota'))
+
+    if hubo_abono_extra:
+        if not futuras:
+            par = inferir_par(cuota_actual.fecha_pago_esperada)
+            nueva_fecha = siguiente_fecha_en_par(cuota_actual.fecha_pago_esperada, par)
+            futuras = [CuotaRapida(prestamo_rapido=prestamo, numero_cuota=cuota_actual.numero_cuota + 1, fecha_pago_esperada=nueva_fecha)]
+
+        nuevo_capital_por_cuota = (prestamo.capital_pendiente / len(futuras)).quantize(Decimal('0.01'))
+        nuevos_intereses = generar_cronograma_interes(prestamo.capital_pendiente, prestamo.interes_porcentaje, len(futuras))
+        for cuota_futura, interes in zip(futuras, nuevos_intereses):
+            cuota_futura.monto_original = nuevo_capital_por_cuota
+            cuota_futura.interes_normal = interes
+            cuota_futura.save()
+        siguiente = futuras[0]
+    elif futuras:
+        siguiente = futuras[0]
+    else:
+        mismo_par = cuota_actual.numero_cuota % 2 == 1
+        interes_nuevo = cuota_actual.interes_normal if mismo_par else (cuota_actual.interes_normal / Decimal('2'))
         par = inferir_par(cuota_actual.fecha_pago_esperada)
         nueva_fecha = siguiente_fecha_en_par(cuota_actual.fecha_pago_esperada, par)
         siguiente = CuotaRapida(
             prestamo_rapido=prestamo,
             numero_cuota=cuota_actual.numero_cuota + 1,
             monto_original=cuota_actual.monto_original,
+            interes_normal=interes_nuevo,
             fecha_pago_esperada=nueva_fecha,
         )
 
-    nuevo_interes = calcular_interes_periodo(prestamo.capital_pendiente, prestamo.interes_porcentaje)
-    siguiente.interes_normal = nuevo_interes
-    siguiente.monto_pendiente_interes = nuevo_interes + prestamo.interes_acumulado_sin_pagar
     siguiente.monto_pendiente = prestamo.capital_pendiente
+    siguiente.monto_pendiente_interes = siguiente.interes_normal + prestamo.interes_acumulado_sin_pagar
     siguiente.save()
 
     cuota_actual.estado = 'TRASLADADA'
@@ -3038,7 +3082,7 @@ def crear_prestamo_rapido(request):
                 if num_cuotas < 1:
                     num_cuotas = 1
 
-                from mi_app.services.amortizacion_service import generar_fechas_cuotas, calcular_interes_periodo
+                from mi_app.services.amortizacion_service import generar_fechas_cuotas, generar_cronograma_interes
 
                 fecha_inicio = date.today()
                 fechas_pago = generar_fechas_cuotas(fecha_inicio, num_cuotas)
@@ -3050,10 +3094,9 @@ def crear_prestamo_rapido(request):
                 prestamo_rapido.save(update_fields=['capital_pendiente'])
 
                 capital_por_cuota = (capital_total / Decimal(num_cuotas)).quantize(Decimal('0.01'))
-                interes_primera_cuota = calcular_interes_periodo(capital_total, tasa)
+                intereses = generar_cronograma_interes(capital_total, tasa, num_cuotas)
 
-                for i, fecha_pago in enumerate(fechas_pago, 1):
-                    interes_cuota = interes_primera_cuota if i == 1 else Decimal('0')
+                for i, (fecha_pago, interes_cuota) in enumerate(zip(fechas_pago, intereses), 1):
                     CuotaRapida.objects.create(
                         prestamo_rapido=prestamo_rapido,
                         numero_cuota=i,
@@ -3266,7 +3309,7 @@ def registrar_pago_rapido(request, cuota_id):
                 else:
                     if prestamo.capital_pendiente < prestamo.monto:
                         prestamo.estado = 'PARCIALMENTE_PAGADO'
-                    _avanzar_a_siguiente_cuota_rapida(prestamo, cuota)
+                    _avanzar_a_siguiente_cuota_rapida(prestamo, cuota, capital_a_pagar)
 
                 prestamo.save()
 

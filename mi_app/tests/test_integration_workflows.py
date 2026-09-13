@@ -537,7 +537,7 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
         )
         self.client_obj.login(username='testuser_motor', password='testpass123')  # pragma: allowlist secret
 
-    def test_crear_prestamo_setea_capital_pendiente_y_solo_primera_cuota_con_interes(self):
+    def test_crear_prestamo_setea_capital_pendiente_y_cronograma_completo_de_interes(self):
         cliente = Cliente.objects.create(nombre="Test Motor Nuevo", celular="3000000000", cedula="999888777")
 
         response = self.client_obj.post(reverse('crear_prestamo'), {
@@ -553,10 +553,12 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
 
         cuotas = list(prestamo.cuotas.order_by('numero_cuota'))
         self.assertEqual(len(cuotas), 4)
-        self.assertEqual(cuotas[0].interes_normal, Decimal('38000'))  # 500000 * 15% / 2 = 37500, redondea a 38000
-        self.assertEqual(cuotas[1].interes_normal, Decimal('0'))  # todavia no calculada
-        self.assertEqual(cuotas[2].interes_normal, Decimal('0'))
-        self.assertEqual(cuotas[3].interes_normal, Decimal('0'))
+        # Cronograma completo desde la creacion: base=500000*15%/2=37500 para
+        # el primer par (cuotas 1-2); el par siguiente (3-4) es la mitad.
+        self.assertEqual(cuotas[0].interes_normal, Decimal('37500.00'))
+        self.assertEqual(cuotas[1].interes_normal, Decimal('37500.00'))
+        self.assertEqual(cuotas[2].interes_normal, Decimal('18750.00'))
+        self.assertEqual(cuotas[3].interes_normal, Decimal('18750.00'))
 
         # Regresion: las cuotas 2-4 nacen con pendiente=0 porque todavia no
         # les toca su turno (no porque ya se pagaron) -- no deben marcarse
@@ -585,11 +587,13 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
         self.assertEqual(prestamo.capital_pendiente, Decimal('300000'))
 
         cuotas = list(prestamo.cuotas_rapidas.order_by('numero_cuota'))
-        self.assertEqual(cuotas[0].interes_normal, Decimal('23000'))  # 300000 * 15% / 2 = 22500, redondea a 23000
-        self.assertEqual(cuotas[1].interes_normal, Decimal('0'))
+        # 300000 * 15% / 2 = 22500, sin redondeo; ambas cuotas son del mismo
+        # par (1 mes) asi que comparten el mismo interes.
+        self.assertEqual(cuotas[0].interes_normal, Decimal('22500.00'))
+        self.assertEqual(cuotas[1].interes_normal, Decimal('22500.00'))
 
-        # Regresion: la cuota 2 nace en 0 porque no le toca su turno, no
-        # porque ya se pago.
+        # Regresion: la cuota 2 no debe marcarse sola como pagada solo por
+        # tener capital pendiente en 0 (todavia no le toca su turno).
         self.assertFalse(cuotas[1].pagado)
         self.assertNotEqual(cuotas[1].estado, 'PAGADA')
 
@@ -827,8 +831,8 @@ class AvanzarCuotaTests(TestCase):
             numero_cuota=1,
             monto_original=Decimal('125000'),
             monto_pendiente=Decimal('500000'),
-            interes_normal=Decimal('38000'),
-            monto_pendiente_interes=Decimal('38000'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('37500'),
             fecha_pago_esperada=date.today() + timedelta(days=17),
         )
 
@@ -838,25 +842,27 @@ class AvanzarCuotaTests(TestCase):
         request.user = self.user
         return pagar_cuota_especifica(request, cuota_id)
 
-    def test_pago_solo_interes_activa_siguiente_cuota_existente(self):
+    def test_pago_solo_interes_mantiene_el_interes_de_la_siguiente_cuota_del_mismo_par(self):
+        # Cuotas 1 y 2 son el mismo "mes" (par 0) -- sin abono extra, el
+        # interes de la cuota 2 no se recalcula, sigue el cronograma fijo.
         self.cuota2 = Cuota.objects.create(
             prestamo=self.prestamo,
             numero_cuota=2,
             monto_original=Decimal('125000'),
             monto_pendiente=Decimal('0'),
-            interes_normal=Decimal('0'),
-            monto_pendiente_interes=Decimal('0'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('37500'),
             fecha_pago_esperada=date.today() + timedelta(days=32),
         )
 
-        response = self._pagar(self.cuota1.id, {'monto_principal': '0', 'monto_interes': '38000', 'monto_mora': '0'})
+        response = self._pagar(self.cuota1.id, {'monto_principal': '0', 'monto_interes': '37500', 'monto_mora': '0'})
         self.assertEqual(response.status_code, 200)
 
         self.prestamo.refresh_from_db()
         self.cuota1.refresh_from_db()
         self.cuota2.refresh_from_db()
 
-        # El capital no bajo (solo se pago interes)
+        # El capital no bajo (solo se pago interes, sin abono extra)
         self.assertEqual(self.prestamo.capital_pendiente, Decimal('500000'))
 
         # La cuota 1 quedo trasladada
@@ -864,13 +870,13 @@ class AvanzarCuotaTests(TestCase):
         self.assertEqual(self.cuota1.monto_pendiente, Decimal('0'))
         self.assertEqual(self.cuota1.monto_pendiente_interes, Decimal('0'))
 
-        # La cuota 2 se activo con interes fresco sobre el mismo capital
-        self.assertEqual(self.cuota2.interes_normal, Decimal('38000'))  # 500000*15%/2=37500->38000
-        self.assertEqual(self.cuota2.monto_pendiente_interes, Decimal('38000'))
+        # La cuota 2 (mismo par) mantiene su interes -- no se recalcula
+        self.assertEqual(self.cuota2.interes_normal, Decimal('37500'))
+        self.assertEqual(self.cuota2.monto_pendiente_interes, Decimal('37500'))
         self.assertEqual(self.cuota2.monto_pendiente, Decimal('500000'))
 
     def test_pago_solo_interes_crea_cuota_nueva_si_no_hay_siguiente(self):
-        response = self._pagar(self.cuota1.id, {'monto_principal': '0', 'monto_interes': '38000', 'monto_mora': '0'})
+        response = self._pagar(self.cuota1.id, {'monto_principal': '0', 'monto_interes': '37500', 'monto_mora': '0'})
         self.assertEqual(response.status_code, 200)
 
         self.cuota1.refresh_from_db()
@@ -878,11 +884,49 @@ class AvanzarCuotaTests(TestCase):
 
         self.assertIsNotNone(nueva_cuota)
         self.assertEqual(self.cuota1.estado, 'TRASLADADA')
-        self.assertEqual(nueva_cuota.interes_normal, Decimal('38000'))
+        # Cuota 1 es numero impar (primera de su par) -> la 2 sigue en el
+        # mismo par, mismo interes (sin abono extra).
+        self.assertEqual(nueva_cuota.interes_normal, Decimal('37500'))
         self.assertEqual(nueva_cuota.fecha_pago_esperada, self.cuota1.fecha_pago_esperada + timedelta(days=15))
 
+    def test_abono_extra_recalcula_el_cronograma_restante_ejemplo_del_cliente(self):
+        # Reproduce el ejemplo confirmado: 500000 al 15%, con 6 cuotas.
+        # Cuotas 1-2: 37500. Abono extra en la cuota 2 deja 200000 de
+        # capital real. Cuotas 3-4 deben recalcularse a 15000 (200000*15%/2)
+        # y cuotas 5-6 a 7500 (la mitad), con capital por cuota = 200000/4=50000.
+        for n in range(2, 7):
+            Cuota.objects.create(
+                prestamo=self.prestamo,
+                numero_cuota=n,
+                monto_original=Decimal('83333.33'),
+                interes_normal=Decimal('37500') if n == 2 else Decimal('18750'),
+                fecha_pago_esperada=date.today() + timedelta(days=17 + 15 * (n - 1)),
+            )
+
+        # Pago sobre la cuota 2: 300000 de capital (mucho mas que su
+        # pedacito nominal ~83333) + su interes de 37500 -> abono extra.
+        response = self._pagar(self.prestamo.cuotas.get(numero_cuota=2).id, {
+            'monto_principal': '300000', 'monto_interes': '37500', 'monto_mora': '0',
+        })
+        self.assertEqual(response.status_code, 200)
+
+        self.prestamo.refresh_from_db()
+        self.assertEqual(self.prestamo.capital_pendiente, Decimal('200000'))
+
+        cuota3 = self.prestamo.cuotas.get(numero_cuota=3)
+        cuota4 = self.prestamo.cuotas.get(numero_cuota=4)
+        cuota5 = self.prestamo.cuotas.get(numero_cuota=5)
+        cuota6 = self.prestamo.cuotas.get(numero_cuota=6)
+
+        for c in (cuota3, cuota4, cuota5, cuota6):
+            self.assertEqual(c.monto_original, Decimal('50000.00'))
+        self.assertEqual(cuota3.interes_normal, Decimal('15000.00'))
+        self.assertEqual(cuota4.interes_normal, Decimal('15000.00'))
+        self.assertEqual(cuota5.interes_normal, Decimal('7500.00'))
+        self.assertEqual(cuota6.interes_normal, Decimal('7500.00'))
+
     def test_pago_que_cierra_prestamo_no_crea_cuota_nueva(self):
-        response = self._pagar(self.cuota1.id, {'monto_principal': '500000', 'monto_interes': '38000', 'monto_mora': '0'})
+        response = self._pagar(self.cuota1.id, {'monto_principal': '500000', 'monto_interes': '37500', 'monto_mora': '0'})
         self.assertEqual(response.status_code, 200)
 
         self.prestamo.refresh_from_db()
@@ -895,7 +939,7 @@ class AvanzarCuotaTests(TestCase):
 
     def test_pagar_cuota_trasladada_redirige_a_la_activa(self):
         # Primer pago: solo interes, deja la cuota 1 trasladada y crea la cuota 2
-        self._pagar(self.cuota1.id, {'monto_principal': '0', 'monto_interes': '38000', 'monto_mora': '0'})
+        self._pagar(self.cuota1.id, {'monto_principal': '0', 'monto_interes': '37500', 'monto_mora': '0'})
         self.cuota1.refresh_from_db()
         nueva_cuota = self.prestamo.cuotas.filter(numero_cuota=2).first()
 
@@ -958,15 +1002,15 @@ class AvanzarCuotaRapidaTests(TestCase):
             numero_cuota=1,
             monto_original=Decimal('150000'),
             monto_pendiente=Decimal('300000'),
-            interes_normal=Decimal('23000'),
-            monto_pendiente_interes=Decimal('23000'),
+            interes_normal=Decimal('22500'),
+            monto_pendiente_interes=Decimal('22500'),
             fecha_pago_esperada=date.today() + timedelta(days=17),
         )
 
-    def test_pago_solo_interes_activa_siguiente_cuota_y_crea_nueva(self):
+    def test_pago_solo_interes_mantiene_interes_y_crea_nueva_cuota(self):
         response = self.client_obj.post(
             reverse('registrar_pago_cuota_rapida', kwargs={'cuota_id': self.cuota1.id}),
-            {'monto_pagado': '23000', 'usuario_registra': 'admin'},
+            {'monto_pagado': '22500', 'usuario_registra': 'admin'},
         )
         self.assertEqual(response.status_code, 302)
 
@@ -978,13 +1022,14 @@ class AvanzarCuotaRapidaTests(TestCase):
         self.assertEqual(self.prestamo.capital_pendiente, Decimal('300000'))
         self.assertEqual(self.cuota1.estado, 'TRASLADADA')
         self.assertIsNotNone(nueva_cuota)
-        self.assertEqual(nueva_cuota.interes_normal, Decimal('23000'))  # 300000*15%/2=22500->23000
+        # Cuota 1 es numero impar -> la 2 sigue en el mismo par, mismo interes
+        self.assertEqual(nueva_cuota.interes_normal, Decimal('22500'))
         self.assertEqual(nueva_cuota.fecha_pago_esperada, self.cuota1.fecha_pago_esperada + timedelta(days=15))
 
     def test_pagar_cuota_rapida_trasladada_redirige_a_la_activa(self):
         self.client_obj.post(
             reverse('registrar_pago_cuota_rapida', kwargs={'cuota_id': self.cuota1.id}),
-            {'monto_pagado': '23000', 'usuario_registra': 'admin'},
+            {'monto_pagado': '22500', 'usuario_registra': 'admin'},
         )
         from mi_app.models import CuotaRapida
         nueva_cuota = CuotaRapida.objects.filter(prestamo_rapido=self.prestamo, numero_cuota=2).first()
@@ -994,6 +1039,33 @@ class AvanzarCuotaRapidaTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.assertIn(str(nueva_cuota.id), response.url)
+
+    def test_abono_extra_recalcula_cronograma_restante(self):
+        from mi_app.models import CuotaRapida
+
+        self.cuota2 = CuotaRapida.objects.create(
+            prestamo_rapido=self.prestamo,
+            numero_cuota=2,
+            monto_original=Decimal('150000'),
+            interes_normal=Decimal('22500'),
+            fecha_pago_esperada=date.today() + timedelta(days=32),
+        )
+
+        # Pago sobre cuota 1: 200000 de capital (mucho mas que su pedacito
+        # nominal de 150000) + interes -> abono extra. Capital restante = 100000.
+        response = self.client_obj.post(
+            reverse('registrar_pago_cuota_rapida', kwargs={'cuota_id': self.cuota1.id}),
+            {'monto_pagado': '222500', 'usuario_registra': 'admin'},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        self.prestamo.refresh_from_db()
+        self.assertEqual(self.prestamo.capital_pendiente, Decimal('100000'))
+
+        self.cuota2.refresh_from_db()
+        self.assertEqual(self.cuota2.monto_original, Decimal('100000.00'))
+        # 100000*15%/2 = 7500, sin redondeo
+        self.assertEqual(self.cuota2.interes_normal, Decimal('7500.00'))
 
 
 class PrestamoRapidoSaldoPendienteTests(TestCase):

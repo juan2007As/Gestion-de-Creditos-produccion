@@ -7,26 +7,40 @@ la base de datos ni hacen .save() -- eso lo decide quien las llama.
 """
 import calendar
 from datetime import date, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 TASA_INTERES_DEFAULT = Decimal('15')
 DIAS_ANCLA = (5, 15, 20, 30)
 
 
-def redondear_al_millar(valor):
-    """Redondea un Decimal al millar (1000) mas cercano."""
-    valor = Decimal(valor)
-    return (valor / Decimal('1000')).to_integral_value(rounding=ROUND_HALF_UP) * Decimal('1000')
-
-
 def calcular_interes_periodo(capital_pendiente, tasa_porcentaje=TASA_INTERES_DEFAULT):
     """
-    Interes de una quincena = capital_pendiente * tasa% / 2, redondeado al millar.
+    Interes de una quincena = capital_pendiente * tasa% / 2. Sin redondeo
+    (decision explicita del dueno: "no hay que redondear" -- reemplaza la
+    regla anterior de redondeo al millar).
     """
     capital_pendiente = Decimal(capital_pendiente)
     tasa_porcentaje = Decimal(tasa_porcentaje)
     interes = capital_pendiente * (tasa_porcentaje / Decimal('100')) / Decimal('2')
-    return redondear_al_millar(interes)
+    return interes.quantize(Decimal('0.01'))
+
+
+def generar_cronograma_interes(capital_base, tasa_porcentaje, num_cuotas):
+    """
+    Genera la lista de `num_cuotas` intereses por cuota segun la regla real
+    del negocio: el interes de las primeras 2 cuotas (1 mes) es
+    calcular_interes_periodo(capital_base, tasa); cada PAR siguiente de
+    cuotas es la MITAD del par anterior, de forma fija -- no se recalcula
+    dinamicamente cuota a cuota. Solo un abono extraordinario a capital
+    dispara un recalculo (ver vistas de pago), que vuelve a arrancar esta
+    misma secuencia desde el nuevo capital restante.
+    """
+    base = calcular_interes_periodo(capital_base, tasa_porcentaje)
+    intereses = []
+    for i in range(num_cuotas):
+        par_index = i // 2
+        intereses.append((base / (Decimal('2') ** par_index)).quantize(Decimal('0.01')))
+    return intereses
 
 
 def ultimo_dia_valido_mes(anio, mes, dia):

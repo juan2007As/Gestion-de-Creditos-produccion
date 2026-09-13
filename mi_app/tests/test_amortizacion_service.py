@@ -3,8 +3,8 @@ from datetime import date
 from django.test import SimpleTestCase
 
 from mi_app.services.amortizacion_service import (
-    redondear_al_millar,
     calcular_interes_periodo,
+    generar_cronograma_interes,
     ultimo_dia_valido_mes,
     determinar_par_y_primera_fecha,
     siguiente_fecha_en_par,
@@ -13,28 +13,39 @@ from mi_app.services.amortizacion_service import (
 )
 
 
-class RedondearAlMillarTests(SimpleTestCase):
-    def test_redondea_hacia_arriba_desde_mitad(self):
-        self.assertEqual(redondear_al_millar(Decimal('18750')), Decimal('19000'))
-
-    def test_redondea_hacia_abajo(self):
-        self.assertEqual(redondear_al_millar(Decimal('18400')), Decimal('18000'))
-
-    def test_valor_exacto_no_cambia(self):
-        self.assertEqual(redondear_al_millar(Decimal('37500')), Decimal('38000'))
-
-
 class CalcularInteresPeriodoTests(SimpleTestCase):
-    def test_capital_500000(self):
-        # 500000*15%/2 = 37500 exacto, a mitad de camino entre 37000 y 38000 ->
-        # redondeo consistente (mismo criterio que 18750->19000) sube a 38000.
-        self.assertEqual(calcular_interes_periodo(Decimal('500000')), Decimal('38000'))
+    def test_capital_500000_sin_redondeo(self):
+        # 500000*15%/2 = 37500 exacto -- ya no se redondea al millar (decision
+        # explicita del dueno: "no hay que redondear").
+        self.assertEqual(calcular_interes_periodo(Decimal('500000')), Decimal('37500'))
 
-    def test_capital_250000_redondea_a_19000(self):
-        self.assertEqual(calcular_interes_periodo(Decimal('250000')), Decimal('19000'))
+    def test_capital_250000_sin_redondeo(self):
+        self.assertEqual(calcular_interes_periodo(Decimal('250000')), Decimal('18750'))
 
     def test_capital_cero_da_interes_cero(self):
         self.assertEqual(calcular_interes_periodo(Decimal('0')), Decimal('0'))
+
+
+class GenerarCronogramaInteresTests(SimpleTestCase):
+    def test_ejemplo_del_cliente_500000_15_por_ciento_6_cuotas(self):
+        cronograma = generar_cronograma_interes(Decimal('500000'), Decimal('15'), 6)
+        self.assertEqual(
+            cronograma,
+            [
+                Decimal('37500.00'), Decimal('37500.00'),
+                Decimal('18750.00'), Decimal('18750.00'),
+                Decimal('9375.00'), Decimal('9375.00'),
+            ],
+        )
+
+    def test_cada_par_es_la_mitad_del_anterior_con_num_cuotas_impar(self):
+        cronograma = generar_cronograma_interes(Decimal('400000'), Decimal('15'), 3)
+        # base = 400000*7.5% = 30000
+        self.assertEqual(cronograma, [Decimal('30000.00'), Decimal('30000.00'), Decimal('15000.00')])
+
+    def test_una_sola_cuota(self):
+        cronograma = generar_cronograma_interes(Decimal('100000'), Decimal('15'), 1)
+        self.assertEqual(cronograma, [Decimal('7500.00')])
 
 
 class UltimoDiaValidoMesTests(SimpleTestCase):
