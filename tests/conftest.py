@@ -37,7 +37,7 @@ def user_normal():
     return User.objects.create_user(
         username='testuser',
         email='testuser@test.com',
-        password='testpass123'
+        password='testpass123'  # pragma: allowlist secret
     )
 
 
@@ -47,7 +47,7 @@ def user_admin():
     user = User.objects.create_superuser(
         username='admin',
         email='admin@test.com',
-        password='admin123'
+        password='admin123'  # pragma: allowlist secret
     )
     return user
 
@@ -58,7 +58,7 @@ def user_staff():
     user = User.objects.create_user(
         username='staff',
         email='staff@test.com',
-        password='staff123'
+        password='staff123'  # pragma: allowlist secret
     )
     user.is_staff = True
     user.save()

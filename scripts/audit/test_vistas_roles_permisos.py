@@ -140,25 +140,25 @@ class TestVistasClientesRoles(BaseTestRoles):
     
     def test_crear_cliente_admin_accede(self):
         """✅ Admin accede a crear cliente - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('crear_cliente'))
         self.assertEqual(response.status_code, 200)
     
     def test_crear_cliente_gerente_accede(self):
         """✅ Gerente accede a crear cliente - 200 OK"""
-        self.client_http.login(username='gerente_test', password='Gerente123!')
+        self.client_http.login(username='gerente_test', password='Gerente123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('crear_cliente'))
         self.assertEqual(response.status_code, 200)
     
     def test_crear_cliente_operario_bloqueado(self):
         """❌ Operario bloqueado en crear cliente - 403 Forbidden"""
-        self.client_http.login(username='operario_test', password='Operario123!')
+        self.client_http.login(username='operario_test', password='Operario123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('crear_cliente'))
         self.assertEqual(response.status_code, 403)
     
     def test_detalle_cliente_admin_accede(self):
         """✅ Admin ve detalle de cliente - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(
             reverse('detalle_cliente', args=[self.cliente_test.id]),
             follow=True  # Seguir redirecciones si las hay
@@ -168,7 +168,7 @@ class TestVistasClientesRoles(BaseTestRoles):
     
     def test_editar_cliente_admin_accede(self):
         """✅ Admin accede a editar cliente - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(
             reverse('editar_cliente', args=[self.cliente_test.id])
         )
@@ -182,31 +182,31 @@ class TestVistasPrestamoRoles(BaseTestRoles):
     
     def test_crear_prestamo_admin_accede(self):
         """✅ Admin accede a crear préstamo - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('crear_prestamo'))
         self.assertEqual(response.status_code, 200)
     
     def test_crear_prestamo_gerente_accede(self):
         """✅ Gerente accede a crear préstamo - 200 OK"""
-        self.client_http.login(username='gerente_test', password='Gerente123!')
+        self.client_http.login(username='gerente_test', password='Gerente123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('crear_prestamo'))
         self.assertEqual(response.status_code, 200)
     
     def test_crear_prestamo_operario_bloqueado(self):
         """❌ Operario bloqueado en crear préstamo - 403 Forbidden"""
-        self.client_http.login(username='operario_test', password='Operario123!')
+        self.client_http.login(username='operario_test', password='Operario123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('crear_prestamo'))
         self.assertEqual(response.status_code, 403)
     
     def test_crear_prestamo_rapido_admin_accede(self):
         """✅ Admin accede a crear préstamo rápido - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('crear_prestamo_rapido'))
         self.assertEqual(response.status_code, 200)
     
     def test_listar_prestamos_rapidos_gerente_accede(self):
         """✅ Gerente accede a listar préstamos rápidos - 200 OK"""
-        self.client_http.login(username='gerente_test', password='Gerente123!')
+        self.client_http.login(username='gerente_test', password='Gerente123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('listar_prestamos_rapidos'))
         self.assertEqual(response.status_code, 200)
 
@@ -218,7 +218,7 @@ class TestVistasPagosRoles(BaseTestRoles):
     
     def test_registrar_pago_admin_accede(self):
         """✅ Admin accede a registrar pago - puede cargar formulario"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(
             reverse('registrar_pago_mejorado', args=[self.cliente_test.id])
         )
@@ -227,7 +227,7 @@ class TestVistasPagosRoles(BaseTestRoles):
     
     def test_buscar_pago_operario_accede(self):
         """✅ Operario SÍ puede buscar cliente para pago (permiso pago.view)"""
-        self.client_http.login(username='operario_test', password='Operario123!')
+        self.client_http.login(username='operario_test', password='Operario123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('buscar_cliente_pago'))
         self.assertEqual(response.status_code, 200)
 
@@ -239,50 +239,50 @@ class TestVistasReportesRoles(BaseTestRoles):
     
     def test_reporte_clientes_admin_accede(self):
         """✅ Admin accede a reporte de clientes - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('reporte_clientes'))
         self.assertEqual(response.status_code, 200)
     
     def test_reporte_clientes_gerente_accede(self):
         """✅ Gerente accede a reporte de clientes - 200 OK"""
-        self.client_http.login(username='gerente_test', password='Gerente123!')
+        self.client_http.login(username='gerente_test', password='Gerente123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('reporte_clientes'))
         self.assertEqual(response.status_code, 200)
     
     def test_reporte_clientes_operario_accede(self):
         """✅ Operario SOÍ accede a reporte_clientes (tiene reporte.view en 7 permisos)"""
-        self.client_http.login(username='operario_test', password='Operario123!')
+        self.client_http.login(username='operario_test', password='Operario123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('reporte_clientes'), follow=True)
         # Operario tiene reporte.view, así que accede
         self.assertEqual(response.status_code, 200)
     
     def test_reporte_prestamos_admin_accede(self):
         """✅ Admin accede a reporte de préstamos - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('reporte_prestamos'))
         self.assertEqual(response.status_code, 200)
     
     def test_reporte_prestamos_gerente_accede(self):
         """✅ Gerente accede a reporte de préstamos - 200 OK"""
-        self.client_http.login(username='gerente_test', password='Gerente123!')
+        self.client_http.login(username='gerente_test', password='Gerente123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('reporte_prestamos'))
         self.assertEqual(response.status_code, 200)
     
     def test_reporte_cuotas_admin_accede(self):
         """✅ Admin accede a reporte de cuotas - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('reporte_cuotas'))
         self.assertEqual(response.status_code, 200)
     
     def test_reporte_estadisticas_admin_accede(self):
         """✅ Admin accede a estadísticas - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('reporte_estadisticas'))
         self.assertEqual(response.status_code, 200)
     
     def test_reporte_prestamos_rapidos_gerente_accede(self):
         """✅ Gerente accede a reporte de préstamos rápidos - 200 OK"""
-        self.client_http.login(username='gerente_test', password='Gerente123!')
+        self.client_http.login(username='gerente_test', password='Gerente123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('reporte_prestamos_rapidos'))
         self.assertEqual(response.status_code, 200)
 
@@ -294,49 +294,49 @@ class TestVistasExportacionRoles(BaseTestRoles):
     
     def test_exportar_clientes_admin_accede(self):
         """✅ Admin puede exportar clientes - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('exportar_clientes'))
         self.assertEqual(response.status_code, 200)
     
     def test_exportar_clientes_gerente_accede(self):
         """✅ Gerente puede exportar clientes - 200 OK"""
-        self.client_http.login(username='gerente_test', password='Gerente123!')
+        self.client_http.login(username='gerente_test', password='Gerente123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('exportar_clientes'))
         self.assertEqual(response.status_code, 200)
     
     def test_exportar_clientes_operario_bloqueado(self):
         """❌ Operario bloqueado en exportar clientes - 403 Forbidden"""
-        self.client_http.login(username='operario_test', password='Operario123!')
+        self.client_http.login(username='operario_test', password='Operario123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('exportar_clientes'))
         self.assertEqual(response.status_code, 403)
     
     def test_exportar_prestamos_admin_accede(self):
         """✅ Admin puede exportar préstamos - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('exportar_prestamos'))
         self.assertEqual(response.status_code, 200)
     
     def test_exportar_cuotas_admin_accede(self):
         """✅ Admin puede exportar cuotas - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('exportar_cuotas'))
         self.assertEqual(response.status_code, 200)
     
     def test_exportar_estadisticas_admin_accede(self):
         """✅ Admin puede exportar estadísticas - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('exportar_estadisticas'))
         self.assertEqual(response.status_code, 200)
     
     def test_exportar_reporte_general_admin_accede(self):
         """✅ Admin puede exportar reporte general - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('exportar_reporte_general'))
         self.assertEqual(response.status_code, 200)
     
     def test_exportar_prestamos_rapidos_gerente_accede(self):
         """✅ Gerente puede exportar préstamos rápidos - 200 OK"""
-        self.client_http.login(username='gerente_test', password='Gerente123!')
+        self.client_http.login(username='gerente_test', password='Gerente123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('exportar_prestamos_rapidos'))
         self.assertEqual(response.status_code, 200)
 
@@ -348,25 +348,25 @@ class TestVistasAuditoriaRoles(BaseTestRoles):
     
     def test_auditoria_admin_accede(self):
         """✅ Admin accede a auditoría - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('auditoria_cambios'))
         self.assertEqual(response.status_code, 200)
     
     def test_auditoria_gerente_bloqueado(self):
         """❌ Gerente bloqueado en auditoría - 403 Forbidden"""
-        self.client_http.login(username='gerente_test', password='Gerente123!')
+        self.client_http.login(username='gerente_test', password='Gerente123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('auditoria_cambios'))
         self.assertEqual(response.status_code, 403)
     
     def test_auditoria_operario_bloqueado(self):
         """❌ Operario bloqueado en auditoría - 403 Forbidden"""
-        self.client_http.login(username='operario_test', password='Operario123!')
+        self.client_http.login(username='operario_test', password='Operario123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('auditoria_cambios'))
         self.assertEqual(response.status_code, 403)
     
     def test_exportar_auditoria_admin_accede(self):
         """✅ Admin puede exportar auditoría - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('exportar_auditoria'))
         self.assertEqual(response.status_code, 200)
 
@@ -383,13 +383,13 @@ class TestVistasPublicasAcceso(BaseTestRoles):
     
     def test_logout_redirige(self):
         """✅ Logout redirige (requiere @login_required) - 302"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('logout'), follow=False)
         self.assertEqual(response.status_code, 302)
     
     def test_inicio_admin_accede(self):
         """✅ Admin accede a inicio - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('inicio'))
         self.assertEqual(response.status_code, 200)
 
@@ -401,14 +401,14 @@ class TestAntiPatronSeguridad(BaseTestRoles):
     
     def test_operario_bloqueado_en_auditoria(self):
         """❌ Operario bloqueado en auditoría (sin auditoria.view)"""
-        self.client_http.login(username='operario_test', password='Operario123!')
+        self.client_http.login(username='operario_test', password='Operario123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('auditoria_cambios'))
         # Operario no tiene auditoria.view
         self.assertEqual(response.status_code, 403)
     
     def test_gerente_bloqueado_en_auditoria(self):
         """❌ Gerente bloqueado en auditoría (sin auditoria.view)"""
-        self.client_http.login(username='gerente_test', password='Gerente123!')
+        self.client_http.login(username='gerente_test', password='Gerente123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('auditoria_cambios'))
         # Gerente no tiene auditoria.view (solo admin lo tiene)
         self.assertEqual(response.status_code, 403)
@@ -424,7 +424,7 @@ class TestAntiPatronSeguridad(BaseTestRoles):
     
     def test_operario_bloqueado_en_reporte_prestamos(self):
         """❌ Operario accede a reporte_prestamos (tiene reporte.view)"""
-        self.client_http.login(username='operario_test', password='Operario123!')
+        self.client_http.login(username='operario_test', password='Operario123!')  # pragma: allowlist secret
         
         # Operario tiene reporte.view, así que debería acceder
         response = self.client_http.get(reverse('reporte_prestamos'), follow=True)
@@ -434,7 +434,7 @@ class TestAntiPatronSeguridad(BaseTestRoles):
     
     def test_admin_accede_a_todas_las_vistas(self):
         """✅ Admin tiene acceso a todas las vistas protegidas"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         
         # Intentar acceder a vistas de diferentes módulos
         response1 = self.client_http.get(reverse('lista_clientes'), follow=True)
@@ -512,13 +512,13 @@ class TestAPIAcceso(BaseTestRoles):
     
     def test_api_buscar_cliente_admin_accede(self):
         """✅ Admin accede a API buscar cliente"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('api_buscar_cliente') + '?q=test')
         self.assertEqual(response.status_code, 200)
     
     def test_api_mora_diaria_admin_accede(self):
         """✅ Admin accede a API mora diaria"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('api_mora_diaria'))
         self.assertEqual(response.status_code, 200)
     

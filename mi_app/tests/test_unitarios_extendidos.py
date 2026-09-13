@@ -412,7 +412,7 @@ class EstadisticasViewTests(TestCase):
     
     def setUp(self):
         """Crear datos de prueba"""
-        self.user = User.objects.create_user(username='testuser', password='pass')
+        self.user = User.objects.create_user(username='testuser', password='pass')  # pragma: allowlist secret
         
         self.cliente1 = Cliente.objects.create(
             nombre="Cliente 1",
@@ -489,8 +489,8 @@ class DecoratorValidacionTests(TestCase):
     
     def setUp(self):
         """Crear usuarios y clientes"""
-        self.user1 = User.objects.create_user(username='user1', password='pass')
-        self.user2 = User.objects.create_user(username='user2', password='pass')
+        self.user1 = User.objects.create_user(username='user1', password='pass')  # pragma: allowlist secret
+        self.user2 = User.objects.create_user(username='user2', password='pass')  # pragma: allowlist secret
         
         self.cliente1 = Cliente.objects.create(
             nombre="Cliente 1",

@@ -62,7 +62,7 @@ class TestRegistrarPagoAtomico:
         """Setup: Cliente + Préstamo + Cuota + Usuario"""
         from datetime import date, timedelta
         
-        usuario = User.objects.create_user(username='admin', password='pass')
+        usuario = User.objects.create_user(username='admin', password='pass')  # pragma: allowlist secret
         cliente = Cliente.objects.create(
             nombre='Test Cliente',
             cedula='123456',
@@ -220,7 +220,7 @@ class TestEliminarPagoAtomico:
     def setup_pago(self, db):
         """Setup: Crear pago registrado"""
         from datetime import timedelta
-        usuario = User.objects.create_user(username='admin', password='pass')
+        usuario = User.objects.create_user(username='admin', password='pass')  # pragma: allowlist secret
         cliente = Cliente.objects.create(nombre='Test', cedula='123456', estado='ACTIVO')
         prestamo = Prestamo.objects.create(
             cliente=cliente,
@@ -283,7 +283,7 @@ class TestRaceConditionProtection:
     def setup_cuota(self, db):
         """Setup cuota para race condition tests"""
         from datetime import timedelta
-        usuario = User.objects.create_user(username='admin', password='pass')
+        usuario = User.objects.create_user(username='admin', password='pass')  # pragma: allowlist secret
         cliente = Cliente.objects.create(nombre='Test', cedula='123456', estado='ACTIVO')
         prestamo = Prestamo.objects.create(
             cliente=cliente,
@@ -337,7 +337,7 @@ class TestTransactionIntegration:
         from datetime import timedelta
         
         # Setup
-        usuario = User.objects.create_user(username='admin', password='pass')
+        usuario = User.objects.create_user(username='admin', password='pass')  # pragma: allowlist secret
         cliente = Cliente.objects.create(
             nombre='Cliente Pago',
             cedula='999999',

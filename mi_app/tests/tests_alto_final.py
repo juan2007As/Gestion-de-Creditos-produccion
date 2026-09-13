@@ -31,7 +31,7 @@ class MoraRealTimeAPITests(TestCase):
         # Crear usuario
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123'
+            password='testpass123'  # pragma: allowlist secret
         )
         
         # Crear cliente
@@ -81,7 +81,7 @@ class MoraRealTimeAPITests(TestCase):
     
     def test_endpoint_retorna_json(self):
         """Prueba que endpoint retorna JSON válido"""
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': self.cuota.id})
         response = self.client_app.get(url)
         
@@ -93,7 +93,7 @@ class MoraRealTimeAPITests(TestCase):
     
     def test_endpoint_estructura_respuesta(self):
         """Prueba que respuesta contiene campos requeridos"""
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': self.cuota.id})
         response = self.client_app.get(url)
         
@@ -118,7 +118,7 @@ class MoraRealTimeAPITests(TestCase):
     
     def test_endpoint_cuota_no_existe(self):
         """Prueba que cuota inexistente retorna 404"""
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': 99999})
         response = self.client_app.get(url)
         
@@ -126,7 +126,7 @@ class MoraRealTimeAPITests(TestCase):
     
     def test_endpoint_solo_get_permitido(self):
         """Prueba que solo GET es permitido"""
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': self.cuota.id})
         
         # POST no debe estar permitido

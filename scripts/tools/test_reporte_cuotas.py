@@ -71,7 +71,7 @@ except User.DoesNotExist:
     print("   Creando usuario de prueba...")
     admin_user = User.objects.create_user(
         username='testadmin',
-        password='testpass123',
+        password='testpass123',  # pragma: allowlist secret
         is_superuser=True,
         is_staff=True
     )
@@ -79,7 +79,7 @@ except User.DoesNotExist:
 
 # Intentar login
 print("\n3. Intentando login...")
-login_success = client.login(username=admin_user.username, password='testpass123')
+login_success = client.login(username=admin_user.username, password='testpass123')  # pragma: allowlist secret
 if login_success:
     print(f"   ✓ Login exitoso con usuario '{admin_user.username}'")
 else:

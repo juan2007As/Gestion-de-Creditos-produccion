@@ -26,7 +26,7 @@ class RealTimeMoraAPITests(TestCase):
         self.client_app = Client()
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123'
+            password='testpass123'  # pragma: allowlist secret
         )
         
         # Crear cliente sin usuario (campo no existe)
@@ -67,7 +67,7 @@ class RealTimeMoraAPITests(TestCase):
     
     def test_api_mora_actual_con_autenticacion(self):
         """Prueba que endpoint retorna mora actual"""
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': self.cuota.id})
         response = self.client_app.get(url)
         
@@ -78,7 +78,7 @@ class RealTimeMoraAPITests(TestCase):
     
     def test_api_mora_actual_cuota_no_existe(self):
         """Prueba que cuota inexistente retorna 404"""
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': 99999})
         response = self.client_app.get(url)
         
@@ -86,7 +86,7 @@ class RealTimeMoraAPITests(TestCase):
     
     def test_api_mora_retorna_estructura_correcta(self):
         """Prueba que la respuesta JSON tiene la estructura correcta"""
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': self.cuota.id})
         response = self.client_app.get(url)
         
@@ -111,7 +111,7 @@ class RealTimeMoraAPITests(TestCase):
         self.cuota.pagado = True
         self.cuota.save()
         
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': self.cuota.id})
         response = self.client_app.get(url)
         
@@ -122,7 +122,7 @@ class RealTimeMoraAPITests(TestCase):
     
     def test_api_mora_metodo_get_requerido(self):
         """Prueba que solo GET es permitido"""
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': self.cuota.id})
         
         # POST no debe estar permitido

@@ -23,12 +23,12 @@ class ClientePrestamoIntegrationTests(TestCase):
     
     def setUp(self):
         """Setup: Usuario, cliente y datos iniciales"""
-        self.user = User.objects.create_user(username='testuser', password='pass123')
+        self.user = User.objects.create_user(username='testuser', password='pass123')  # pragma: allowlist secret
         self.user.is_staff = True
         self.user.save()
         
         self.client_http = Client()
-        self.client_http.login(username='testuser', password='pass123')
+        self.client_http.login(username='testuser', password='pass123')  # pragma: allowlist secret
         
         self.cliente = Cliente.objects.create(
             nombre="Juan García",
@@ -116,7 +116,7 @@ class ListaNegraBloqueoPrestamosIntegrationTests(TestCase):
     
     def setUp(self):
         """Setup: Usuario, cliente normal y cliente moroso"""
-        self.user = User.objects.create_user(username='testuser', password='pass')
+        self.user = User.objects.create_user(username='testuser', password='pass')  # pragma: allowlist secret
         
         self.cliente_normal = Cliente.objects.create(
             nombre="Cliente Normal",

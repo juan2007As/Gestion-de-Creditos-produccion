@@ -8,7 +8,7 @@ class AuthenticationTests(TestCase):
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123'
+            password='testpass123'  # pragma: allowlist secret
         )
     
     def test_login_view_exists(self):
@@ -30,7 +30,7 @@ class AuthenticationTests(TestCase):
     def test_user_authentication(self):
         """Un usuario puede autenticarse"""
         # Verifica que el usuario se puede autenticar
-        authenticated = self.client.login(username='testuser', password='testpass123')
+        authenticated = self.client.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         self.assertTrue(authenticated)
     
     def test_user_creation(self):
@@ -38,7 +38,7 @@ class AuthenticationTests(TestCase):
         new_user = User.objects.create_user(
             username='newuser',
             email='new@test.com',
-            password='newpass123'
+            password='newpass123'  # pragma: allowlist secret
         )
         self.assertEqual(new_user.username, 'newuser')
         self.assertTrue(new_user.check_password('newpass123'))

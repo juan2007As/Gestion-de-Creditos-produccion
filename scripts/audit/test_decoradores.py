@@ -84,7 +84,7 @@ class TestDecoradores(TestCase):
         # Por eso usamos get_or_create y actualizamos el rol
         self.user_admin = User.objects.create_user(
             username='admin_user',
-            password='pass123',
+            password='pass123',  # pragma: allowlist secret
             first_name='Admin',
             email='admin@example.com'
         )
@@ -95,7 +95,7 @@ class TestDecoradores(TestCase):
         
         self.user_gerente = User.objects.create_user(
             username='gerente_user',
-            password='pass123',
+            password='pass123',  # pragma: allowlist secret
             first_name='Gerente',
             email='gerente@example.com'
         )
@@ -106,7 +106,7 @@ class TestDecoradores(TestCase):
         
         self.user_operario = User.objects.create_user(
             username='operario_user',
-            password='pass123',
+            password='pass123',  # pragma: allowlist secret
             first_name='Operario',
             email='operario@example.com'
         )
@@ -118,7 +118,7 @@ class TestDecoradores(TestCase):
         # Usuario sin rol (el signal lo crea con rol OPERARIO, lo cambiamos a None)
         self.user_sin_rol = User.objects.create_user(
             username='sin_rol',
-            password='pass123'
+            password='pass123'  # pragma: allowlist secret
         )
         self.profile_sin_rol = self.user_sin_rol.profile
         self.profile_sin_rol.rol = None
@@ -128,7 +128,7 @@ class TestDecoradores(TestCase):
         # Usuario inactivo (el signal lo crea con rol OPERARIO)
         self.user_inactivo = User.objects.create_user(
             username='inactivo_user',
-            password='pass123'
+            password='pass123'  # pragma: allowlist secret
         )
         self.profile_inactivo = self.user_inactivo.profile
         self.profile_inactivo.rol = self.rol_operario

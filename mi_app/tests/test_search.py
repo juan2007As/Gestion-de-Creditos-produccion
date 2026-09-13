@@ -10,7 +10,7 @@ class ClientSearchAPITests(TestCase):
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123'
+            password='testpass123'  # pragma: allowlist secret
         )
         
         # Crear clientes de prueba
@@ -31,7 +31,7 @@ class ClientSearchAPITests(TestCase):
         )
         
         # Hacer login
-        self.client.login(username='testuser', password='testpass123')
+        self.client.login(username='testuser', password='testpass123')  # pragma: allowlist secret
     
     def test_search_api_requires_login(self):
         """API requiere estar logueado"""
@@ -119,9 +119,9 @@ class ClientSearchComponentTests(TestCase):
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123'
+            password='testpass123'  # pragma: allowlist secret
         )
-        self.client.login(username='testuser', password='testpass123')
+        self.client.login(username='testuser', password='testpass123')  # pragma: allowlist secret
     
     def test_search_component_exists(self):
         """El componente de búsqueda existe"""

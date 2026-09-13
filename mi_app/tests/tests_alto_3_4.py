@@ -205,7 +205,7 @@ class RealTimeMoraAPITests(TestCase):
         self.client_app = Client()
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123'
+            password='testpass123'  # pragma: allowlist secret
         )
         
         # Crear cliente
@@ -245,7 +245,7 @@ class RealTimeMoraAPITests(TestCase):
     
     def test_api_mora_actual_con_autenticacion(self):
         """Prueba que endpoint retorna mora actual"""
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': self.cuota.id})
         response = self.client_app.get(url)
         
@@ -258,7 +258,7 @@ class RealTimeMoraAPITests(TestCase):
     
     def test_api_mora_actual_datos_correctos(self):
         """Prueba que los datos retornados son correctos"""
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': self.cuota.id})
         response = self.client_app.get(url)
         
@@ -276,9 +276,9 @@ class RealTimeMoraAPITests(TestCase):
         """Prueba que otro usuario autenticado puede acceder (API no restringe por cliente)"""
         other_user = User.objects.create_user(
             username='otheruser',
-            password='testpass123'
+            password='testpass123'  # pragma: allowlist secret
         )
-        self.client_app.login(username='otheruser', password='testpass123')
+        self.client_app.login(username='otheruser', password='testpass123')  # pragma: allowlist secret
 
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': self.cuota.id})
         response = self.client_app.get(url)
@@ -288,7 +288,7 @@ class RealTimeMoraAPITests(TestCase):
     
     def test_api_mora_actual_cuota_no_existe(self):
         """Prueba que cuota inexistente retorna 404"""
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': 99999})
         response = self.client_app.get(url)
         
@@ -296,7 +296,7 @@ class RealTimeMoraAPITests(TestCase):
     
     def test_api_mora_calcula_dias_atraso(self):
         """Prueba que los días de atraso se calculan correctamente"""
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': self.cuota.id})
         response = self.client_app.get(url)
         
@@ -311,7 +311,7 @@ class RealTimeMoraAPITests(TestCase):
         self.cuota.pagado = True
         self.cuota.save()
         
-        self.client_app.login(username='testuser', password='testpass123')
+        self.client_app.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         url = reverse('api_cuota_mora_actual', kwargs={'cuota_id': self.cuota.id})
         response = self.client_app.get(url)
         
@@ -331,7 +331,7 @@ class ALTO_IntegrationTests(TestCase):
         """Configurar datos de prueba"""
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123'
+            password='testpass123'  # pragma: allowlist secret
         )
         self.cliente = Cliente.objects.create(
             nombre='Test',

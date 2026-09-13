@@ -29,9 +29,9 @@ class ListaNegraBloqueoPrestamo(TestCase):
             estado="ACTIVO"
         )
         
-        self.user = User.objects.create_user(username='testuser', password='12345')
+        self.user = User.objects.create_user(username='testuser', password='12345')  # pragma: allowlist secret
         self.client_http = Client()
-        self.client_http.login(username='testuser', password='12345')
+        self.client_http.login(username='testuser', password='12345')  # pragma: allowlist secret
     
     def test_lista_negra_vigente_bloquea_prestamo(self):
         """
@@ -247,7 +247,7 @@ class ResolutionTODOs(TestCase):
     
     def setUp(self):
         """Preparar test user y cliente"""
-        self.user = User.objects.create_user(username='testuser', password='pass')
+        self.user = User.objects.create_user(username='testuser', password='pass')  # pragma: allowlist secret
         
         self.cliente = Cliente.objects.create(
             nombre="Test Cliente",
@@ -295,7 +295,7 @@ class IntegracionFASE2(TestCase):
     
     def setUp(self):
         """Setup completo"""
-        self.user = User.objects.create_user(username='testadmin', password='pass')
+        self.user = User.objects.create_user(username='testadmin', password='pass')  # pragma: allowlist secret
         self.cliente = Cliente.objects.create(
             nombre="Integration Test",
             celular="6666666666",
