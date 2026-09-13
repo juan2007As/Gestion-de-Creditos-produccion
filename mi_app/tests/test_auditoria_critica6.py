@@ -27,7 +27,7 @@ def user_admin(db):
     return User.objects.create_superuser(
         username='admin_test',
         email='admin@test.com',
-        password='admin123'
+        password='admin123'  # pragma: allowlist secret
     )
 
 
@@ -37,7 +37,7 @@ def user_normal(db):
     return User.objects.create_user(
         username='user_test',
         email='user@test.com',
-        password='user123'
+        password='user123'  # pragma: allowlist secret
     )
 
 

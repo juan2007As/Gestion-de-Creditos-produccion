@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
@@ -38,20 +38,20 @@ jobs:
     - name: Load test data
       run: |
         python manage.py shell << EOF
-from mi_app.models import Cliente, Prestamo
-from datetime import date, timedelta
+        from mi_app.models import Cliente, Prestamo
+        from datetime import date, timedelta
 
-# Crear 100 clientes de prueba
-for i in range(100):
-    Cliente.objects.create(
-        nombre=f'Test Cliente {i}',
-        celular=f'300{i:07d}',
-        cedula=f'{i:010d}',
-        email=f'test{i}@example.com'
-    )
+        # Crear 100 clientes de prueba
+        for i in range(100):
+            Cliente.objects.create(
+                nombre=f'Test Cliente {i}',
+                celular=f'300{i:07d}',
+                cedula=f'{i:010d}',
+                email=f'test{i}@example.com'
+            )
 
-print(f"✅ Created {Cliente.objects.count()} test clients")
-EOF
+        print(f"✅ Created {Cliente.objects.count()} test clients")
+        EOF
 
     - name: Run performance baseline tests
       run: |
@@ -60,43 +60,43 @@ EOF
     - name: Display query performance metrics
       run: |
         cat << 'EOF' > performance_check.py
-import os
-import django
+        import os
+        import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'proyecto_john.settings')
-django.setup()
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'proyecto_john.settings')
+        django.setup()
 
-from django.test.utils import CaptureQueriesContext
-from django.db import connection
-from mi_app.models import Cliente, Prestamo
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+        from mi_app.models import Cliente, Prestamo
 
-print("\n📊 QUERY PERFORMANCE BASELINE\n")
-print("=" * 60)
+        print("\n📊 QUERY PERFORMANCE BASELINE\n")
+        print("=" * 60)
 
-# Check 1: Cliente list
-with CaptureQueriesContext(connection) as ctx:
-    list(Cliente.objects.all()[:10])
-print(f"✅ Cliente.objects.all() → {len(ctx)} queries")
+        # Check 1: Cliente list
+        with CaptureQueriesContext(connection) as ctx:
+            list(Cliente.objects.all()[:10])
+        print(f"✅ Cliente.objects.all() → {len(ctx)} queries")
 
-# Check 2: Prestamos with prefetch
-with CaptureQueriesContext(connection) as ctx:
-    from django.db.models import Prefetch
-    list(Prestamo.objects.select_related('cliente')[:10])
-print(f"✅ Prestamo with select_related → {len(ctx)} queries")
+        # Check 2: Prestamos with prefetch
+        with CaptureQueriesContext(connection) as ctx:
+            from django.db.models import Prefetch
+            list(Prestamo.objects.select_related('cliente')[:10])
+        print(f"✅ Prestamo with select_related → {len(ctx)} queries")
 
-# Check 3: Aggregations
-with CaptureQueriesContext(connection) as ctx:
-    from django.db.models import Sum
-    Prestamo.objects.aggregate(total=Sum('monto'))
-print(f"✅ Prestamo.aggregate() → {len(ctx)} queries")
+        # Check 3: Aggregations
+        with CaptureQueriesContext(connection) as ctx:
+            from django.db.models import Sum
+            Prestamo.objects.aggregate(total=Sum('monto'))
+        print(f"✅ Prestamo.aggregate() → {len(ctx)} queries")
 
-print("=" * 60 + "\n")
-EOF
+        print("=" * 60 + "\n")
+        EOF
         python performance_check.py
 
     - name: Upload performance metrics
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: performance-metrics
         path: |
@@ -131,50 +131,50 @@ EOF
     if: always()
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Generate benchmark report
       run: |
         mkdir -p ./reports
         cat << 'EOF' > ./reports/performance-benchmark.md
-# Performance Benchmark Report 📊
+        # Performance Benchmark Report 📊
 
-## Test Environment
-- Python: 3.11
-- Django: 6.0.2
-- Database: SQLite
-- Runner: GitHub Actions (Ubuntu Latest)
+        ## Test Environment
+        - Python: 3.11
+        - Django: 6.0.2
+        - Database: SQLite
+        - Runner: GitHub Actions (Ubuntu Latest)
 
-## Baseline Metrics
+        ## Baseline Metrics
 
-### Query Performance
-- **Clientes List**: Expected < 5 queries
-- **Prestamos with Relations**: Expected < 10 queries with select_related()
-- **Aggregations**: Expected 1 query
+        ### Query Performance
+        - **Clientes List**: Expected < 5 queries
+        - **Prestamos with Relations**: Expected < 10 queries with select_related()
+        - **Aggregations**: Expected 1 query
 
-### Response Times (Target)
-- List views: < 200ms
-- Detail views: < 300ms
-- Create/Update: < 500ms
-- Reports: < 1000ms
+        ### Response Times (Target)
+        - List views: < 200ms
+        - Detail views: < 300ms
+        - Create/Update: < 500ms
+        - Reports: < 1000ms
 
-### Database Optimization
-- ✅ N+1 queries eliminated via select_related/prefetch_related
-- ✅ Compound indexes created for common queries
-- ✅ Aggregation functions optimized
+        ### Database Optimization
+        - ✅ N+1 queries eliminated via select_related/prefetch_related
+        - ✅ Compound indexes created for common queries
+        - ✅ Aggregation functions optimized
 
-## Recent Changes Impact
-- No performance regression detected
-- Query count maintained within acceptable ranges
+        ## Recent Changes Impact
+        - No performance regression detected
+        - Query count maintained within acceptable ranges
 
----
+        ---
 
-Generated: $(date)
-EOF
+        Generated: $(date)
+        EOF
         cat ./reports/performance-benchmark.md
 
     - name: Upload benchmark report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: benchmark-report
         path: ./reports/

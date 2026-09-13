@@ -397,8 +397,8 @@ git log --oneline -1
 # Verificar variables de entorno
 echo $SECRET_KEY
 
-# O crear archivo .env temporal
-echo "SECRET_KEY=django-insecure-temp-key" > .env
+# O crear archivo .env temporal (reemplazá <tu-clave> por una generada, nunca uses una fija)
+echo "SECRET_KEY=<tu-clave>" > .env
 ```
 
 ### Error: Modulo Django no encontrado

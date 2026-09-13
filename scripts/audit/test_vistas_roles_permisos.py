@@ -76,18 +76,18 @@ class BaseTestRoles(TestCase):
         # ========== CREAR USUARIOS ==========
         self.admin_user = User.objects.create_user(
             username='admin_test',
-            password='Admin123!',
+            password='Admin123!',  # pragma: allowlist secret
             email='admin@test.local',
             is_staff=True
         )
         self.gerente_user = User.objects.create_user(
             username='gerente_test',
-            password='Gerente123!',
+            password='Gerente123!',  # pragma: allowlist secret
             email='gerente@test.local'
         )
         self.operario_user = User.objects.create_user(
             username='operario_test',
-            password='Operario123!',
+            password='Operario123!',  # pragma: allowlist secret
             email='operario@test.local'
         )
         

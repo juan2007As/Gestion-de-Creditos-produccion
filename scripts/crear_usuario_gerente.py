@@ -24,7 +24,7 @@ else:
     user = User.objects.create_user(
         username='gerente',
         email='gerente@sistema.com',
-        password='gerente123',
+        password='gerente123',  # pragma: allowlist secret
         first_name='Gerente',
         last_name='Sistema'
     )

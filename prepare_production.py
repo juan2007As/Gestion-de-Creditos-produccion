@@ -28,9 +28,9 @@ def create_production_env():
     # Usar placeholders que el usuario debe editar
     print("\n📝 Creando archivo .env con placeholders - DEBES EDITAR MANUALMENTE:")
     usuario_pa = "TU_USUARIO_PYTHONANYWHERE"
-    db_password = "TU_PASSWORD_BASE_DATOS"
+    db_password = "TU_PASSWORD_BASE_DATOS"  # pragma: allowlist secret
     email_user = "tu-email@gmail.com"
-    email_password = "tu-app-password"
+    email_password = "tu-app-password"  # pragma: allowlist secret
 
     # Generar SECRET_KEY segura
     secret_key = generate_secret_key()

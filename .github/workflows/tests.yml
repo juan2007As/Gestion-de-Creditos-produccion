@@ -25,7 +25,7 @@ jobs:
         env:
           POSTGRES_DB: test_db
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: postgres  # pragma: allowlist secret
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -35,10 +35,10 @@ jobs:
           - 5432:5432
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -79,7 +79,7 @@ jobs:
         coverage report || true
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
         flags: unittests
@@ -98,7 +98,7 @@ jobs:
     
     - name: Upload test report
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test-report-py${{ matrix.python-version }}
         path: test_report.txt
@@ -107,10 +107,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
@@ -135,10 +135,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
@@ -149,7 +149,9 @@ jobs:
 
     - name: Run Bandit security check (bloquea en severidad media o superior)
       run: |
-        bandit -r mi_app --format json -o bandit-report.json
+        # El reporte JSON es solo informativo (se sube como artifact), no bloquea por
+        # los 353 hallazgos de severidad baja ya conocidos y aceptados (DEUDA-TECNICA.md).
+        bandit -r mi_app --format json -o bandit-report.json || true
         bandit -r mi_app -ll
 
     - name: Check dependencies for vulnerabilities (bloquea, salvo deuda aceptada)
@@ -168,10 +170,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
@@ -185,10 +187,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 

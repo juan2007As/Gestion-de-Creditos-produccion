@@ -36,7 +36,7 @@ class TotalPrestadoTestCase(TestCase):
         # Crear usuario de prueba
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123'
+            password='testpass123'  # pragma: allowlist secret
         )
         
         # Crear cliente de prueba

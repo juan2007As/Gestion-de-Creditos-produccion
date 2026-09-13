@@ -37,7 +37,7 @@ def verificar_configuracion():
         print(f"  {key}: {value}")
 
     print("\n🔒 SEGURIDAD:")
-    print(f"  Secret Key: {'✅ Configurada' if settings.SECRET_KEY != 'django-insecure-dev-key-change-in-production' else '⚠️ Usando clave por defecto'}")
+    print(f"  Secret Key: {'✅ Configurada' if settings.SECRET_KEY != 'django-insecure-dev-key-change-in-production' else '⚠️ Usando clave por defecto'}")  # pragma: allowlist secret
     print(f"  Allowed Hosts: {', '.join(settings.ALLOWED_HOSTS)}")
     print(f"  SSL Redirect: {getattr(settings, 'SECURE_SSL_REDIRECT', False)}")
 

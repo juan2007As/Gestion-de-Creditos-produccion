@@ -18,7 +18,7 @@ import json
 # Configuración
 BASE_URL = "http://127.0.0.1:8000"
 TEST_USER = "admin"
-TEST_PASSWORD = "admin123"
+TEST_PASSWORD = "admin123"  # pragma: allowlist secret
 
 # Colores para output
 class Colors:

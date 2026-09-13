@@ -41,7 +41,7 @@ class ValidacionesCritica4Tests(TestCase):
         # Crear usuario autenticado
         self.user = User.objects.create_user(
             username='testuser',
-            password='testpass123'
+            password='testpass123'  # pragma: allowlist secret
         )
         profile, _ = UsuarioProfile.objects.get_or_create(
             usuario=self.user,
@@ -405,7 +405,7 @@ class AuditoriaValidacionesTests(TestCase):
         """Configuración inicial"""
         self.user = User.objects.create_user(
             username='admin',
-            password='admin'
+            password='admin'  # pragma: allowlist secret
         )
     
     def test_auditor_validaciones_ejecuta_sin_errores(self):

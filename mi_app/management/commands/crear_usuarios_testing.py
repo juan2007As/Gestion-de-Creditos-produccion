@@ -26,7 +26,7 @@ class Command(BaseCommand):
         {
             'username': 'admin_user',
             'email': 'admin@test.local',
-            'password': 'Admin123!',
+            'password': 'Admin123!',  # pragma: allowlist secret
             'first_name': 'Admin',
             'last_name': 'Testing',
             'is_staff': True,
@@ -36,7 +36,7 @@ class Command(BaseCommand):
         {
             'username': 'gerente_user',
             'email': 'gerente@test.local',
-            'password': 'Gerente123!',
+            'password': 'Gerente123!',  # pragma: allowlist secret
             'first_name': 'Gerente',
             'last_name': 'Testing',
             'is_staff': False,
@@ -46,7 +46,7 @@ class Command(BaseCommand):
         {
             'username': 'operario_user',
             'email': 'operario@test.local',
-            'password': 'Operario123!',
+            'password': 'Operario123!',  # pragma: allowlist secret
             'first_name': 'Operario',
             'last_name': 'Testing',
             'is_staff': False,
