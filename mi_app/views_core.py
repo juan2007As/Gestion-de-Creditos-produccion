@@ -3164,9 +3164,8 @@ def detalle_prestamo_rapido(request, prestamo_id):
     # el saldo real segun el motor de interes sobre saldo cuando el
     # prestamo tiene cuotas (ver PrestamoRapido en models.py). Solo se
     # agrega el interes pendiente por separado para el label de la UI.
-    cuota_activa = cuotas.exclude(estado='TRASLADADA').order_by('numero_cuota').first()
     if tiene_cuotas:
-        interes_pendiente_actual = prestamo._interes_pendiente_actual() if cuota_activa else Decimal('0')
+        interes_pendiente_actual = prestamo._interes_pendiente_total_credito()
     else:
         interes_pendiente_actual = Decimal(str(prestamo.calcular_interes_total()))
 

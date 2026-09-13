@@ -569,6 +569,35 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
             self.assertFalse(cuota.pagado, f"cuota {cuota.numero_cuota} no deberia estar pagada")
             self.assertNotEqual(cuota.estado, 'PAGADA', f"cuota {cuota.numero_cuota} no deberia estar PAGADA")
 
+    def test_total_pendiente_incluye_interes_de_todas_las_cuotas_futuras(self):
+        """
+        Regresion: 'En Circulacion'/'Total Pendiente' deben mostrar la
+        obligacion COMPLETA del credito (capital + interes de TODAS las
+        cuotas restantes ya precalculadas), no solo el interes del periodo
+        activo. Ejemplo real reportado por el usuario: 500000 al 15% en 6
+        cuotas -- interes total del cronograma es 37500+37500+18750+18750
+        +9375+9375=131250, asi que el total pendiente recien creado el
+        prestamo debe ser 500000+131250=631250, no 537500 (que era el bug:
+        solo sumaba el interes de la primera cuota activa).
+        """
+        cliente = Cliente.objects.create(nombre="Test Total Pendiente Completo", celular="3000000002", cedula="999888779")
+
+        response = self.client_obj.post(reverse('crear_prestamo'), {
+            'cliente': cliente.id,
+            'monto_total': '500000',
+            'interes_porcentaje': '15',
+            'num_cuotas': '6',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        prestamo = Prestamo.objects.get(cliente=cliente)
+        self.assertEqual(prestamo.total_pendiente, 631250.0)
+
+        resumen = prestamo.resumen_financiero()
+        self.assertEqual(resumen['total_pendiente_principal'], 500000.0)
+        self.assertEqual(resumen['total_pendiente_interes'], 131250.0)
+        self.assertEqual(resumen['total_credito'], 631250.0)
+
     def test_crear_prestamo_rapido_setea_capital_pendiente_y_solo_primera_cuota(self):
         from mi_app.models import PrestamoRapido
 
@@ -596,6 +625,30 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
         # tener capital pendiente en 0 (todavia no le toca su turno).
         self.assertFalse(cuotas[1].pagado)
         self.assertNotEqual(cuotas[1].estado, 'PAGADA')
+
+    def test_saldo_pendiente_rapido_incluye_interes_de_todas_las_cuotas_futuras(self):
+        """
+        Mismo caso que test_total_pendiente_incluye_interes_de_todas_las_cuotas_futuras
+        pero para PrestamoRapido: 300000 al 15% en 4 cuotas -- cronograma es
+        22500+22500+11250+11250=67500, asi que saldo_pendiente recien creado
+        debe ser 300000+67500=367500, no solo 322500 (capital + interes de
+        la primera cuota activa).
+        """
+        from mi_app.models import PrestamoRapido
+
+        cliente = Cliente.objects.create(nombre="Test Rapido Total Pendiente", celular="3000000003", cedula="999888780")
+
+        response = self.client_obj.post(reverse('crear_prestamo_rapido'), {
+            'cliente_id': cliente.id,
+            'monto': '300000',
+            'interes_porcentaje': '15',
+            'usar_cuotas': 'on',
+            'num_cuotas': '4',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        prestamo = PrestamoRapido.objects.get(cliente=cliente)
+        self.assertEqual(prestamo.saldo_pendiente, Decimal('367500.00'))
 
 
 class PagarCuotaEspecificaMotorNuevoTests(TestCase):
