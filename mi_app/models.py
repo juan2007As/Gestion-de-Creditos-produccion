@@ -835,7 +835,7 @@ class Cuota(models.Model):
     def total_a_pagar(self):
         """Retorna el total que debe pagar en esta cuota"""
         mora = self.calcular_mora_diaria()
-        return float(self.monto_pendiente) + float(self.interes_normal) + float(mora)
+        return self.monto_pendiente + self.monto_pendiente_interes + mora
     
     def total_pagado(self):
         """Calcula cuánto ya se pagó de esta cuota"""

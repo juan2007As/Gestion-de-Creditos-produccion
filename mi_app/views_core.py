@@ -37,6 +37,7 @@ from pathlib import Path
 # AUTENTICACIÓN - LOGIN / LOGOUT
 # ===============================================================================
 
+@ratelimit(key='ip', rate='5/m', method='POST', block=True)
 def login_view(request):
     """
     Vista de login del sistema.

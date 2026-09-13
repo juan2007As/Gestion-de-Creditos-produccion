@@ -18,7 +18,7 @@
 | Punto | Estado |
 |---|---|
 | Escaneo de secretos en pre-commit y CI | ✅ Activo desde la Fase A4 |
-| Rate limiting en `login_view` | ❌ Sin `@ratelimit` — fuerza bruta viable (`DEUDA-TECNICA.md` cajón 1 #7) |
+| Rate limiting en `login_view` | ✅ `@ratelimit(key='ip', rate='5/m', method='POST', block=True)` |
 | `/admin/` con MFA o restricción adicional | ❌ Ruta por defecto, solo usuario+contraseña (cajón 1 #8) |
 | Cabeceras de seguridad (`CSP`, `HSTS`, `X-Content-Type-Options`) | Parcial — `SECURE_*` de Django activos, sin `Content-Security-Policy` explícita |
 | SAST (bandit) en el pipeline | ✅ Bloqueante desde la Fase A4 (severidad media+) |

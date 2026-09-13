@@ -25,7 +25,7 @@
 
 ## 5. Backups y recuperación — ya resuelto en la Fase A4
 
-10. **Existe** `.github/workflows/backup.yml`: `pg_dump` diario contra `DATABASE_URL` (secret de GitHub, pendiente de que el dueño lo configure) + restauración real contra una base vacía en la misma corrida. Si no restaura, el job falla — no es un backup silencioso.
+10. **Existe** `.github/workflows/backup.yml`: `pg_dump` diario contra `DATABASE_URL` (secret de GitHub ya configurado por el dueño) + restauración real contra una base vacía en la misma corrida. Si no restaura, el job falla — no es un backup silencioso.
 11. Antigüedad del backup: se puede ver en la pestaña Actions del repositorio (última corrida exitosa = último backup verificado).
 12. Retención de los backups: 30 días vía `retention-days` del artifact de GitHub Actions — no es almacenamiento a largo plazo; si el negocio necesita retención mayor, es una decisión aparte (ver [[compliance-rules]]).
 

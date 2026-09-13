@@ -10,8 +10,8 @@
 
 1. Se resuelve en un único punto: `mi_app.utilities.decorators.obtener_profile()` + el sistema de auth nativo de Django. No crear una segunda forma de "saber quién eres".
 2. Contraseñas: hash nativo de Django (PBKDF2) — no tocar.
-3. **Rate limiting en login: no existe.** `login_view` (`views_core.py:41`) no lleva `@ratelimit` — deuda cajón 1, fuerza bruta viable. Al arreglarlo: por cuenta y por IP.
-4. **MFA en cuentas administrativas: no existe.** `/admin/` solo pide usuario+contraseña — deuda cajón 1, exigido desde P3.
+3. **Rate limiting en login: ya existe.** `login_view` (`views_core.py:41`) lleva `@ratelimit(key='ip', rate='5/m', method='POST', block=True)`.
+4. **MFA en cuentas administrativas: decisión consciente de no implementar por ahora.** `/admin/` solo pide usuario+contraseña — aceptado como deuda (cajón 4), no es un descuido: es una cuenta única con password aleatoria fuerte, y MFA real es una feature no trivial (dependencia nueva, migración, flujo de login nuevo).
 
 ## 2. Sesiones
 

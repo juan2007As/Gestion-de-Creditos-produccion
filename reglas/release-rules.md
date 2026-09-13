@@ -6,7 +6,7 @@
 
 1. El pipeline (`.github/workflows/tests.yml`) ejecuta: tests (job `tests`, matrix Python 3.10/3.12), linting (no bloqueante salvo errores de sintaxis), `bandit` (bloqueante, severidad media+), `safety` (bloqueante, con 6 CVEs de Django 5.2.x ignoradas explícitamente hasta esa migración mayor), y `secrets-scan` (bloqueante).
 2. `quality-gate` depende de `tests`, `linting`, `security` y `secrets-scan`, y falla de verdad si `tests`, `security` o `secrets-scan` fallan — corregido en la Fase A4 (antes solo miraba `tests`).
-3. **Pendiente, no resuelto**: `render.yaml` tiene `autoDeploy: true` sin conectar al resultado del pipeline. Render despliega en cada push a `main` sin esperar a que el CI termine. Para arreglarlo: desactivar `autoDeploy`, generar un Deploy Hook desde el dashboard de Render, y agregar un paso final al workflow que lo llame solo si `quality-gate` pasó. Requiere que el dueño genere el hook (acción de dashboard, no de código).
+3. **Resuelto**: `render.yaml` tiene `autoDeploy: false`. El job `deploy` en `tests.yml` llama al Deploy Hook de Render (`secrets.RENDER_DEPLOY_HOOK_URL`) solo si `quality-gate` pasó y solo en push a `main`. Si el secret falta, el job falla con un mensaje explícito en vez de fallar en silencio.
 4. Un test intermitente se arregla o se retira, no se reintenta a ciegas — los tests E2E ya están marcados `|| true` a propósito (necesitan Selenium, no configurado), documentado, no oculto.
 
 ## 2. Artefacto y despliegue

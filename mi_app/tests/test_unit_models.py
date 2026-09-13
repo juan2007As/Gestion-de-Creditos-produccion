@@ -217,6 +217,43 @@ class TestCuotaModel:
         )
         assert cuota.porcentaje_pagado == 0
 
+    def test_total_a_pagar_usa_interes_pendiente_no_el_original(self):
+        """
+        Regresión: total_a_pagar() debía sumar el interés ORIGINAL (interes_normal)
+        en vez del interés que realmente falta por pagar (monto_pendiente_interes),
+        cobrando de más en cualquier cuota con un abono parcial de interés ya hecho.
+        Ver DEUDA-TECNICA.md cajón 1 #1.
+
+        Autocontenida (no usa la fixture prestamo_activo de tests/conftest.py,
+        que pytest no resuelve para archivos bajo mi_app/tests/).
+        """
+        cliente = Cliente.objects.create(
+            nombre='Cliente Test Total A Pagar',
+            cedula='999999999',
+            celular='3000000000',
+            estado='ACTIVO',
+        )
+        prestamo = Prestamo.objects.create(
+            cliente=cliente,
+            monto_total=Decimal('1000'),
+            interes_porcentaje=Decimal('10.0'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=30),
+            tipo_pago='QUINCENAL',
+            estado='ACTIVO',
+        )
+        cuota = Cuota.objects.create(
+            prestamo=prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('1000'),
+            monto_pendiente=Decimal('1000'),
+            interes_normal=Decimal('100'),          # interés original completo
+            monto_pendiente_interes=Decimal('30'),  # ya se abonaron 70 de interés
+            fecha_pago_esperada=date.today() + timedelta(days=15),  # sin mora
+        )
+        assert cuota.total_a_pagar() == Decimal('1030')
+        assert isinstance(cuota.total_a_pagar(), Decimal)
+
 
 # ============================================================================
 # UNIT TESTS - PAGO MODEL

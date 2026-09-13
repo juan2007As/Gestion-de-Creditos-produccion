@@ -19,7 +19,10 @@ services:
 
     # Rama que activa el deploy
     branch: main
-    autoDeploy: true
+    # Desactivado a propósito (Fase A4/A5): el deploy ya no dispara solo al pushear.
+    # Lo dispara el job "deploy" de .github/workflows/tests.yml, y solo si el
+    # pipeline completo (tests + security + secrets-scan) pasó primero.
+    autoDeploy: false
 
     # Comandos de build y arranque
     buildCommand: bash build.sh

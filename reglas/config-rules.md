@@ -12,7 +12,7 @@
 
 ## 2. Secretos
 
-6. **Ningún secreto en el repositorio.** Caso real y activo: la API key de Comfama en `lambda/` (ya retirada del working tree, sigue en el historial de `origin/main` — ver [[git-rules]]).
+6. **Ningún secreto en el repositorio.** Caso real ya resuelto: la API key de Comfama en `lambda/` — retirada del working tree, avisado Comfama y la key ya fue rotada de su lado. Queda un residuo inerte (la key vieja, ya inválida) en el historial de `origin/main` — no se reescribe sin pedido explícito del dueño (ver [[git-rules]]).
 7. **Escaneo automático activo desde la Fase A4**: `.pre-commit-config.yaml` (detect-secrets) + job `secrets-scan` en `.github/workflows/tests.yml`. Un hallazgo nuevo se audita (real o falso positivo) antes de forzar el commit — nunca con `--no-verify` sin mirar cuál de los dos es.
 8. **Procedimiento ante filtración** (aplica ahora mismo a la key de Comfama):
    1. **Revocar primero** — avisar a Comfama para rotar la key. Acción del dueño, no de la IA.
