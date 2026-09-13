@@ -121,19 +121,19 @@ class TestVistasClientesRoles(BaseTestRoles):
     
     def test_lista_clientes_admin_accede(self):
         """✅ Admin accede a lista de clientes - 200 OK"""
-        self.client_http.login(username='admin_test', password='Admin123!')
+        self.client_http.login(username='admin_test', password='Admin123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('lista_clientes'))
         self.assertEqual(response.status_code, 200)
     
     def test_lista_clientes_gerente_accede(self):
         """✅ Gerente accede a lista de clientes - 200 OK"""
-        self.client_http.login(username='gerente_test', password='Gerente123!')
+        self.client_http.login(username='gerente_test', password='Gerente123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('lista_clientes'))
         self.assertEqual(response.status_code, 200)
     
     def test_lista_clientes_operario_accede_con_permiso(self):
         """✅ Operario SÍ puede ver lista de clientes (tiene cliente.view)"""
-        self.client_http.login(username='operario_test', password='Operario123!')
+        self.client_http.login(username='operario_test', password='Operario123!')  # pragma: allowlist secret
         response = self.client_http.get(reverse('lista_clientes'))
         # Operario tiene cliente.view, así que PUEDE acceder
         self.assertEqual(response.status_code, 200)

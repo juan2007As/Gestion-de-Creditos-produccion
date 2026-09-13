@@ -50,7 +50,7 @@ class ValidacionesCritica4Tests(TestCase):
         if profile.rol != rol:
             profile.rol = rol
             profile.save()
-        self.client_obj.login(username='testuser', password='testpass123')
+        self.client_obj.login(username='testuser', password='testpass123')  # pragma: allowlist secret
         
         # Crear cliente normal
         self.cliente = Cliente.objects.create(

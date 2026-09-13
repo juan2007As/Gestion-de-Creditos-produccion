@@ -87,7 +87,7 @@ jobs:
         # Check 3: Aggregations
         with CaptureQueriesContext(connection) as ctx:
             from django.db.models import Sum
-            Prestamo.objects.aggregate(total=Sum('monto'))
+            Prestamo.objects.aggregate(total=Sum('monto_total'))
         print(f"✅ Prestamo.aggregate() → {len(ctx)} queries")
 
         print("=" * 60 + "\n")
