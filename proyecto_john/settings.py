@@ -216,10 +216,17 @@ if PRODUCTION:
                 'class': 'logging.FileHandler',
                 'filename': BASE_DIR / 'logs' / 'django_error.log',
             },
+            # Render (y la mayoría de plataformas de hosting) solo capturan
+            # stdout/stderr, no el archivo de arriba (filesystem efímero además
+            # en el plan free) — sin esto, un 500 en producción es invisible.
+            'console': {
+                'level': 'ERROR',
+                'class': 'logging.StreamHandler',
+            },
         },
         'loggers': {
             'django': {
-                'handlers': ['file'],
+                'handlers': ['file', 'console'],
                 'level': 'ERROR',
                 'propagate': True,
             },
