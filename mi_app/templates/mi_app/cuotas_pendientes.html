@@ -63,6 +63,10 @@
                                 </span>
                                 <br>
                                 <small style="color: #666;">{{ cuota.fecha_pago_real|date:"d/m/Y" }}</small>
+                            {% elif cuota.estado == 'TRASLADADA' and cuota.fue_pago_parcial_en_su_turno %}
+                                <span style="background-color: #ffc107; color: #333; padding: 5px 10px; border-radius: 4px; font-size: 0.85em;">
+                                    ⚠️ Pagada Parcial
+                                </span>
                             {% elif cuota.estado == 'TRASLADADA' %}
                                 <span style="background-color: #28a745; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.85em;">
                                     ✔️ Pagada

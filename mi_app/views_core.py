@@ -2817,7 +2817,17 @@ def _obtener_estado_visual_cuota(cuota):
         # mostrarla como "Trasladada" (a diferencia de "Pagada") generaba
         # confusion real ("por que dice trasladada si pague completo?").
         # Se muestra igual que una cuota PAGADA -- decision explicita del
-        # dueno.
+        # dueno. PERO: el motor no bloquea un pago por DEBAJO del monto
+        # nominal (avanza igual, el faltante queda acumulado en el saldo
+        # del prestamo) -- si eso paso, no se debe mostrar como "Pagada"
+        # sin mas, es engañoso. Ver DEUDA-TECNICA.md #26.
+        if cuota.fue_pago_parcial_en_su_turno:
+            return {
+                'estado': 'PAGADA PARCIAL',
+                'icono': '⚠',
+                'clase': 'badge bg-warning text-dark',
+                'color': 'orange',
+            }
         return {
             'estado': 'PAGADA',
             'icono': '✓',

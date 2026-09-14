@@ -1286,6 +1286,7 @@ class ReporteCuotasTrasladadaTests(TestCase):
             monto_pendiente=Decimal('0'),
             interes_normal=Decimal('37500'),
             monto_pendiente_interes=Decimal('0'),
+            monto_pagado_principal=Decimal('83333.33'),
             monto_pagado_interes=Decimal('37500'),
             fecha_pago_esperada=date.today() - timedelta(days=20),
             estado='TRASLADADA',
@@ -2469,3 +2470,99 @@ class BarraProgresoCssValidaTests(TestCase):
         content = response.content.decode('utf-8')
         self.assertIn('width: 100.00%', content)
         self.assertNotIn('width: 100,00%', content)
+
+
+class PagoParcialTrasladadaTests(TestCase):
+    """
+    El motor no bloquea un pago por DEBAJO del monto nominal de la cuota
+    activa -- avanza igual a la siguiente (el faltante queda como saldo
+    pendiente acumulado en el prestamo, no se pierde). El dueno probo
+    justo este caso (pago menor al nominal) y encontro que la cuota
+    quedaba con el badge "Pagada" (verde) igual que un pago completo --
+    engañoso, porque el cliente solo pago una fraccion de lo debido en
+    ese periodo. Se agrego Cuota.fue_pago_parcial_en_su_turno para
+    distinguir ambos casos sin bloquear el avance (decision explicita
+    del dueno: badge distinto, no bloquear el pago). Ver DEUDA-TECNICA.md #26.
+    """
+
+    def setUp(self):
+        self.cliente = Cliente.objects.create(nombre="Test Pago Parcial Trasladada", celular="3000000013", cedula="999888794")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('470000'),
+        )
+
+    def test_fue_pago_parcial_en_su_turno_false_si_no_es_trasladada(self):
+        cuota_pendiente = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('500000'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+        self.assertFalse(cuota_pendiente.fue_pago_parcial_en_su_turno)
+
+    def test_fue_pago_parcial_en_su_turno_false_si_se_pago_el_nominal_completo(self):
+        cuota_trasladada_completa = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            interes_normal=Decimal('37500'),
+            monto_pagado_principal=Decimal('83333.33'),
+            monto_pagado_interes=Decimal('37500'),
+            estado='TRASLADADA',
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+        self.assertFalse(cuota_trasladada_completa.fue_pago_parcial_en_su_turno)
+
+    def test_fue_pago_parcial_en_su_turno_true_si_se_pago_menos_del_nominal(self):
+        cuota_trasladada_corta = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            interes_normal=Decimal('37500'),
+            monto_pagado_principal=Decimal('30000'),
+            monto_pagado_interes=Decimal('10000'),
+            estado='TRASLADADA',
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+        self.assertTrue(cuota_trasladada_corta.fue_pago_parcial_en_su_turno)
+
+    def test_badge_visible_es_pagada_parcial_no_pagada(self):
+        from mi_app.views_core import _obtener_estado_visual_cuota
+
+        cuota_trasladada_corta = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            interes_normal=Decimal('37500'),
+            monto_pagado_principal=Decimal('30000'),
+            monto_pagado_interes=Decimal('10000'),
+            estado='TRASLADADA',
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+        estado_visual = _obtener_estado_visual_cuota(cuota_trasladada_corta)
+        self.assertEqual(estado_visual['estado'], 'PAGADA PARCIAL')
+
+    def test_badge_visible_sigue_siendo_pagada_para_pago_completo(self):
+        from mi_app.views_core import _obtener_estado_visual_cuota
+
+        cuota_trasladada_completa = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            interes_normal=Decimal('37500'),
+            monto_pagado_principal=Decimal('83333.33'),
+            monto_pagado_interes=Decimal('37500'),
+            estado='TRASLADADA',
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+        estado_visual = _obtener_estado_visual_cuota(cuota_trasladada_completa)
+        self.assertEqual(estado_visual['estado'], 'PAGADA')

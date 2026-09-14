@@ -865,7 +865,26 @@ class Cuota(models.Model):
     def total_pagado(self):
         """Calcula cuánto ya se pagó de esta cuota"""
         return float(self.monto_original) - float(self.monto_pendiente)
-    
+
+    @property
+    def fue_pago_parcial_en_su_turno(self):
+        """
+        True solo si esta cuota quedo TRASLADADA (el pago no cerro el
+        credito, se avanzo a la siguiente) pero lo que se pago no cubrio
+        el monto nominal completo de capital e interes de ESTA cuota --
+        es decir, se avanzo el turno con un pago corto, no con un pago
+        completo o un abono extra. El motor no bloquea el avance en ese
+        caso (el faltante queda como saldo pendiente acumulado en el
+        prestamo, no se pierde), pero de cara al operario es distinto de
+        un pago completo -- ver DEUDA-TECNICA.md #25/#26.
+        """
+        if self.estado != 'TRASLADADA':
+            return False
+        return (
+            self.monto_pagado_principal < self.monto_original
+            or self.monto_pagado_interes < self.interes_normal
+        )
+
     def detalles_completos(self):
         """
         Retorna detalles desglosados de la cuota para el mockup
@@ -1304,6 +1323,16 @@ class CuotaRapida(models.Model):
 
     def __str__(self):
         return f"Cuota Rápida {self.numero_cuota} - Préstamo {self.prestamo_rapido.id}"
+
+    @property
+    def fue_pago_parcial_en_su_turno(self):
+        """Igual que Cuota.fue_pago_parcial_en_su_turno -- ver esa docstring."""
+        if self.estado != 'TRASLADADA':
+            return False
+        return (
+            self.monto_pagado_principal < self.monto_original
+            or self.monto_pagado_interes < self.interes_normal
+        )
 
     def calcular_mora_diaria(self):
         """
