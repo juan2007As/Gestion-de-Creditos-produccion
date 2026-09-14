@@ -115,9 +115,12 @@ class Cliente(models.Model):
         prestamos_total = self.prestamo_set.count()
         prestamos_completados = self.prestamo_set.filter(estado='COMPLETADO').count()
         
+        # TRASLADADA (saldo movido) y ANULADA (credito cerrado antes de
+        # que esta cuota se usara) no deben nada -- se excluyen para no
+        # contarlas como vencidas y hundir el rating de un cliente al dia.
         cuotas_vencidas = 0
         for prestamo in self.prestamo_set.all():
-            for cuota in prestamo.cuotas.all():
+            for cuota in prestamo.cuotas.exclude(estado__in=('TRASLADADA', 'ANULADA')):
                 if not cuota.pagado and cuota.fecha_pago_esperada and cuota.fecha_pago_esperada < date.today():
                     cuotas_vencidas += 1
 
@@ -216,11 +219,16 @@ class Cliente(models.Model):
         return self.prestamo_set.filter(estado='ACTIVO')
     
     def obtener_cuotas_vencidas(self):
-        """Retorna las cuotas vencidas del cliente"""
+        """
+        Retorna las cuotas vencidas del cliente. Excluye TRASLADADA (saldo
+        movido) y ANULADA (credito cerrado antes de que esta cuota se
+        usara) -- ninguna de las dos debe nada, aunque su fecha original
+        ya haya pasado.
+        """
         from datetime import date
         cuotas_vencidas = []
         for prestamos in self.prestamo_set.all():
-            for cuota in prestamos.cuotas.all():
+            for cuota in prestamos.cuotas.exclude(estado__in=('TRASLADADA', 'ANULADA')):
                 if not cuota.pagado and cuota.fecha_pago_esperada and cuota.fecha_pago_esperada < date.today():
                     cuotas_vencidas.append(cuota)
         return cuotas_vencidas
@@ -257,14 +265,17 @@ class Cliente(models.Model):
         from datetime import date, timedelta
         cuotas_vencidas_mora = []
         fecha_limite = date.today() - timedelta(days=dias_minimos)
-        
+
+        # TRASLADADA (saldo movido) y ANULADA (credito cerrado antes de
+        # que esta cuota se usara) no deben nada -- se excluyen para no
+        # mandar a lista negra a un cliente que ya pago todo.
         for prestamo in self.prestamo_set.all():
-            for cuota in prestamo.cuotas.all():
+            for cuota in prestamo.cuotas.exclude(estado__in=('TRASLADADA', 'ANULADA')):
                 # Si NO está pagada y la fecha esperada pasó más de X días
                 if not cuota.pagado and cuota.fecha_pago_esperada:
                     if cuota.fecha_pago_esperada <= fecha_limite:
                         cuotas_vencidas_mora.append(cuota)
-        
+
         return cuotas_vencidas_mora
     
     def debe_estar_en_lista_negra(self, dias_mora=30):
@@ -553,14 +564,21 @@ class Prestamo(models.Model):
         el ultimo abono extra), asi que se conoce de antemano, no hace
         falta esperar a que le toque el turno para sumarlo. Ver
         docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md.
+
+        Si el credito ya esta COMPLETADO, no puede quedar nada pendiente
+        -- corte explicito, sin importar en que estado quedaron las cuotas
+        que nunca llegaron a usarse (deberian estar ANULADA, pero esta
+        guarda es la fuente de verdad final).
         """
+        if self.estado == 'COMPLETADO':
+            return Decimal('0')
         from mi_app.services.amortizacion_service import calcular_interes_pendiente_actual
-        cuota_activa = self.cuotas.exclude(estado='TRASLADADA').order_by('numero_cuota').first()
+        cuota_activa = self.cuotas.exclude(estado__in=('TRASLADADA', 'ANULADA', 'PAGADA')).order_by('numero_cuota').first()
         if not cuota_activa:
             return self.interes_acumulado_sin_pagar
         interes_pendiente_actual = calcular_interes_pendiente_actual(self, cuota_activa)
         interes_futuro = sum(
-            (c.interes_normal for c in self.cuotas.filter(numero_cuota__gt=cuota_activa.numero_cuota).exclude(estado='TRASLADADA')),
+            (c.interes_normal for c in self.cuotas.filter(numero_cuota__gt=cuota_activa.numero_cuota).exclude(estado__in=('TRASLADADA', 'ANULADA'))),
             Decimal('0'),
         )
         return interes_pendiente_actual + interes_futuro
@@ -591,10 +609,15 @@ class Prestamo(models.Model):
         return self.cuotas.filter(pagado=True).count()
     @property
     def num_cuotas_vencidas(self):
-        """Cuotas vencidas sin pagar"""
+        """
+        Cuotas vencidas sin pagar. Excluye TRASLADADA (su saldo se movio a
+        la siguiente) y ANULADA (nunca llegaron a usarse porque el
+        credito cerro antes) -- ninguna de las dos debe nada, aunque su
+        fecha original ya haya pasado.
+        """
         from datetime import date
         vencidas = 0
-        for cuota in self.cuotas.all():
+        for cuota in self.cuotas.exclude(estado__in=('TRASLADADA', 'ANULADA')):
             if not cuota.pagado and cuota.fecha_pago_esperada and cuota.fecha_pago_esperada < date.today():
                 vencidas += 1
         return vencidas
@@ -649,6 +672,7 @@ class Cuota(models.Model):
         ('VENCIDA', 'Vencida sin Pago'),
         ('VENCIDA_PARCIAL', 'Vencida Parcialmente Pagada'),
         ('TRASLADADA', 'Trasladada a la Siguiente Cuota'),
+        ('ANULADA', 'Anulada — el Crédito se Cerró Antes de Llegar Aquí'),
     ]
     
     prestamo = models.ForeignKey(Prestamo, on_delete=models.CASCADE, related_name='cuotas')
@@ -752,10 +776,12 @@ class Cuota(models.Model):
         # explicitamente quien procesa el pago (aplicar_pago, registrar_pago,
         # etc.) seteando self.pagado -- ver
         # docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md.
-        if self.estado == 'TRASLADADA':
-            # Estado terminal explicito: el saldo de esta cuota ya se movio
-            # a la siguiente (ver amortizacion_service / vistas de pago).
-            # No se recalcula automaticamente.
+        if self.estado in ('TRASLADADA', 'ANULADA'):
+            # Estados terminales explicitos: TRASLADADA = el saldo de esta
+            # cuota ya se movio a la siguiente; ANULADA = el credito se
+            # cerro antes de que esta cuota llegara a usarse (ver
+            # _anular_cuotas_restantes en views_core.py). Ninguno se
+            # recalcula automaticamente.
             pass
         elif self.pagado:
             self.estado = 'PAGADA'
@@ -779,13 +805,14 @@ class Cuota(models.Model):
         AUTO-CORRECCIÓN: Al guardar una cuota, automáticamente:
         1. Actualiza la mora acumulada (si no está pagada)
         2. Actualiza el estado de la cuota
-        
+
         Previene inconsistencias financieras (CRÍTICA #3)
         """
         # PASO 1: Auto-actualizar mora si no está completamente pagada ni
-        # trasladada (una cuota trasladada ya no acumula su propia mora --
-        # la mora sigue en la cuota que ahora esta activa).
-        if not self.pagado and self.estado != 'TRASLADADA' and self.fecha_pago_esperada:
+        # trasladada/anulada (esas cuotas ya no acumulan su propia mora --
+        # trasladada porque la mora sigue en la cuota activa, anulada
+        # porque el credito ya termino).
+        if not self.pagado and self.estado not in ('TRASLADADA', 'ANULADA') and self.fecha_pago_esperada:
             mora_calculada = self.calcular_mora_diaria()
             self.interes_mora_acumulado = mora_calculada
 
@@ -800,7 +827,7 @@ class Cuota(models.Model):
 
         # Determinar estado automáticamente. NOTA: ya no se infiere PAGADA
         # solo por saldo en 0 -- ver actualizar_estado() más arriba.
-        if self.estado == 'TRASLADADA':
+        if self.estado in ('TRASLADADA', 'ANULADA'):
             pass
         elif self.pagado:
             self.estado = 'PAGADA'
@@ -1098,14 +1125,19 @@ class PrestamoRapido(models.Model):
         creacion o el ultimo abono extra. Solo tiene sentido si el
         prestamo tiene cuotas -- ver
         docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md.
+
+        Si el credito ya esta PAGADO, no puede quedar nada pendiente --
+        corte explicito, igual que Prestamo._interes_pendiente_total_credito().
         """
+        if self.estado == 'PAGADO':
+            return Decimal('0')
         from mi_app.services.amortizacion_service import calcular_interes_pendiente_actual
-        cuota_activa = self.cuotas_rapidas.exclude(estado='TRASLADADA').order_by('numero_cuota').first()
+        cuota_activa = self.cuotas_rapidas.exclude(estado__in=('TRASLADADA', 'ANULADA', 'PAGADA')).order_by('numero_cuota').first()
         if not cuota_activa:
             return self.interes_acumulado_sin_pagar
         interes_pendiente_actual = calcular_interes_pendiente_actual(self, cuota_activa)
         interes_futuro = sum(
-            (c.interes_normal for c in self.cuotas_rapidas.filter(numero_cuota__gt=cuota_activa.numero_cuota).exclude(estado='TRASLADADA')),
+            (c.interes_normal for c in self.cuotas_rapidas.filter(numero_cuota__gt=cuota_activa.numero_cuota).exclude(estado__in=('TRASLADADA', 'ANULADA'))),
             Decimal('0'),
         )
         return interes_pendiente_actual + interes_futuro
@@ -1223,6 +1255,7 @@ class CuotaRapida(models.Model):
         ('VENCIDA', 'Vencida sin Pago'),
         ('VENCIDA_PARCIAL', 'Vencida Parcialmente Pagada'),
         ('TRASLADADA', 'Trasladada a la Siguiente Cuota'),
+        ('ANULADA', 'Anulada — el Crédito se Cerró Antes de Llegar Aquí'),
     ]
 
     prestamo_rapido = models.ForeignKey(
@@ -1297,8 +1330,9 @@ class CuotaRapida(models.Model):
 
         # NOTA: ya no se infiere PAGADA solo por saldo en 0 -- ver
         # Cuota.actualizar_estado() para la explicación completa. TRASLADADA
-        # es un estado terminal explicito, tampoco se recalcula solo.
-        if self.estado == 'TRASLADADA':
+        # y ANULADA son estados terminales explicitos, tampoco se
+        # recalculan solos.
+        if self.estado in ('TRASLADADA', 'ANULADA'):
             pass
         elif self.pagado:
             self.estado = 'PAGADA'

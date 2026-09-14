@@ -1741,3 +1741,211 @@ class ExportarCuotasVencidasExcelTests(TestCase):
         headers = [cell.value for cell in ws[1]]
         idx_principal = headers.index('Monto Principal')
         self.assertEqual(filas[0][idx_principal], 500000.0)
+
+
+class CierreTotalAnulaCuotasRestantesTests(TestCase):
+    """
+    Bug real reportado: pagar TODO el capital pendiente de una vez (cierre
+    total del credito) dejaba las cuotas futuras que nunca llegaron a
+    usarse con su interes precalculado intacto, como si todavia se
+    fueran a cobrar. Prestamo.total_pendiente/resumen_financiero()
+    volvian a sumar ese interes fantasma (131.250 en el ejemplo real del
+    cliente) aunque el credito ya estuviera 100% completado. Se agrega el
+    estado terminal ANULADA para las cuotas que nunca se usaron, y una
+    guarda explicita: si el prestamo esta COMPLETADO, el interes
+    pendiente es siempre 0. Ver reporte del cliente (2026-09-13).
+
+    NOTA: se invoca la vista directamente via RequestFactory (no Client)
+    -- mismo motivo que AvanzarCuotaTests (bug conocido de Python 3.14 +
+    Django 4.2 al renderizar templates con status 200 via el test client).
+    """
+
+    def setUp(self):
+        from django.test import RequestFactory
+        self.factory = RequestFactory()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        for codigo in ('prestamo.create', 'pago.create'):
+            perm, _ = Permiso.objects.get_or_create(
+                codigo=codigo,
+                defaults={'descripcion': codigo, 'activo': True}
+            )
+            RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+
+        self.user = User.objects.create_user(
+            username='testuser_cierre_total',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+
+        self.cliente = Cliente.objects.create(nombre="Test Cierre Total", celular="3000000016", cedula="999888797")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=90),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+        # Cronograma real del ejemplo del cliente: 37500,37500,18750,18750,9375,9375
+        intereses = [Decimal('37500'), Decimal('37500'), Decimal('18750'), Decimal('18750'), Decimal('9375'), Decimal('9375')]
+        self.cuotas = []
+        for i, interes in enumerate(intereses, 1):
+            cuota = Cuota.objects.create(
+                prestamo=self.prestamo,
+                numero_cuota=i,
+                monto_original=Decimal('83333.33'),
+                monto_pendiente=Decimal('500000') if i == 1 else Decimal('0'),
+                interes_normal=interes,
+                monto_pendiente_interes=interes,
+                fecha_pago_esperada=date.today() + timedelta(days=15 * i),
+            )
+            self.cuotas.append(cuota)
+
+    def _pagar_todo(self):
+        from mi_app.views_core import pagar_cuota_especifica
+        request = self.factory.post(f'/cuota/{self.cuotas[0].id}/pagar/', {
+            'monto_principal': '500000',
+            'monto_interes': '37500',
+            'monto_mora': '0',
+        })
+        request.user = self.user
+        return pagar_cuota_especifica(request, self.cuotas[0].id)
+
+    def test_total_pendiente_queda_en_cero_tras_cierre_total(self):
+        response = self._pagar_todo()
+        self.assertEqual(response.status_code, 200)
+
+        self.prestamo.refresh_from_db()
+        self.assertEqual(self.prestamo.estado, 'COMPLETADO')
+        self.assertEqual(self.prestamo.capital_pendiente, Decimal('0'))
+        self.assertEqual(self.prestamo.total_pendiente, 0.0)
+        self.assertEqual(self.prestamo.porcentaje_pagado, Decimal('100'))
+
+        resumen = self.prestamo.resumen_financiero()
+        self.assertEqual(resumen['total_pendiente_interes'], 0.0)
+        self.assertEqual(resumen['interes_total_credito'], 0.0)
+
+    def test_cuotas_futuras_quedan_anuladas_sin_montos_pendientes(self):
+        self._pagar_todo()
+
+        for cuota in self.cuotas[1:]:
+            cuota.refresh_from_db()
+            self.assertEqual(cuota.estado, 'ANULADA', f"cuota {cuota.numero_cuota} deberia estar ANULADA")
+            self.assertEqual(cuota.monto_pendiente, Decimal('0'))
+            self.assertEqual(cuota.monto_pendiente_interes, Decimal('0'))
+
+        self.cuotas[0].refresh_from_db()
+        self.assertEqual(self.cuotas[0].estado, 'PAGADA')
+        self.assertTrue(self.cuotas[0].pagado)
+
+
+class EstadosTerminalesNoSeCorrompenTests(TestCase):
+    """
+    Bug critico encontrado en la auditoria: determinar_estado_cuota_al_crear()
+    (usada por mora_diaria_api, el comando sincronizar_estados_cuotas, y
+    reconciliar_finanzas) no conocia los estados terminales TRASLADADA/
+    ANULADA del motor de interes sobre saldo -- cualquier sincronizacion
+    masiva las sobreescribia de vuelta a VENCIDA/PENDIENTE, y les
+    calculaba mora fantasma. Ademas, Cliente.calcular_rating()/
+    obtener_cuotas_vencidas_por_dias() (esta ultima usada para marcar
+    lista negra automatica) tampoco las excluian -- un cliente que pago
+    TODO su credito podia terminar con rating de 1 estrella o marcado
+    en lista negra, solo porque quedaron cuotas ANULADA con fecha vieja.
+    Ver reporte del cliente (2026-09-13).
+    """
+
+    def setUp(self):
+        self.cliente = Cliente.objects.create(nombre="Test Estados Terminales", celular="3000000017", cedula="999888798")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=90),
+            estado='COMPLETADO',
+            capital_pendiente=Decimal('0'),
+        )
+        self.cuota_pagada = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('0'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('0'),
+            monto_pagado_principal=Decimal('500000'),
+            monto_pagado_interes=Decimal('37500'),
+            pagado=True,
+            fecha_pago_esperada=date.today() - timedelta(days=40),
+        )
+        self.cuota_pagada.estado = 'PAGADA'
+        self.cuota_pagada.save()
+
+        # Cuotas 2-6 quedaron ANULADA con fecha muy vieja (> 30 dias) --
+        # exactamente el escenario que antes disparaba lista negra/rating malo.
+        self.cuotas_anuladas = []
+        for i in range(2, 7):
+            c = Cuota.objects.create(
+                prestamo=self.prestamo,
+                numero_cuota=i,
+                monto_original=Decimal('83333.33'),
+                monto_pendiente=Decimal('0'),
+                interes_normal=Decimal('18750'),
+                monto_pendiente_interes=Decimal('0'),
+                fecha_pago_esperada=date.today() - timedelta(days=40 - i),
+            )
+            Cuota.objects.filter(id=c.id).update(estado='ANULADA')
+            c.refresh_from_db()
+            self.cuotas_anuladas.append(c)
+
+    def test_determinar_estado_cuota_al_crear_preserva_anulada(self):
+        from mi_app.utils import determinar_estado_cuota_al_crear
+        cuota = self.cuotas_anuladas[0]
+        resultado = determinar_estado_cuota_al_crear(
+            pagado=cuota.pagado,
+            fecha_pago_esperada=cuota.fecha_pago_esperada,
+            monto_pagado_principal=cuota.monto_pagado_principal,
+            monto_original=cuota.monto_original,
+            estado_actual=cuota.estado,
+        )
+        self.assertEqual(resultado, 'ANULADA')
+
+    def test_determinar_estado_cuota_al_crear_preserva_trasladada(self):
+        from mi_app.utils import determinar_estado_cuota_al_crear
+        resultado = determinar_estado_cuota_al_crear(
+            pagado=False,
+            fecha_pago_esperada=date.today() - timedelta(days=40),
+            monto_pagado_principal=Decimal('0'),
+            monto_original=Decimal('83333.33'),
+            estado_actual='TRASLADADA',
+        )
+        self.assertEqual(resultado, 'TRASLADADA')
+
+    def test_sincronizar_estados_cuotas_no_sobreescribe_anulada(self):
+        from django.core.management import call_command
+        import io
+
+        call_command('sincronizar_estados_cuotas', stdout=io.StringIO())
+
+        for c in self.cuotas_anuladas:
+            c.refresh_from_db()
+            self.assertEqual(c.estado, 'ANULADA', f"cuota {c.numero_cuota} no deberia cambiar de ANULADA")
+
+    def test_rating_no_se_hunde_por_cuotas_anuladas(self):
+        # Cliente pago TODO (1 prestamo completado, 0 cuotas realmente
+        # vencidas) -- deberia tener el mejor rating, no el peor.
+        self.assertEqual(self.cliente.calcular_rating(), 5.0)
+
+    def test_lista_negra_no_se_activa_por_cuotas_anuladas(self):
+        self.assertFalse(self.cliente.debe_estar_en_lista_negra(dias_mora=30))
+        self.assertEqual(self.cliente.obtener_cuotas_vencidas_por_dias(30), [])
+
+    def test_obtener_cuotas_vencidas_excluye_anulada_y_trasladada(self):
+        self.assertEqual(self.cliente.obtener_cuotas_vencidas(), [])

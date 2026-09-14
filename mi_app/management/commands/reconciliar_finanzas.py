@@ -75,7 +75,10 @@ class Command(BaseCommand):
         self.stdout.write("CORRECCIÓN 2: MORA NO ACTUALIZADA EN CUOTAS")
         self.stdout.write("-"*80 + "\n")
 
-        for cuota in Cuota.objects.filter(pagado=False):
+        # TRASLADADA (saldo movido) y ANULADA (credito cerrado antes de
+        # que esta cuota se usara) no deben nada -- se excluyen para no
+        # calcularles mora fantasma.
+        for cuota in Cuota.objects.filter(pagado=False).exclude(estado__in=('TRASLADADA', 'ANULADA')):
             if not cuota.fecha_pago_esperada:
                 continue
             

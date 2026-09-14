@@ -164,29 +164,33 @@ def mora_diaria_api(request):
     """
     from decimal import Decimal
     
-    # Obtener todas las cuotas pendientes vencidas
+    # Obtener todas las cuotas pendientes vencidas. TRASLADADA (saldo
+    # movido) y ANULADA (credito cerrado antes de que esta cuota se
+    # usara) no deben nada -- se excluyen para no calcularles mora
+    # fantasma ni contarlas como vencidas.
     cuotas_vencidas = Cuota.objects.filter(
         pagado=False,
         fecha_pago_esperada__lt=date.today()
-    ).select_related('prestamo__cliente')
-    
+    ).exclude(estado__in=('TRASLADADA', 'ANULADA')).select_related('prestamo__cliente')
+
     total_mora = Decimal('0')
     cuotas_mora = []
     estadisticas_por_cliente = {}
     estados_sincronizados = 0  # ✅ OPCIÓN C: Contador de updates
-    
+
     for cuota in cuotas_vencidas:
         mora = cuota.calcular_mora_diaria()
         total_mora += mora
-        
+
         # ✅ OPCIÓN C PASO 4 - NUEVA: Sincronizar estado en BD
         estado_correcto = determinar_estado_cuota_al_crear(
             pagado=cuota.pagado,
             fecha_pago_esperada=cuota.fecha_pago_esperada,
             monto_pagado_principal=cuota.monto_pagado_principal,
-            monto_original=cuota.monto_original
+            monto_original=cuota.monto_original,
+            estado_actual=cuota.estado,
         )
-        
+
         # Si el estado en BD es diferente, actualizar
         if cuota.estado != estado_correcto:
             Cuota.objects.filter(id=cuota.id).update(estado=estado_correcto)
@@ -416,18 +420,20 @@ def obtener_estadisticas_sistema():
     )
     total_pagado = total_pagado_result['principal'] + total_pagado_result['interes'] + total_pagado_result['mora']
     
-    # CUOTAS
+    # CUOTAS. TRASLADADA (saldo movido) y ANULADA (credito cerrado antes
+    # de que esta cuota se usara) no deben nada -- se excluyen de
+    # "pendientes" y "vencidas".
     total_cuotas = cuotas.count()
     cuotas_pagadas = cuotas.filter(pagado=True).count()
-    cuotas_pendientes = cuotas.filter(pagado=False).count()
-    
+    cuotas_pendientes = cuotas.filter(pagado=False).exclude(estado__in=('TRASLADADA', 'ANULADA')).count()
+
     # CUOTAS VENCIDAS
     cuotas_vencidas = 0
     monto_vencido = Decimal('0')
-    for c in cuotas.filter(pagado=False):
+    for c in cuotas.filter(pagado=False).exclude(estado__in=('TRASLADADA', 'ANULADA')):
         if c.fecha_pago_esperada and c.fecha_pago_esperada < hoy:
             cuotas_vencidas += 1
-            monto_vencido += c.monto_pendiente + c.interes_normal + c.calcular_mora_diaria()
+            monto_vencido += c.monto_pendiente + c.monto_pendiente_interes + c.calcular_mora_diaria()
     
     # TASA DE CUMPLIMIENTO
     tasa_pagos = (cuotas_pagadas / total_cuotas * 100) if total_cuotas > 0 else 0
@@ -1156,7 +1162,7 @@ def mis_prestamos(request, cliente_id):
             'progreso': (resumen['total_pagado_principal'] / resumen['monto_original'] * 100) if resumen['monto_original'] > 0 else 0,
             'num_cuotas': prestamo.cuotas.count(),
             'num_pagadas': prestamo.num_cuotas_pagadas,
-            'num_pendientes': prestamo.cuotas.filter(pagado=False).count(),
+            'num_pendientes': prestamo.cuotas.filter(pagado=False).exclude(estado__in=('TRASLADADA', 'ANULADA')).count(),
             'num_vencidas': prestamo.num_cuotas_vencidas,
         }
         prestamos_data.append(prestamo_info)
@@ -1207,7 +1213,7 @@ def detalles_prestamo(request, prestamo_id):
         'cuotas_data': cuotas_data,
         'progreso': progreso,
         'num_pagadas': prestamo.num_cuotas_pagadas,
-        'num_pendientes': prestamo.cuotas.filter(pagado=False).count(),
+        'num_pendientes': prestamo.cuotas.filter(pagado=False).exclude(estado__in=('TRASLADADA', 'ANULADA')).count(),
         'num_vencidas': prestamo.num_cuotas_vencidas,
     }
     
@@ -1326,6 +1332,7 @@ def pagar_cuota_especifica(request, cuota_id):
             if resumen['cerrado']:
                 cuota.actualizar_estado()
                 cuota.save()
+                _anular_cuotas_restantes(prestamo, cuota)
             else:
                 _avanzar_a_siguiente_cuota(prestamo, cuota, monto_principal)
 
@@ -1370,11 +1377,13 @@ def registrar_pago_mejorado(request, cliente_id):
     
     cliente = get_object_or_404(Cliente, id=cliente_id)
     
-    # Obtener solo cuotas pendientes de este cliente
+    # Obtener solo cuotas pendientes de este cliente -- TRASLADADA (saldo
+    # movido) y ANULADA (credito cerrado antes de que esta cuota se
+    # usara) no deben nada, se excluyen.
     cuotas_pendientes = Cuota.objects.filter(
         prestamo__cliente=cliente,
         pagado=False
-    ).select_related('prestamo').order_by('prestamo_id', 'numero_cuota')
+    ).exclude(estado__in=('TRASLADADA', 'ANULADA')).select_related('prestamo').order_by('prestamo_id', 'numero_cuota')
     
     # Agrupar por préstamo
     prestamos_cuotas = {}
@@ -2043,18 +2052,29 @@ def reporte_estadisticas(request):
     prestamos_vencidos = Prestamo.objects.filter(estado='VENCIDO').count()
     
     # MONTOS - BUG FIX #1: Calcular AMBOS capital y total con interés para mayor claridad
+    # (capital_prestado/total_credito son volumen HISTORICO total prestado, no saldo vivo)
     capital_prestado = sum(Decimal(str(p.monto_total)) for p in Prestamo.objects.all())
     total_credito = sum(Decimal(str(p.total_credito)) for p in Prestamo.objects.all())
     total_pagado = sum(Decimal(str(p.total_pagado)) for p in Prestamo.objects.all())
-    total_pendiente_capital = capital_prestado - total_pagado
-    total_pendiente_credito = total_credito - total_pagado
+    # Pendiente REAL vivo: se suma directo capital_pendiente/total_pendiente de
+    # cada prestamo (ya son la fuente de verdad correcta), no se reconstruye
+    # restando total_pagado (que tambien incluye interes/mora, no solo
+    # capital) de un total historico estatico -- mismo fix que
+    # obtener_estadisticas_sistema() (usado en la pagina de Inicio); esta
+    # vista tenia su propia implementacion paralela que nunca se corrigio.
+    total_pendiente_capital = sum(p.capital_pendiente for p in Prestamo.objects.all())
+    total_pendiente_credito = Decimal(str(sum(p.total_pendiente for p in Prestamo.objects.all())))
     tasa_pago = (total_pagado / total_credito * 100) if total_credito > 0 else 0
-    
-    # CUOTAS
+
+    # CUOTAS. TRASLADADA (saldo movido) y ANULADA (credito cerrado antes
+    # de que esta cuota se usara) no deben nada -- se excluyen de
+    # "pendientes" y "vencidas".
     total_cuotas = Cuota.objects.count()
     cuotas_pagadas = Cuota.objects.filter(pagado=True).count()
-    cuotas_pendientes = Cuota.objects.filter(pagado=False).count()
-    cuotas_vencidas = Cuota.objects.filter(pagado=False, fecha_pago_esperada__lt=date.today()).count()
+    cuotas_pendientes = Cuota.objects.filter(pagado=False).exclude(estado__in=('TRASLADADA', 'ANULADA')).count()
+    cuotas_vencidas = Cuota.objects.filter(
+        pagado=False, fecha_pago_esperada__lt=date.today()
+    ).exclude(estado__in=('TRASLADADA', 'ANULADA')).count()
     
     # CALIFICACIONES
     clientes_con_calificacion = Cliente.objects.all()
@@ -2878,6 +2898,41 @@ def _avanzar_a_siguiente_cuota_rapida(prestamo, cuota_actual, capital_pagado):
     cuota_actual.save()
 
 
+def _anular_cuotas_restantes(prestamo, cuota_cerrada):
+    """
+    Cuando un pago cierra TODO el credito (capital_pendiente e
+    interes_acumulado_sin_pagar llegan a 0 -- ver aplicar_pago()), las
+    cuotas futuras que nunca llegaron a usarse siguen en la base de datos
+    con su interes precalculado como si todavia se fueran a cobrar --
+    nadie las apagaba. Se marcan ANULADA (no TRASLADADA: aqui no hay
+    "siguiente cuota", el credito ya termino) y se ponen sus montos
+    pendientes en $0, para que ningun reporte/exportacion/agregado las
+    cuente como pendientes o vencidas.
+
+    Se usa .update() (no .save() por instancia) para no disparar el
+    auto-recalculo de Cuota.save() -- ya sabemos exactamente el estado
+    final que queremos.
+    """
+    prestamo.cuotas.filter(
+        numero_cuota__gt=cuota_cerrada.numero_cuota
+    ).exclude(estado='TRASLADADA').update(
+        estado='ANULADA',
+        monto_pendiente=Decimal('0'),
+        monto_pendiente_interes=Decimal('0'),
+    )
+
+
+def _anular_cuotas_restantes_rapida(prestamo, cuota_cerrada):
+    """Igual que _anular_cuotas_restantes, pero para PrestamoRapido/CuotaRapida."""
+    prestamo.cuotas_rapidas.filter(
+        numero_cuota__gt=cuota_cerrada.numero_cuota
+    ).exclude(estado='TRASLADADA').update(
+        estado='ANULADA',
+        monto_pendiente=Decimal('0'),
+        monto_pendiente_interes=Decimal('0'),
+    )
+
+
 def _obtener_estado_visual_cuota(cuota):
     """
     Determina el estado visual de una cuota para mostrar en templates
@@ -2895,6 +2950,14 @@ def _obtener_estado_visual_cuota(cuota):
         return {
             'estado': 'TRASLADADA',
             'icono': '↷',
+            'clase': 'badge bg-secondary',
+            'color': 'gray',
+        }
+
+    if cuota.estado == 'ANULADA':
+        return {
+            'estado': 'ANULADA',
+            'icono': '⊘',
             'clase': 'badge bg-secondary',
             'color': 'gray',
         }
@@ -3050,10 +3113,13 @@ def detalle_prestamo_rapido(request, prestamo_id):
     cuotas = CuotaRapida.objects.filter(prestamo_rapido=prestamo).order_by('numero_cuota')
 
     cuotas_pagadas = cuotas.filter(pagado=True).count()
-    cuotas_pendientes = cuotas.filter(pagado=False).count()
+    # TRASLADADA (saldo movido) y ANULADA (credito cerrado antes de que
+    # esta cuota se usara) no deben nada -- se excluyen de "pendientes"
+    # y "vencidas".
+    cuotas_pendientes = cuotas.filter(pagado=False).exclude(estado__in=('TRASLADADA', 'ANULADA')).count()
     tiene_cuotas = cuotas.exists()
     cuotas_vencidas = 0
-    for cuota in cuotas.filter(pagado=False):
+    for cuota in cuotas.filter(pagado=False).exclude(estado__in=('TRASLADADA', 'ANULADA')):
         if cuota.fecha_pago_esperada and cuota.fecha_pago_esperada < date.today():
             cuotas_vencidas += 1
 
@@ -3202,6 +3268,7 @@ def registrar_pago_rapido(request, cuota_id):
                     prestamo.fecha_pago_real = date.today()
                     cuota.actualizar_estado()
                     cuota.save()
+                    _anular_cuotas_restantes_rapida(prestamo, cuota)
                 else:
                     if prestamo.capital_pendiente < prestamo.monto:
                         prestamo.estado = 'PARCIALMENTE_PAGADO'

@@ -71,34 +71,46 @@ def formatear_numero_colombiano(valor, decimales=2):
         return str(valor)
 
 
-def determinar_estado_cuota_al_crear(pagado, fecha_pago_esperada, monto_pagado_principal, monto_original):
+def determinar_estado_cuota_al_crear(pagado, fecha_pago_esperada, monto_pagado_principal, monto_original, estado_actual=None):
     """
     ✅ OPCIÓN C PASO 1: Función centralizada para determinar estado correcto al crear cuota.
-    
+
     Esta función define la lógica de transformación de estado PENDIENTE → VENCIDA/VENCIDA_PARCIAL
     basado en:
+    - ¿Ya está en un estado terminal explícito (TRASLADADA/ANULADA)? → se conserva tal cual
     - ¿Está pagada? → PAGADA
     - ¿Está vencida (fecha pasó)? → VENCIDA o VENCIDA_PARCIAL
     - Caso defecto → PENDIENTE
-    
+
     Args:
         pagado (bool): ¿La cuota está completamente pagada?
         fecha_pago_esperada (date): Fecha esperada de pago
         monto_pagado_principal (Decimal): Monto del principal pagado
         monto_original (Decimal): Monto original total del principal
-    
+        estado_actual (str, opcional): estado actual de la cuota en BD. Si es
+            'TRASLADADA' o 'ANULADA' (estados terminales del motor de interes
+            sobre saldo -- ver docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md),
+            se devuelve sin cambios: ninguna de las dos se recalcula
+            automaticamente, sin importar pagado/fecha. Sin este chequeo,
+            cualquier sincronizacion masiva (mora_diaria_api, el comando
+            sincronizar_estados_cuotas) las sobreescribia de vuelta a
+            VENCIDA/PENDIENTE, corrompiendo el estado del motor nuevo.
+
     Returns:
-        str: Estado correcto ('PAGADA', 'VENCIDA', 'VENCIDA_PARCIAL', 'PENDIENTE')
+        str: Estado correcto ('TRASLADADA', 'ANULADA', 'PAGADA', 'VENCIDA', 'VENCIDA_PARCIAL', 'PENDIENTE')
     """
     from datetime import date
     from decimal import Decimal
-    
+
+    if estado_actual in ('TRASLADADA', 'ANULADA'):
+        return estado_actual
+
     hoy = date.today()
-    
+
     # Caso 1: Si está completamente pagada
     if pagado and (Decimal(str(monto_pagado_principal)) >= Decimal(str(monto_original))):
         return 'PAGADA'
-    
+
     # Caso 2: Si está vencida (fecha de pago pasó)
     if fecha_pago_esperada and fecha_pago_esperada < hoy:
         # Si tiene algún monto pagado del principal
@@ -106,6 +118,6 @@ def determinar_estado_cuota_al_crear(pagado, fecha_pago_esperada, monto_pagado_p
             return 'VENCIDA_PARCIAL'
         else:
             return 'VENCIDA'
-    
+
     # Caso 3: Por defecto, pendiente
     return 'PENDIENTE'

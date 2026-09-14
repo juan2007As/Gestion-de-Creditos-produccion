@@ -58,12 +58,17 @@ class Command(BaseCommand):
         for cuota in cuotas:
             total_revisadas += 1
             
-            # Determinar estado correcto
+            # Determinar estado correcto. estado_actual se pasa siempre:
+            # TRASLADADA/ANULADA son estados terminales del motor de interes
+            # sobre saldo (ver docs/superpowers/specs/2026-09-13-interes-sobre-saldo-design.md)
+            # y NUNCA deben resincronizarse solos -- sin esto, correr este
+            # comando sobreescribia esos estados de vuelta a VENCIDA/PENDIENTE.
             estado_correcto = determinar_estado_cuota_al_crear(
                 pagado=cuota.pagado,
                 fecha_pago_esperada=cuota.fecha_pago_esperada,
                 monto_pagado_principal=cuota.monto_pagado_principal,
-                monto_original=cuota.monto_original
+                monto_original=cuota.monto_original,
+                estado_actual=cuota.estado,
             )
             
             # Si es diferente, registrar cambio
