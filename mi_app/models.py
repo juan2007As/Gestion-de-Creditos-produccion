@@ -637,12 +637,24 @@ class Prestamo(models.Model):
         total_pagado_interes = sum(float(c.monto_pagado_interes) for c in self.cuotas.all())
         total_pagado_mora = sum(float(c.monto_pagado_mora) for c in self.cuotas.all())
 
+        # 'interes_total_credito'/'total_credito' son el TOTAL DE VIDA del
+        # credito (interes ya pagado + interes que falta, sobre el capital
+        # fijo) -- NO lo mismo que 'total_pendiente_interes'/lo que se debe
+        # ahora (esa es la resta -- sin este fix, ambos quedaban con la
+        # MISMA formula, asi que "Total Credito" e "Interés Total" siempre
+        # coincidian exactamente con "Total Pendiente", aunque ya se
+        # hubiera pagado una parte -- para un credito cerrado esto llegaba
+        # a mostrar "Total Credito: $0", como si el credito nunca hubiera
+        # existido).
+        interes_total_credito = total_pagado_interes + float(interes_pendiente_total)
+        total_credito = float(self.monto_total) + interes_total_credito
+
         return {
             'monto_original': float(self.monto_total),
             'tasa_interes_quincena': float(self.interes_porcentaje),
             'tasa_mora_diaria': float(self.mora_diaria_pesos) if self.mora_diaria_pesos else 2000,
-            'interes_total_credito': float(interes_pendiente_total),
-            'total_credito': float(self.capital_pendiente + interes_pendiente_total),
+            'interes_total_credito': interes_total_credito,
+            'total_credito': total_credito,
             'total_pagado_principal': total_pagado_principal,
             'total_pagado_interes': total_pagado_interes,
             'total_pendiente_principal': float(self.capital_pendiente),
@@ -672,7 +684,7 @@ class Cuota(models.Model):
         ('VENCIDA', 'Vencida sin Pago'),
         ('VENCIDA_PARCIAL', 'Vencida Parcialmente Pagada'),
         ('TRASLADADA', 'Trasladada a la Siguiente Cuota'),
-        ('ANULADA', 'Anulada — el Crédito se Cerró Antes de Llegar Aquí'),
+        ('ANULADA', 'Anulada (crédito cerrado antes)'),
     ]
     
     prestamo = models.ForeignKey(Prestamo, on_delete=models.CASCADE, related_name='cuotas')
@@ -1255,7 +1267,7 @@ class CuotaRapida(models.Model):
         ('VENCIDA', 'Vencida sin Pago'),
         ('VENCIDA_PARCIAL', 'Vencida Parcialmente Pagada'),
         ('TRASLADADA', 'Trasladada a la Siguiente Cuota'),
-        ('ANULADA', 'Anulada — el Crédito se Cerró Antes de Llegar Aquí'),
+        ('ANULADA', 'Anulada (crédito cerrado antes)'),
     ]
 
     prestamo_rapido = models.ForeignKey(

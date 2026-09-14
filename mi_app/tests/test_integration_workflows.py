@@ -1831,7 +1831,13 @@ class CierreTotalAnulaCuotasRestantesTests(TestCase):
 
         resumen = self.prestamo.resumen_financiero()
         self.assertEqual(resumen['total_pendiente_interes'], 0.0)
-        self.assertEqual(resumen['interes_total_credito'], 0.0)
+        # interes_total_credito/total_credito son el TOTAL DE VIDA del
+        # credito (pagado + pendiente), no solo lo pendiente -- un credito
+        # cerrado con $37.500 de interes ya cobrado sigue valiendo
+        # $37.500 de interes en total, no $0 (eso confundiria "ya se
+        # cobro todo" con "nunca hubo interes").
+        self.assertEqual(resumen['interes_total_credito'], 37500.0)
+        self.assertEqual(resumen['total_credito'], 537500.0)
 
     def test_cuotas_futuras_quedan_anuladas_sin_montos_pendientes(self):
         self._pagar_todo()
@@ -2020,3 +2026,75 @@ class CierreTotalRapidoAnulaCuotasRestantesTests(TestCase):
             self.assertEqual(cuota.estado, 'ANULADA')
             self.assertEqual(cuota.monto_pendiente, Decimal('0'))
             self.assertEqual(cuota.monto_pendiente_interes, Decimal('0'))
+
+
+class PagarCuotaAnuladaRedirigeTests(TestCase):
+    """
+    Bug encontrado en verificacion visual: el boton "Pagar" seguia
+    apareciendo (y la vista aceptaba la solicitud) para cuotas ANULADA
+    (nunca llegaron a usarse porque el credito ya cerro). Se agrega el
+    mismo guard que ya existia para TRASLADADA: redirige al detalle del
+    prestamo con un mensaje informativo, en vez de dejar seguir el flujo
+    de pago sobre una cuota que no debe nada.
+    """
+
+    def setUp(self):
+        from django.test import RequestFactory
+        self.factory = RequestFactory()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        for codigo in ('prestamo.create', 'pago.create'):
+            perm, _ = Permiso.objects.get_or_create(
+                codigo=codigo,
+                defaults={'descripcion': codigo, 'activo': True}
+            )
+            RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+        self.user = User.objects.create_user(
+            username='testuser_pagar_anulada',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+
+        self.cliente = Cliente.objects.create(nombre="Test Pagar Anulada", celular="3000000019", cedula="999888800")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=90),
+            estado='COMPLETADO',
+            capital_pendiente=Decimal('0'),
+        )
+        self.cuota_anulada = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=2,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('0'),
+            interes_normal=Decimal('18750'),
+            monto_pendiente_interes=Decimal('0'),
+            fecha_pago_esperada=date.today() + timedelta(days=15),
+        )
+        Cuota.objects.filter(id=self.cuota_anulada.id).update(estado='ANULADA')
+        self.cuota_anulada.refresh_from_db()
+
+    def test_pagar_cuota_especifica_redirige_para_cuota_anulada(self):
+        from mi_app.views_core import pagar_cuota_especifica
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from django.contrib.sessions.backends.db import SessionStore
+
+        request = self.factory.get(f'/cuota/{self.cuota_anulada.id}/pagar/')
+        request.user = self.user
+        # Los messages framework requiere middleware de sesion/mensajes --
+        # se agrega manualmente ya que RequestFactory no corre middlewares.
+        request.session = SessionStore()
+        request._messages = FallbackStorage(request)
+
+        response = pagar_cuota_especifica(request, self.cuota_anulada.id)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('detalles_prestamo', args=[self.prestamo.id]))

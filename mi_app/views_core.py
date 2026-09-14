@@ -1267,8 +1267,12 @@ def pagar_cuota_especifica(request, cuota_id):
     prestamo = cuota.prestamo
     cliente = prestamo.cliente
 
+    if cuota.estado == 'ANULADA':
+        messages.info(request, 'Este crédito ya se cerró antes de que le tocara el turno a esta cuota. No hay nada que pagar aquí.')
+        return redirect('detalles_prestamo', prestamo_id=prestamo.id)
+
     if cuota.estado == 'TRASLADADA':
-        cuota_activa = prestamo.cuotas.exclude(estado='TRASLADADA').order_by('numero_cuota').first()
+        cuota_activa = prestamo.cuotas.exclude(estado__in=('TRASLADADA', 'ANULADA')).order_by('numero_cuota').first()
         messages.info(request, 'Esta cuota ya no está activa: el saldo se trasladó a la cuota actual.')
         if cuota_activa:
             return redirect('pagar_cuota_especifica', cuota_id=cuota_activa.id)
@@ -3202,8 +3206,12 @@ def registrar_pago_rapido(request, cuota_id):
     cuota = get_object_or_404(CuotaRapida, pk=cuota_id)
     prestamo = cuota.prestamo_rapido
 
+    if cuota.estado == 'ANULADA':
+        messages.info(request, 'Este crédito ya se cerró antes de que le tocara el turno a esta cuota. No hay nada que pagar aquí.')
+        return redirect('detalle_prestamo_rapido', prestamo_id=prestamo.id)
+
     if cuota.estado == 'TRASLADADA':
-        cuota_activa = prestamo.cuotas_rapidas.exclude(estado='TRASLADADA').order_by('numero_cuota').first()
+        cuota_activa = prestamo.cuotas_rapidas.exclude(estado__in=('TRASLADADA', 'ANULADA')).order_by('numero_cuota').first()
         messages.info(request, 'Esta cuota ya no está activa: el saldo se trasladó a la cuota actual.')
         if cuota_activa:
             return redirect('registrar_pago_cuota_rapida', cuota_id=cuota_activa.id)

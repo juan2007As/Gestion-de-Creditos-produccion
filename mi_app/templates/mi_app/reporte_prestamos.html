@@ -148,7 +148,7 @@
                                 <small class="text-muted">{{ prestamo.fecha_inicio|date:"d/m/Y" }}</small>
                             </td>
                             <td>
-                                <strong>{{ prestamo.total_credito|formato_moneda_co}}</strong>
+                                <strong>{{ prestamo.resumen_financiero.total_credito|formato_moneda_co}}</strong>
                                 <br>
                                 <small class="text-muted">Tasa: {{ prestamo.interes_porcentaje }}%</small>
                             </td>
