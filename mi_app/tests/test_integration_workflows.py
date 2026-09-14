@@ -1949,3 +1949,74 @@ class EstadosTerminalesNoSeCorrompenTests(TestCase):
 
     def test_obtener_cuotas_vencidas_excluye_anulada_y_trasladada(self):
         self.assertEqual(self.cliente.obtener_cuotas_vencidas(), [])
+
+
+class CierreTotalRapidoAnulaCuotasRestantesTests(TestCase):
+    """Igual que CierreTotalAnulaCuotasRestantesTests, pero para
+    PrestamoRapido/CuotaRapida (registrar_pago_rapido)."""
+
+    def setUp(self):
+        from django.test import RequestFactory
+        from mi_app.models import PrestamoRapido, CuotaRapida, Rol, Permiso, RolPermiso, UsuarioProfile
+        self.PrestamoRapido = PrestamoRapido
+        self.CuotaRapida = CuotaRapida
+        self.factory = RequestFactory()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        perm, _ = Permiso.objects.get_or_create(
+            codigo='pago.create',
+            defaults={'descripcion': 'pago.create', 'activo': True}
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+        self.user = User.objects.create_user(
+            username='testuser_cierre_total_rapido',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+
+        self.cliente = Cliente.objects.create(nombre="Test Cierre Total Rapido", celular="3000000018", cedula="999888799")
+        self.prestamo = self.PrestamoRapido.objects.create(
+            cliente=self.cliente,
+            monto=Decimal('300000'),
+            interes_porcentaje=Decimal('15'),
+            capital_pendiente=Decimal('300000'),
+        )
+        intereses = [Decimal('22500'), Decimal('22500'), Decimal('11250'), Decimal('11250')]
+        self.cuotas = []
+        for i, interes in enumerate(intereses, 1):
+            c = self.CuotaRapida.objects.create(
+                prestamo_rapido=self.prestamo,
+                numero_cuota=i,
+                monto_original=Decimal('75000'),
+                monto_pendiente=Decimal('300000') if i == 1 else Decimal('0'),
+                interes_normal=interes,
+                monto_pendiente_interes=interes,
+                fecha_pago_esperada=date.today() + timedelta(days=15 * i),
+            )
+            self.cuotas.append(c)
+
+    def test_cierre_total_anula_cuotas_restantes_y_pendiente_en_cero(self):
+        from mi_app.views_core import registrar_pago_rapido
+        request = self.factory.post(f'/prestamo-rapido/cuota/{self.cuotas[0].id}/pagar/', {
+            'monto_pagado': '322500',  # 300000 capital + 22500 interes
+        })
+        request.user = self.user
+        response = registrar_pago_rapido(request, self.cuotas[0].id)
+        self.assertEqual(response.status_code, 302)
+
+        self.prestamo.refresh_from_db()
+        self.assertEqual(self.prestamo.estado, 'PAGADO')
+        self.assertEqual(self.prestamo.capital_pendiente, Decimal('0'))
+        self.assertEqual(self.prestamo.saldo_pendiente, Decimal('0'))
+
+        for cuota in self.cuotas[1:]:
+            cuota.refresh_from_db()
+            self.assertEqual(cuota.estado, 'ANULADA')
+            self.assertEqual(cuota.monto_pendiente, Decimal('0'))
+            self.assertEqual(cuota.monto_pendiente_interes, Decimal('0'))
