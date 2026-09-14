@@ -112,7 +112,8 @@ def cliente_moroso():
 
 @pytest.fixture
 def prestamo_activo(cliente_activo):
-    """Préstamo activo"""
+    """Préstamo activo -- recién creado, nada pagado todavía (capital_pendiente
+    = monto_total, igual que crear_prestamo lo deja de verdad)."""
     return Prestamo.objects.create(
         cliente=cliente_activo,
         monto_total=Decimal('50000'),
@@ -120,7 +121,8 @@ def prestamo_activo(cliente_activo):
         fecha_inicio=date.today(),
         fecha_fin_estimada=date.today() + timedelta(days=60),
         tipo_pago='QUINCENAL',
-        estado='ACTIVO'
+        estado='ACTIVO',
+        capital_pendiente=Decimal('50000'),
     )
 
 
@@ -134,7 +136,8 @@ def prestamo_completado(cliente_activo):
         fecha_inicio=date.today(),
         fecha_fin_estimada=date.today() + timedelta(days=60),
         tipo_pago='QUINCENAL',
-        estado='COMPLETADO'
+        estado='COMPLETADO',
+        capital_pendiente=Decimal('0'),
     )
     return prestamo
 
