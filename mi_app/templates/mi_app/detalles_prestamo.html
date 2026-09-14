@@ -61,7 +61,7 @@
 
                     <!-- BARRA DE PROGRESO -->
                     <div class="progress" style="height: 30px;">
-                        <div class="progress-bar bg-success" role="progressbar" style="width: {% localize off %}{{ progreso|floatformat:2 }}{% endlocalize %}%;" aria-valuenow="{% localize off %}{{ progreso|floatformat:2 }}{% endlocalize %}" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ progreso|stringformat:".2f" }}%;" aria-valuenow="{{ progreso|stringformat:".2f" }}" aria-valuemin="0" aria-valuemax="100">
                             <strong>{{ progreso|formato_porcentaje}} Completado</strong>
                         </div>
                     </div>

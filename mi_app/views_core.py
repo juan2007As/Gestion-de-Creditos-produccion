@@ -2810,11 +2810,19 @@ def _obtener_estado_visual_cuota(cuota):
         }
 
     if cuota.estado == 'TRASLADADA':
+        # Internamente sigue siendo TRASLADADA (el saldo se movio a la
+        # siguiente cuota, no es el cierre del credito) -- eso no cambia,
+        # lo sigue usando la logica de cierre/reportes. Pero de cara al
+        # operario esta cuota SI se pago en su turno sin deber nada, y
+        # mostrarla como "Trasladada" (a diferencia de "Pagada") generaba
+        # confusion real ("por que dice trasladada si pague completo?").
+        # Se muestra igual que una cuota PAGADA -- decision explicita del
+        # dueno.
         return {
-            'estado': 'TRASLADADA',
-            'icono': '↷',
-            'clase': 'badge bg-secondary',
-            'color': 'gray',
+            'estado': 'PAGADA',
+            'icono': '✓',
+            'clase': 'badge bg-success',
+            'color': 'green',
         }
 
     if cuota.estado == 'ANULADA':

@@ -64,8 +64,8 @@
                                 <br>
                                 <small style="color: #666;">{{ cuota.fecha_pago_real|date:"d/m/Y" }}</small>
                             {% elif cuota.estado == 'TRASLADADA' %}
-                                <span style="background-color: #6c757d; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.85em;">
-                                    ↷ Trasladada
+                                <span style="background-color: #28a745; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.85em;">
+                                    ✔️ Pagada
                                 </span>
                             {% elif cuota.estado == 'ANULADA' %}
                                 <span style="background-color: #6c757d; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.85em;">

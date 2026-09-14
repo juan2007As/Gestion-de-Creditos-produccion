@@ -218,12 +218,12 @@
                                     </td>
                                     <td>
                                         <span class="badge
-                                            {% if cuota.estado == 'PAGADA' %}bg-success
+                                            {% if cuota.estado == 'PAGADA' or cuota.estado == 'TRASLADADA' %}bg-success
                                             {% elif cuota.estado == 'PARCIALMENTE_PAGADA' %}bg-info
                                             {% elif cuota.estado == 'VENCIDA' or cuota.estado == 'VENCIDA_PARCIAL' %}bg-danger
                                             {% else %}bg-secondary{% endif %}
                                         ">
-                                            {{ cuota.get_estado_display }}
+                                            {% if cuota.estado == 'TRASLADADA' %}Pagada{% else %}{{ cuota.get_estado_display }}{% endif %}
                                         </span>
                                     </td>
                                     <td class="text-end">

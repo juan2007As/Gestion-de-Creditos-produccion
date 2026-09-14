@@ -1323,12 +1323,21 @@ class ReporteCuotasTrasladadaTests(TestCase):
         response = reporte_cuotas_completo(request)
         self.assertEqual(response.status_code, 200)
         content = response.content.decode('utf-8')
-        self.assertIn('↷ TRASLADADA', content)
+        # El filtro interno sigue llamandose 'trasladada' (sigue siendo un
+        # estado propio a nivel de datos/reportes), pero el badge visible
+        # se muestra como "Pagada" -- decision explicita del dueno tras
+        # reportar que "TRASLADADA" en pantalla confundia con "no se pago".
+        self.assertIn('✅ PAGADA', content)
 
-    def test_badge_visible_muestra_trasladada_no_vencida(self):
+    def test_badge_visible_muestra_pagada_no_vencida(self):
+        # Antes mostraba el badge "TRASLADADA" (gris) para una cuota ya
+        # pagada en su turno -- el dueno reporto que eso confundia
+        # ("por que dice trasladada si pague completo?"). Ahora se
+        # muestra igual que una cuota PAGADA de verdad; el estado interno
+        # (TRASLADADA) no cambia, solo el badge visible.
         response = self._reportar('')
         content = response.content.decode('utf-8')
-        self.assertIn('↷ TRASLADADA', content)
+        self.assertIn('✅ PAGADA', content)
         self.assertNotIn('❌ VENCIDA', content)
 
 
@@ -2399,3 +2408,64 @@ class N1LatenteCorregidoTests(TestCase):
         idx_pendiente = headers.index('Monto Pendiente')
         fila = next(row for row in ws.iter_rows(min_row=2, values_only=True))
         self.assertEqual(fila[idx_pendiente], 631250.0)
+
+
+class BarraProgresoCssValidaTests(TestCase):
+    """
+    detalles_prestamo.html armaba el ancho de la barra de progreso con
+    {% localize off %}{{ progreso|floatformat:2 }}{% endlocalize %} --
+    pero el filtro floatformat ignora el bloque localize off (no respeta
+    la bandera de contexto, a diferencia de la interpolacion simple de un
+    Decimal), asi que con LANGUAGE_CODE='es-co' seguia devolviendo coma
+    decimal ("100,00") dentro de un atributo style, produciendo CSS
+    invalido ("width: 100,00%;") que el navegador ignora en silencio y
+    deja la barra colapsada. El dueno lo reporto en vivo tras un fix
+    anterior que solo agregaba {% localize off %} sin quitar
+    floatformat -- no alcanzaba. El fix real usa stringformat:".2f"
+    (nunca localiza, es formateo de Python puro) en vez de floatformat
+    para el valor que va dentro del CSS.
+    """
+
+    def setUp(self):
+        from django.test import RequestFactory
+
+        self.factory = RequestFactory()
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        perm, _ = Permiso.objects.get_or_create(
+            codigo='prestamo.view',
+            defaults={'descripcion': 'prestamo.view', 'activo': True}
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+        self.user = User.objects.create_user(
+            username='testuser_barra_progreso',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+        self.cliente = Cliente.objects.create(nombre="Test Barra Progreso", celular="3000000012", cedula="999888793")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='COMPLETADO',
+            capital_pendiente=Decimal('0'),
+        )
+
+    def test_ancho_de_la_barra_es_css_valido_no_localizado(self):
+        from mi_app.views_core import detalles_prestamo
+
+        request = self.factory.get(f'/prestamo/{self.prestamo.id}/')
+        request.user = self.user
+        response = detalles_prestamo(request, self.prestamo.id)
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        self.assertIn('width: 100.00%', content)
+        self.assertNotIn('width: 100,00%', content)
