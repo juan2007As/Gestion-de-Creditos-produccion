@@ -471,18 +471,29 @@ function adicionarMora() {
     actualizarResumen();
 }
 
+// "Capital + Interés" y "Solo Capital" llenan el pedacito NOMINAL de esta
+// cuota puntual (cuota.monto_original) -- el pago rutinario esperado --
+// no el capital_pendiente completo del credito. Pagar mas que eso es un
+// abono extraordinario (o un cierre total), una decision que el
+// operario debe tomar a proposito editando el monto, no un click de
+// atajo. Se limita ademas al capital_pendiente real por si ya quedara
+// menos que el nominal (tramo final de un cronograma recalculado).
 function rellenarAmbos() {
     const maxP = {{ capital_pendiente|stringformat:".2f"|default:0 }};
+    const nominalP = {{ cuota.monto_original|stringformat:".2f"|default:0 }};
     const maxI = {{ interes_pendiente|stringformat:".2f"|default:0 }};
-    document.getElementById('monto_principal').value = maxP.toFixed(2);
+    const principal = Math.min(nominalP, maxP);
+    document.getElementById('monto_principal').value = principal.toFixed(2);
     document.getElementById('monto_interes').value = maxI.toFixed(2);
     document.getElementById('monto_mora').value = 0;
     actualizarResumen();
 }
 
 function rellenarSoloPrincipal() {
-    const max = {{ capital_pendiente|stringformat:".2f"|default:0 }};
-    document.getElementById('monto_principal').value = max.toFixed(2);
+    const maxP = {{ capital_pendiente|stringformat:".2f"|default:0 }};
+    const nominalP = {{ cuota.monto_original|stringformat:".2f"|default:0 }};
+    const principal = Math.min(nominalP, maxP);
+    document.getElementById('monto_principal').value = principal.toFixed(2);
     document.getElementById('monto_interes').value = 0;
     document.getElementById('monto_mora').value = 0;
     actualizarResumen();
