@@ -216,8 +216,8 @@
                             <td><strong>#{{ cuota.numero_cuota }}</strong></td>
                             <td>
                                 {{ cuota.fecha_pago_esperada|date:"d/m/Y" }}
-                                {% if detalles.dias_vencidos_positivo > 0 %}
-                                    <br><small class="text-danger"><strong>-{{ detalles.dias_vencidos_positivo }} días</strong></small>
+                                {% if detalles.dias_para_vencer < 0 %}
+                                    <br><small class="text-danger"><strong>Vencida hace {{ detalles.dias_vencidos_positivo }} días</strong></small>
                                 {% endif %}
                             </td>
                             <td>

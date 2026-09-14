@@ -60,8 +60,17 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'crispy_forms',
+    'crispy_bootstrap5',
     'mi_app',
 ]
+
+# django-crispy-forms: instalado en requirements.txt desde el inicio,
+# pero nunca se habia agregado a INSTALLED_APPS -- {% load crispy_forms_tags %}
+# rompia con KeyError en cualquier template que lo usara (ver
+# reporte_cuotas_vencidas.html).
+CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
+CRISPY_TEMPLATE_PACK = 'bootstrap5'
 
 MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',

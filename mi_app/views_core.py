@@ -544,12 +544,24 @@ def clientes_importados(request):
             Q(cedula__icontains=busqueda)
         )
     
+    # p.total_pendiente (la property) generaria N+1 aqui -- su
+    # .exclude()/.filter() interno no reutiliza el cache de
+    # prefetch_related. Se usa interes_pendiente_total_desde_cuotas()
+    # (Python puro sobre las cuotas ya precargadas) igual que en
+    # obtener_estadisticas_sistema().
+    from mi_app.services.amortizacion_service import interes_pendiente_total_desde_cuotas
+    from decimal import Decimal
+
     clientes_info = []
     for cliente in clientes_optimized:
         # Contar préstamos activos sin hacer additional queries (ya están prefetched)
         prestamos_activos = sum(1 for p in cliente.prestamo_set.all() if p.estado == 'ACTIVO')
         # Calcular total_pendiente usando los préstamos ya cargados
-        total_pendiente = sum(p.total_pendiente for p in cliente.prestamo_set.all())
+        total_pendiente = Decimal('0')
+        for p in cliente.prestamo_set.all():
+            cuotas_prefetched = list(p.cuotas.all())
+            interes_pendiente = interes_pendiente_total_desde_cuotas(p, cuotas_prefetched)
+            total_pendiente += p.capital_pendiente + interes_pendiente
         clientes_info.append({
             'cliente': cliente,
             'prestamos_activos': prestamos_activos,
@@ -1371,195 +1383,17 @@ def pagar_cuota_especifica(request, cuota_id):
 @login_required(login_url='login')
 def registrar_pago_mejorado(request, cliente_id):
     """
-    Interfaz mejorada de pago:
-    - Selector de cuotas (múltiples, agrupadas por préstamo)
-    - Vista previa de mora actualizada
-    - Desglose editable (principal/interés/mora)
-    - Comprobante al registrar
+    Ruta huerfana retirada: no la enlazaba ningun template (inalcanzable
+    desde la navegacion normal), y su implementacion tenia el MISMO bug
+    que ya se retiro en registrar_pago -- mutaba monto_pendiente/
+    monto_pagado_principal de la cuota directamente, sin tocar
+    Prestamo.capital_pendiente ni pasar por aplicar_pago(), dejando el
+    capital vivo del prestamo desincronizado. Redirige siempre al flujo
+    de pago correcto (buscar_cliente_pago / pagos_dinamico), con el
+    cliente ya preseleccionado.
     """
-    from .models import Pago
-    from decimal import Decimal
-    
-    cliente = get_object_or_404(Cliente, id=cliente_id)
-    
-    # Obtener solo cuotas pendientes de este cliente -- TRASLADADA (saldo
-    # movido) y ANULADA (credito cerrado antes de que esta cuota se
-    # usara) no deben nada, se excluyen.
-    cuotas_pendientes = Cuota.objects.filter(
-        prestamo__cliente=cliente,
-        pagado=False
-    ).exclude(estado__in=('TRASLADADA', 'ANULADA')).select_related('prestamo').order_by('prestamo_id', 'numero_cuota')
-    
-    # Agrupar por préstamo
-    prestamos_cuotas = {}
-    for cuota in cuotas_pendientes:
-        if cuota.prestamo.id not in prestamos_cuotas:
-            prestamos_cuotas[cuota.prestamo.id] = {
-                'prestamo': cuota.prestamo,
-                'cuotas': []
-            }
-        prestamos_cuotas[cuota.prestamo.id]['cuotas'].append(cuota)
-    
-    if request.method == 'POST':
-        from django.utils.html import escape
-        import re
-        
-        cuota_id = request.POST.get('cuota_id', '').strip()
-        monto_pagado_str = request.POST.get('monto_pagado', '0').strip()
-        monto_principal_str = request.POST.get('monto_principal', '0').strip()
-        monto_interes_str = request.POST.get('monto_interes', '0').strip()
-        monto_mora_str = request.POST.get('monto_mora', '0').strip()
-        referencia = escape(request.POST.get('referencia', '').strip())  # Sanitizar
-        notas = escape(request.POST.get('notas', '').strip())  # Sanitizar
-        
-        # ✅ VALIDACIONES MEJORADAS
-        errores = []
-        
-        # 1. Validar cuota_id (debe ser número válido)
-        if not cuota_id:
-            errores.append("Debe seleccionar una cuota")
-        else:
-            try:
-                cuota_id_int = int(cuota_id)
-                if cuota_id_int <= 0:
-                    errores.append("ID de cuota inválido")
-                cuota = Cuota.objects.get(id=cuota_id_int)
-            except (Cuota.DoesNotExist, ValueError, TypeError):
-                errores.append("Cuota no válida")
-                cuota = None
-        
-        # 2. Validar monto_pagado > 0 (y que sea número válido)
-        try:
-            # Verificar que solo contiene números y punto decimal
-            if not re.match(r'^[\d.]+$', monto_pagado_str):
-                errores.append("El monto debe contener solo números")
-            
-            monto_pagado = Decimal(monto_pagado_str)
-            if monto_pagado <= 0:
-                errores.append("El monto a pagar debe ser mayor a $0")
-            if monto_pagado > Decimal('999999999'):
-                errores.append("El monto es demasiado alto")
-        except:
-            errores.append("El monto debe ser un número válido")
-            monto_pagado = None
-        
-        # 3. Validar desglose de pagos
-        try:
-            # Validar formato de cada monto
-            for campo, valor in [('principal', monto_principal_str), ('interés', monto_interes_str), ('mora', monto_mora_str)]:
-                if not re.match(r'^[\d.]*$', valor):
-                    errores.append(f"El monto de {campo} contiene caracteres inválidos")
-            
-            monto_principal = Decimal(monto_principal_str) if monto_principal_str else Decimal('0')
-            monto_interes = Decimal(monto_interes_str) if monto_interes_str else Decimal('0')
-            monto_mora = Decimal(monto_mora_str) if monto_mora_str else Decimal('0')
-            
-            if monto_principal < 0 or monto_interes < 0 or monto_mora < 0:
-                errores.append("Los montos no pueden ser negativos")
-            
-            # Verificar que la suma no supere lo pendiente
-            if cuota and monto_pagado:
-                monto_total_pendiente = (
-                    cuota.monto_pendiente + 
-                    cuota.monto_pendiente_interes + 
-                    cuota.calcular_mora()
-                )
-                if monto_pagado > monto_total_pendiente:
-                    errores.append(
-                        f"El monto a pagar (${monto_pagado}) no puede superar "
-                        f"lo pendiente (${monto_total_pendiente})"
-                    )
-        except Exception as e:
-            errores.append("Los montos del desglose deben ser números válidos")
-        
-        # 4. Validar que referencia y notas no contengan inyecciones SQL
-        # (escape() ya lo hace, pero verificamos tamaño)
-        if len(referencia) > 100:
-            errores.append("La referencia no puede exceder 100 caracteres")
-        if len(notas) > 500:
-            errores.append("Las notas no pueden exceder 500 caracteres")
-        
-        # Si hay errores, mostrar formulario
-        if errores:
-            contexto = {
-                'cliente': cliente,
-                'prestamos_cuotas': prestamos_cuotas,
-                'error': ' | '.join(errores),
-            }
-            return render(request, 'mi_app/registrar_pago_mejorado.html', contexto)
-        
-        if not cuota:
-            contexto = {
-                'cliente': cliente,
-                'prestamos_cuotas': prestamos_cuotas,
-                'error': 'Error al procesar la cuota',
-            }
-            return render(request, 'mi_app/registrar_pago_mejorado.html', contexto)
-        
-        # Crear registro de pago
-        pago = Pago.objects.create(
-            cuota=cuota,
-            monto_pagado=monto_pagado,
-            monto_principal=monto_principal,
-            monto_interes=monto_interes,
-            monto_mora=monto_mora,
-            usuario_registra=request.user.username,  # ✅ SOLUCIONADO: Obtener del usuario logueado
-            referencia=referencia,
-            notas=notas
-        )
-        
-        # Actualizar cuota
-        cuota.monto_pagado_principal += monto_principal
-        cuota.monto_pagado_interes += monto_interes
-        cuota.monto_pagado_mora += monto_mora
-        
-        # BUG #6 FIX: Recalcular montos pendientes correctamente
-        cuota.monto_pendiente = max(cuota.monto_original - cuota.monto_pagado_principal, Decimal('0'))
-        cuota.monto_pendiente_interes = max(cuota.interes_normal - cuota.monto_pagado_interes, Decimal('0'))
-        
-        # Marcar como pagada si está completa
-        if cuota.monto_pendiente == 0 and cuota.monto_pendiente_interes == 0:
-            cuota.pagado = True
-            cuota.fecha_pago_real = date.today()
-        
-        # BUG #6 FIX: Llamar a actualizar_estado() para sincronizar 'estado' y 'porcentaje_pagado'
-        # Este método recalcula automáticamente los campos de estado basado en los montos pagados
-        cuota.actualizar_estado()
-        
-        # Actualizar estado del préstamo
-        if cuota.prestamo.cuotas.filter(pagado=False).count() == 0:
-            cuota.prestamo.estado = 'COMPLETADO'
-            cuota.prestamo.save()
-        
-        # ✅ NUEVA: Cascada de recalculos (REGLA #3: Cambios Transversales)
-        cliente.actualizar_etiqueta()
-        cliente.actualizar_lista_negra_automatica(usuario=request.user)
-        
-        # Registrar cambio en auditoría
-        try:
-            from mi_app.auditoria import registrar_cambio_manual
-            registrar_cambio_manual(usuario=request.user, modelo='Cliente', id_objeto=cliente.id, accion='PAGO_REGISTRADO')
-        except Exception as e:
-            import logging
-            logging.warning(f"Error auditoría de pago: {str(e)}")
-        
-        # Mostrar comprobante
-        contexto = {
-            'pago': pago,
-            'cuota': cuota,
-            'cliente': cliente,
-            'comprobante': pago.comprobante_texto(),
-        }
-        
-        return render(request, 'mi_app/comprobante_pago.html', contexto)
-    
-    contexto = {
-        'cliente': cliente,
-        'prestamos_cuotas': prestamos_cuotas,
-        'total_cuotas_pendientes': cuotas_pendientes.count(),
-    }
-    
-    return render(request, 'mi_app/registrar_pago_mejorado.html', contexto)
+    get_object_or_404(Cliente, id=cliente_id)
+    return redirect(f"{reverse('buscar_cliente_pago')}?cliente_id={cliente_id}")
 
 
 @require_permission('reporte.view')
@@ -1678,12 +1512,25 @@ def reporte_clientes(request):
     )['total'] or 0
     total_credito = Decimal(str(total_credito_result))
     
-    # BUG #5: Préstamos Rápidos - saldo_pendiente es @property, no campo BD
+    # BUG #5: Préstamos Rápidos - saldo_pendiente es @property, no campo BD.
+    # pr.saldo_pendiente generaria N+1 aqui (su .exclude()/.filter()
+    # interno no reutiliza el cache de prefetch_related) -- se prefetchea
+    # cuotas_rapidas y se usa interes_pendiente_total_desde_cuotas()
+    # (Python puro), igual que en obtener_estadisticas_sistema().
+    from mi_app.services.amortizacion_service import interes_pendiente_total_desde_cuotas
+
     rapidos_pendientes = PrestamoRapido.objects.filter(
         estado__in=['PENDIENTE', 'PARCIALMENTE_PAGADO']
-    )
+    ).prefetch_related('cuotas_rapidas')
     total_rapidos = PrestamoRapido.objects.count()
-    total_rapidos_pendiente = sum(float(pr.saldo_pendiente) for pr in rapidos_pendientes)
+    total_rapidos_pendiente = Decimal('0')
+    for pr in rapidos_pendientes:
+        cuotas_rapidas_prefetched = list(pr.cuotas_rapidas.all())
+        if cuotas_rapidas_prefetched:
+            interes_pendiente = interes_pendiente_total_desde_cuotas(pr, cuotas_rapidas_prefetched)
+            total_rapidos_pendiente += pr.capital_pendiente + interes_pendiente
+        else:
+            total_rapidos_pendiente += Decimal(str(pr.saldo_pendiente))
     
     contexto = {
         'clientes': clientes_reporte,
@@ -3695,8 +3542,14 @@ def exportar_prestamos_excel(request):
             return ""
         return f"{mes}{dia}{tipo_pago}"
     
-    # Obtener todos los préstamos
-    prestamos = Prestamo.objects.select_related('cliente').all().order_by('-fecha_inicio')
+    # Obtener todos los préstamos. prefetch_related('cuotas') evita N+1 --
+    # prestamo.total_pendiente (property) generaria queries nuevas por
+    # prestamo (su .exclude()/.filter() interno no reutiliza el cache de
+    # prefetch), asi que se calcula abajo con interes_pendiente_total_desde_cuotas()
+    # sobre las cuotas ya precargadas.
+    from mi_app.services.amortizacion_service import interes_pendiente_total_desde_cuotas
+
+    prestamos = Prestamo.objects.select_related('cliente').prefetch_related('cuotas').all().order_by('-fecha_inicio')
     clientes_lista_negra = set(
         ListaNegra.objects.filter(activa=True).values_list('cliente_id', flat=True)
     )
@@ -3737,14 +3590,16 @@ def exportar_prestamos_excel(request):
     
     # Agregar datos de préstamos
     for prestamo in prestamos:
-        # Calcular totales
+        # Calcular totales (usando las cuotas ya precargadas por
+        # prefetch_related, no propiedades que generarian N+1)
+        cuotas = list(prestamo.cuotas.all())
         monto_original = float(prestamo.monto_total)
         total_pagado = prestamo.total_pagado
-        total_pendiente = prestamo.total_pendiente
-        num_cuotas = prestamo.cuotas.count()
-        
+        interes_pendiente = interes_pendiente_total_desde_cuotas(prestamo, cuotas)
+        total_pendiente = float(prestamo.capital_pendiente + interes_pendiente)
+        num_cuotas = len(cuotas)
+
         # Calcular interés total e intereses por período
-        cuotas = prestamo.cuotas.all()
         interes_total = sum(float(c.interes_normal) for c in cuotas)
         
         # Determinar si es quincenal o mensual
@@ -3756,13 +3611,15 @@ def exportar_prestamos_excel(request):
         else:
             interes_mensual = interes_total / num_cuotas if num_cuotas > 0 else 0
         
-        # Obtener fecha de último pago
+        # Obtener fecha de último pago (Python puro sobre las cuotas ya
+        # precargadas, en vez de .filter() que re-consultaria la BD)
         fecha_ultimo_pago = "N/A"
-        cuota_pagada = cuotas.filter(pagado=True).order_by('-fecha_pago_real').first()
-        if cuota_pagada and cuota_pagada.fecha_pago_real:
+        cuotas_pagadas_con_fecha = [c for c in cuotas if c.pagado and c.fecha_pago_real]
+        if cuotas_pagadas_con_fecha:
+            cuota_pagada = max(cuotas_pagadas_con_fecha, key=lambda c: c.fecha_pago_real)
             fecha_ultimo_pago = cuota_pagada.fecha_pago_real.strftime('%d/%m/%Y')
-        
-        mora_acumulada = sum(c.calcular_mora_diaria() for c in cuotas.filter(pagado=False))
+
+        mora_acumulada = sum(c.calcular_mora_diaria() for c in cuotas if not c.pagado)
 
         # Agregar fila
         row_data = [
@@ -4449,9 +4306,20 @@ def exportar_prestamos_rapidos_excel(request):
     clientes_lista_negra = set(
         ListaNegra.objects.filter(activa=True).values_list('cliente_id', flat=True)
     )
-    prestamos_rapidos = PrestamoRapido.objects.all().select_related('cliente').order_by('-fecha_solicitud')
-    
+    # prefetch_related('cuotas_rapidas') evita N+1 -- pr.saldo_pendiente
+    # (property) generaria queries nuevas por prestamo rapido (su
+    # .exclude()/.filter() interno no reutiliza el cache de prefetch).
+    from mi_app.services.amortizacion_service import interes_pendiente_total_desde_cuotas
+
+    prestamos_rapidos = PrestamoRapido.objects.all().select_related('cliente').prefetch_related('cuotas_rapidas').order_by('-fecha_solicitud')
+
     for pr in prestamos_rapidos:
+        cuotas_rapidas = list(pr.cuotas_rapidas.all())
+        if cuotas_rapidas:
+            interes_pendiente = interes_pendiente_total_desde_cuotas(pr, cuotas_rapidas)
+            saldo_pendiente = float(pr.capital_pendiente + interes_pendiente)
+        else:
+            saldo_pendiente = float(pr.saldo_pendiente)
         ws.append([
             pr.cliente.nombre,
             pr.cliente.cedula or "",
@@ -4459,7 +4327,7 @@ def exportar_prestamos_rapidos_excel(request):
             'LISTA_NEGRA' if pr.cliente_id in clientes_lista_negra else (pr.cliente.etiqueta_cliente or 'SIN_HISTORIAL'),
             'Sí' if pr.cliente_id in clientes_lista_negra else 'No',
             float(pr.monto),
-            float(pr.saldo_pendiente),
+            saldo_pendiente,
             pr.estado,
             float(pr.interes_porcentaje) if pr.interes_porcentaje else 0,
             pr.fecha_solicitud.strftime('%d/%m/%Y'),

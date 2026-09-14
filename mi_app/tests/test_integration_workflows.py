@@ -2121,3 +2121,254 @@ class PagarCuotaAnuladaRedirigeTests(TestCase):
         response = pagar_cuota_especifica(request, self.cuota_anulada.id)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse('detalles_prestamo', args=[self.prestamo.id]))
+
+
+class RegistrarPagoMejoradoRetiradaTests(TestCase):
+    """
+    registrar_pago_mejorado era una ruta huerfana (ningun template la
+    enlazaba) con el MISMO bug ya retirado de registrar_pago: mutaba
+    monto_pendiente/monto_pagado_principal de la cuota directamente, sin
+    tocar Prestamo.capital_pendiente ni pasar por aplicar_pago(). Se
+    retiro: ahora solo redirige a buscar_cliente_pago con el cliente
+    preseleccionado.
+    """
+
+    def setUp(self):
+        self.cliente = Cliente.objects.create(nombre="Test Pago Mejorado Retirado", celular="3000000020", cedula="999888801")
+
+    def test_redirige_a_buscar_cliente_pago(self):
+        from django.test import RequestFactory
+        from mi_app.models import Rol, Permiso, RolPermiso, UsuarioProfile
+        from mi_app.views_core import registrar_pago_mejorado
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        perm, _ = Permiso.objects.get_or_create(
+            codigo='pago.create',
+            defaults={'descripcion': 'pago.create', 'activo': True}
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+        user = User.objects.create_user(
+            username='testuser_pago_mejorado_retirado',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=user,
+            defaults={'rol': rol, 'activo': True}
+        )
+
+        factory = RequestFactory()
+        request = factory.get(f'/clientes/{self.cliente.id}/registrar-pago/')
+        request.user = user
+        response = registrar_pago_mejorado(request, self.cliente.id)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('buscar_cliente_pago'), response.url)
+        self.assertIn(str(self.cliente.id), response.url)
+
+
+class ReporteCuotasVencidasRendersTests(TestCase):
+    """
+    reporte_cuotas_vencidas.html usa {% load crispy_forms_tags %}, pero
+    crispy_forms/crispy_bootstrap5 (instalados via requirements.txt desde
+    el inicio) nunca se habian agregado a INSTALLED_APPS -- rompia el
+    render completo de esta vista con KeyError en cualquier entorno. Ver
+    auditoria de consistencia del motor de interes sobre saldo
+    (2026-09-13).
+    """
+
+    def setUp(self):
+        from mi_app.models import Rol, Permiso, RolPermiso, UsuarioProfile
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        perm, _ = Permiso.objects.get_or_create(
+            codigo='reporte.view',
+            defaults={'descripcion': 'reporte.view', 'activo': True}
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+        self.user = User.objects.create_user(
+            username='testuser_reporte_vencidas_render',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+
+    def test_renderiza_sin_error_de_crispy_forms(self):
+        from django.test import RequestFactory
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from django.contrib.sessions.backends.db import SessionStore
+        from mi_app.views_core import reporte_cuotas_vencidas
+
+        factory = RequestFactory()
+        request = factory.get('/reportes/cuotas-vencidas/')
+        request.user = self.user
+        request.session = SessionStore()
+        request._messages = FallbackStorage(request)
+
+        response = reporte_cuotas_vencidas(request)
+        self.assertEqual(response.status_code, 200)
+
+
+class PagosDinamicoDiasVencidosSignoTests(TestCase):
+    """
+    pagos_dinamico.html (Paso 3) mostraba "-{{ dias_vencidos_positivo }}
+    dias" para CUALQUIER cuota con fecha distinta de hoy -- incluidas las
+    que vencen en el FUTURO, ya que dias_vencidos_positivo es un valor
+    absoluto (abs()) y la condicion solo chequeaba "> 0", sin distinguir
+    pasado de futuro. Se corrige para gatillar el aviso de "vencida hace"
+    solo cuando dias_para_vencer < 0 (genuinamente atrasada), igual que
+    ya hacen detalles_cuota.html/detalles_prestamo.html/
+    pagar_cuota_especifica.html. Ver reporte del cliente (2026-09-13).
+    """
+
+    def setUp(self):
+        from django.test import RequestFactory
+        from mi_app.models import Rol, Permiso, RolPermiso, UsuarioProfile
+
+        self.factory = RequestFactory()
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        perm, _ = Permiso.objects.get_or_create(
+            codigo='pago.view',
+            defaults={'descripcion': 'pago.view', 'activo': True}
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+        self.user = User.objects.create_user(
+            username='testuser_dias_vencidos_signo',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+
+        self.cliente = Cliente.objects.create(nombre="Test Dias Vencidos Signo", celular="3000000021", cedula="999888802")
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=90),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+        self.cuota_futura = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('500000'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+
+    def test_cuota_futura_no_muestra_vencida_hace(self):
+        from mi_app.views_core import buscar_cliente_pago
+
+        request = self.factory.get(f'/pagos/buscar/?cliente_id={self.cliente.id}&prestamo_id={self.prestamo.id}')
+        request.user = self.user
+        response = buscar_cliente_pago(request)
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        self.assertNotIn('Vencida hace', content)
+
+
+class N1LatenteCorregidoTests(TestCase):
+    """
+    clientes_importados, reporte_clientes, exportar_prestamos_excel y
+    exportar_prestamos_rapidos_excel iteraban prestamos llamando
+    total_pendiente/saldo_pendiente (properties) sin el helper
+    prefetch-aware -- valores correctos, pero N+1 real a escala (mismo
+    patron ya arreglado en obtener_estadisticas_sistema()). Se verifica
+    que los valores sigan siendo correctos tras el fix.
+    """
+
+    def setUp(self):
+        from django.test import RequestFactory
+        from mi_app.models import Rol, Permiso, RolPermiso, UsuarioProfile
+
+        self.factory = RequestFactory()
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        for codigo in ('cliente.view', 'reporte.export'):
+            perm, _ = Permiso.objects.get_or_create(
+                codigo=codigo,
+                defaults={'descripcion': codigo, 'activo': True}
+            )
+            RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+        self.user = User.objects.create_user(
+            username='testuser_n1_latente',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+
+        self.cliente = Cliente.objects.create(
+            nombre="Test N1 Latente", celular="3000000022", cedula="999888803", importado_excel=True,
+        )
+        self.prestamo = Prestamo.objects.create(
+            cliente=self.cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=90),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+        # Cronograma real: 37500,37500,18750,18750,9375,9375 -- solo la
+        # cuota 1 (activa) queda con capital vivo.
+        intereses = [Decimal('37500'), Decimal('37500'), Decimal('18750'), Decimal('18750'), Decimal('9375'), Decimal('9375')]
+        for i, interes in enumerate(intereses, 1):
+            Cuota.objects.create(
+                prestamo=self.prestamo,
+                numero_cuota=i,
+                monto_original=Decimal('83333.33'),
+                monto_pendiente=Decimal('500000') if i == 1 else Decimal('0'),
+                interes_normal=interes,
+                monto_pendiente_interes=interes,
+                fecha_pago_esperada=date.today() + timedelta(days=15 * i),
+            )
+
+    def test_clientes_importados_muestra_total_pendiente_correcto(self):
+        from mi_app.views_core import clientes_importados
+
+        request = self.factory.get('/clientes/importados/')
+        request.user = self.user
+        response = clientes_importados(request)
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        # total_pendiente = capital_pendiente(500000) + interes pendiente
+        # total del cronograma (131250) = 631250
+        self.assertIn('631', content)
+
+    def test_exportar_prestamos_excel_usa_total_pendiente_correcto(self):
+        import io
+        from openpyxl import load_workbook
+        from mi_app.views_core import exportar_prestamos_excel
+
+        request = self.factory.get('/exportar/prestamos/')
+        request.user = self.user
+        response = exportar_prestamos_excel(request)
+
+        self.assertEqual(response.status_code, 200)
+        wb = load_workbook(io.BytesIO(response.content))
+        ws = wb.active
+        headers = [cell.value for cell in ws[1]]
+        idx_pendiente = headers.index('Monto Pendiente')
+        fila = next(row for row in ws.iter_rows(min_row=2, values_only=True))
+        self.assertEqual(fila[idx_pendiente], 631250.0)
