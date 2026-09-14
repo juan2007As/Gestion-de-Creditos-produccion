@@ -282,7 +282,7 @@
                                     </div>
                                     <div class="mt-2">
                                         <div class="progress" style="height: 20px;">
-                                            <div class="progress-bar bg-success" role="progressbar" style="width: {{ prestamo.porcentaje_pagado }}%" aria-valuenow="{{ prestamo.porcentaje_pagado }}" aria-valuemin="0" aria-valuemax="100">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: {% localize off %}{{ prestamo.porcentaje_pagado }}{% endlocalize %}%" aria-valuenow="{% localize off %}{{ prestamo.porcentaje_pagado }}{% endlocalize %}" aria-valuemin="0" aria-valuemax="100">
                                                 {{ prestamo.porcentaje_pagado|floatformat:1 }}%
                                             </div>
                                         </div>

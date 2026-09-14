@@ -1,6 +1,7 @@
 {% extends 'mi_app/base.html' %}
 {% load custom_filters %}
 {% load static %}
+{% load l10n %}
 
 {% block title %}Reporte de Préstamos{% endblock %}
 
@@ -160,7 +161,7 @@
                             </td>
                             <td>
                                 <div class="progress" style="height: 20px;">
-                                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ prestamo.porcentaje_pagado }}%" aria-valuenow="{{ prestamo.porcentaje_pagado }}" aria-valuemin="0" aria-valuemax="100">
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: {% localize off %}{{ prestamo.porcentaje_pagado }}{% endlocalize %}%" aria-valuenow="{% localize off %}{{ prestamo.porcentaje_pagado }}{% endlocalize %}" aria-valuemin="0" aria-valuemax="100">
                                         <small>{{ prestamo.porcentaje_pagado|floatformat:1 }}%</small>
                                     </div>
                                 </div>

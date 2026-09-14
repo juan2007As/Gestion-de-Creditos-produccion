@@ -12,6 +12,14 @@ from decimal import Decimal
 TASA_INTERES_DEFAULT = Decimal('15')
 DIAS_ANCLA = (5, 15, 20, 30)
 
+# Repartir el capital en N cuotas nominales (capital_total / N, cada una
+# quantize(0.01)) casi nunca cierra exacto en $0 -- ej. 500000/6 =
+# 83333.33 x 6 = 499999.98, deja $0.02 sin cobrar. Sin tolerancia, ese
+# residuo de centavos vuelve a generar una cuota nueva entera (con su
+# propio interes calculado) para $0.02 de capital, en vez de dar el
+# credito por cerrado. $1 es insignificante en pesos colombianos.
+TOLERANCIA_CIERRE = Decimal('1.00')
+
 
 def calcular_interes_periodo(capital_pendiente, tasa_porcentaje=TASA_INTERES_DEFAULT):
     """
@@ -173,8 +181,18 @@ def aplicar_pago(prestamo, cuota, capital_pagado, interes_pagado, mora_pagada):
     cuota.monto_pendiente = prestamo.capital_pendiente
     cuota.monto_pendiente_interes = prestamo.interes_acumulado_sin_pagar
 
-    cerrado = prestamo.capital_pendiente <= 0 and prestamo.interes_acumulado_sin_pagar <= 0
+    cerrado = (
+        prestamo.capital_pendiente <= TOLERANCIA_CIERRE
+        and prestamo.interes_acumulado_sin_pagar <= TOLERANCIA_CIERRE
+    )
     if cerrado:
+        # Snap a $0 exacto -- el residuo (si lo hay) es de redondeo, no
+        # deuda real; no debe quedar un "$0.02 pendiente" fantasma en
+        # ningun lado despues de cerrar.
+        prestamo.capital_pendiente = Decimal('0')
+        prestamo.interes_acumulado_sin_pagar = Decimal('0')
+        cuota.monto_pendiente = Decimal('0')
+        cuota.monto_pendiente_interes = Decimal('0')
         cuota.pagado = True
         cuota.fecha_pago_real = date.today()
         prestamo.estado = 'COMPLETADO'

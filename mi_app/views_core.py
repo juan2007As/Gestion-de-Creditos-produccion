@@ -1346,26 +1346,29 @@ def pagar_cuota_especifica(request, cuota_id):
                 capital_despues=resumen['capital_despues'],
             )
 
+            siguiente_cuota = None
             if resumen['cerrado']:
                 cuota.actualizar_estado()
                 cuota.save()
                 _anular_cuotas_restantes(prestamo, cuota)
             else:
-                _avanzar_a_siguiente_cuota(prestamo, cuota, monto_principal)
+                siguiente_cuota = _avanzar_a_siguiente_cuota(prestamo, cuota, monto_principal)
 
             prestamo.save()
 
-        detalles = cuota.detalles_completos()
-        contexto = {
-            'pago': pago, 'cuota': cuota, 'prestamo': prestamo, 'cliente': cliente,
-            'detalles': detalles,
-            'pagos': Pago.objects.filter(cuota=cuota).order_by('-fecha_pago'),
-            'comprobante': pago.comprobante_texto(),
-            'capital_pendiente': prestamo.capital_pendiente,
-            'interes_pendiente': prestamo.interes_acumulado_sin_pagar,
-            'success': True,
-        }
-        return render(request, 'mi_app/pagar_cuota_especifica.html', contexto)
+        # Post-Redirect-Get: sin esto, un refresh o el "Volver" del navegador
+        # reenviaba el mismo pago dos veces, y la pagina se quedaba con el
+        # formulario activo sobre una cuota que ya no es la que hay que
+        # pagar (ya quedo Trasladada/Pagada/Anulada). Se redirige a la
+        # cuota que de verdad sigue activa (o al detalle si el credito ya
+        # cerro), con un mensaje de confirmacion.
+        messages.success(
+            request,
+            f'✅ Pago registrado: ${monto_total:,.2f} (Comprobante #{pago.id}).'
+        )
+        if resumen['cerrado']:
+            return redirect('detalles_prestamo', prestamo_id=prestamo.id)
+        return redirect('pagar_cuota_especifica', cuota_id=siguiente_cuota.id)
 
     else:  # GET
         pagos = Pago.objects.filter(cuota=cuota).order_by('-fecha_pago')
@@ -2707,6 +2710,8 @@ def _avanzar_a_siguiente_cuota(prestamo, cuota_actual, capital_pagado):
     cuota_actual.monto_pendiente_interes = Decimal('0')
     cuota_actual.save()
 
+    return siguiente
+
 
 def _avanzar_a_siguiente_cuota_rapida(prestamo, cuota_actual, capital_pagado):
     """Igual que _avanzar_a_siguiente_cuota, pero para PrestamoRapido/CuotaRapida."""
@@ -2752,6 +2757,8 @@ def _avanzar_a_siguiente_cuota_rapida(prestamo, cuota_actual, capital_pagado):
     cuota_actual.monto_pendiente = Decimal('0')
     cuota_actual.monto_pendiente_interes = Decimal('0')
     cuota_actual.save()
+
+    return siguiente
 
 
 def _anular_cuotas_restantes(prestamo, cuota_cerrada):

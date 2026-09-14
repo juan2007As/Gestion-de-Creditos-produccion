@@ -708,8 +708,9 @@ class PagarCuotaEspecificaMotorNuevoTests(TestCase):
         )
 
         prestamo.refresh_from_db()
-        self.assertEqual(response.status_code, 200)
-        self.assertNotIn('error', response.context or {})
+        # Post-Redirect-Get: el abono extra no cierra el credito (quedan
+        # 50000 de capital), asi que redirige a la cuota que sigue activa.
+        self.assertEqual(response.status_code, 302)
         self.assertEqual(prestamo.capital_pendiente, Decimal('50000'))
 
 
@@ -890,9 +891,13 @@ class AvanzarCuotaTests(TestCase):
         )
 
     def _pagar(self, cuota_id, data):
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from django.contrib.sessions.backends.db import SessionStore
         from mi_app.views_core import pagar_cuota_especifica
         request = self.factory.post(f'/cuota/{cuota_id}/pagar/', data)
         request.user = self.user
+        request.session = SessionStore()
+        request._messages = FallbackStorage(request)
         return pagar_cuota_especifica(request, cuota_id)
 
     def test_pago_solo_interes_mantiene_el_interes_de_la_siguiente_cuota_del_mismo_par(self):
@@ -909,7 +914,11 @@ class AvanzarCuotaTests(TestCase):
         )
 
         response = self._pagar(self.cuota1.id, {'monto_principal': '0', 'monto_interes': '37500', 'monto_mora': '0'})
-        self.assertEqual(response.status_code, 200)
+        # Post-Redirect-Get: un pago que no cierra el prestamo redirige a
+        # la cuota que queda activa (aqui, la 2), no se queda en la misma
+        # pagina con el formulario todavia activo.
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('pagar_cuota_especifica', args=[self.cuota2.id]))
 
         self.prestamo.refresh_from_db()
         self.cuota1.refresh_from_db()
@@ -930,12 +939,15 @@ class AvanzarCuotaTests(TestCase):
 
     def test_pago_solo_interes_crea_cuota_nueva_si_no_hay_siguiente(self):
         response = self._pagar(self.cuota1.id, {'monto_principal': '0', 'monto_interes': '37500', 'monto_mora': '0'})
-        self.assertEqual(response.status_code, 200)
 
         self.cuota1.refresh_from_db()
         nueva_cuota = self.prestamo.cuotas.filter(numero_cuota=2).first()
 
         self.assertIsNotNone(nueva_cuota)
+        # Post-Redirect-Get: redirige a la cuota recien creada (la que
+        # queda activa), no se queda en la misma pagina.
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('pagar_cuota_especifica', args=[nueva_cuota.id]))
         self.assertEqual(self.cuota1.estado, 'TRASLADADA')
         # Cuota 1 es numero impar (primera de su par) -> la 2 sigue en el
         # mismo par, mismo interes (sin abono extra).
@@ -961,12 +973,15 @@ class AvanzarCuotaTests(TestCase):
         response = self._pagar(self.prestamo.cuotas.get(numero_cuota=2).id, {
             'monto_principal': '300000', 'monto_interes': '37500', 'monto_mora': '0',
         })
-        self.assertEqual(response.status_code, 200)
 
         self.prestamo.refresh_from_db()
         self.assertEqual(self.prestamo.capital_pendiente, Decimal('200000'))
 
         cuota3 = self.prestamo.cuotas.get(numero_cuota=3)
+        # Post-Redirect-Get: redirige a la cuota 3 (la que queda activa
+        # tras el abono extra), no se queda en la misma pagina.
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('pagar_cuota_especifica', args=[cuota3.id]))
         cuota4 = self.prestamo.cuotas.get(numero_cuota=4)
         cuota5 = self.prestamo.cuotas.get(numero_cuota=5)
         cuota6 = self.prestamo.cuotas.get(numero_cuota=6)
@@ -980,7 +995,11 @@ class AvanzarCuotaTests(TestCase):
 
     def test_pago_que_cierra_prestamo_no_crea_cuota_nueva(self):
         response = self._pagar(self.cuota1.id, {'monto_principal': '500000', 'monto_interes': '37500', 'monto_mora': '0'})
-        self.assertEqual(response.status_code, 200)
+        # Post-Redirect-Get: un pago que cierra el credito redirige al
+        # detalle del prestamo, no se queda en la pagina de la cuota ya
+        # cerrada con el formulario todavia activo.
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('detalles_prestamo', args=[self.prestamo.id]))
 
         self.prestamo.refresh_from_db()
         self.cuota1.refresh_from_db()
@@ -1833,6 +1852,8 @@ class CierreTotalAnulaCuotasRestantesTests(TestCase):
             self.cuotas.append(cuota)
 
     def _pagar_todo(self):
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from django.contrib.sessions.backends.db import SessionStore
         from mi_app.views_core import pagar_cuota_especifica
         request = self.factory.post(f'/cuota/{self.cuotas[0].id}/pagar/', {
             'monto_principal': '500000',
@@ -1840,11 +1861,17 @@ class CierreTotalAnulaCuotasRestantesTests(TestCase):
             'monto_mora': '0',
         })
         request.user = self.user
+        request.session = SessionStore()
+        request._messages = FallbackStorage(request)
         return pagar_cuota_especifica(request, self.cuotas[0].id)
 
     def test_total_pendiente_queda_en_cero_tras_cierre_total(self):
         response = self._pagar_todo()
-        self.assertEqual(response.status_code, 200)
+        # Post-Redirect-Get: un cierre total redirige al detalle del
+        # prestamo, no se queda en la cuota ya cerrada con el formulario
+        # todavia activo.
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('detalles_prestamo', args=[self.prestamo.id]))
 
         self.prestamo.refresh_from_db()
         self.assertEqual(self.prestamo.estado, 'COMPLETADO')
