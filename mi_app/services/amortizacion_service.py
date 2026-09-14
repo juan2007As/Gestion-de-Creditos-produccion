@@ -12,25 +12,31 @@ from decimal import Decimal
 TASA_INTERES_DEFAULT = Decimal('15')
 DIAS_ANCLA = (5, 15, 20, 30)
 
+# El sistema trabaja en pesos colombianos enteros -- no hay centavos
+# (decision explicita del dueno: "no son dolares, son pesos"). Todo monto
+# calculado por este servicio se redondea a la unidad peso.
+UNIDAD_MONETARIA = Decimal('1')
+
 # Repartir el capital en N cuotas nominales (capital_total / N, cada una
-# quantize(0.01)) casi nunca cierra exacto en $0 -- ej. 500000/6 =
-# 83333.33 x 6 = 499999.98, deja $0.02 sin cobrar. Sin tolerancia, ese
-# residuo de centavos vuelve a generar una cuota nueva entera (con su
-# propio interes calculado) para $0.02 de capital, en vez de dar el
-# credito por cerrado. $1 es insignificante en pesos colombianos.
-TOLERANCIA_CIERRE = Decimal('1.00')
+# redondeada a la unidad peso) casi nunca cierra exacto en $0 -- ej.
+# 500000/6 = 83333.33... -> 83333 x 6 = 499998, deja $2 sin cobrar. Sin
+# tolerancia, ese residuo de redondeo vuelve a generar una cuota nueva
+# entera (con su propio interes calculado) para esos pocos pesos, en vez
+# de dar el credito por cerrado. Con 6 cuotas como maximo, el residuo de
+# redondeo nunca supera unos pocos pesos -- insignificante en pesos
+# colombianos, $10 de margen es mas que suficiente.
+TOLERANCIA_CIERRE = Decimal('10')
 
 
 def calcular_interes_periodo(capital_pendiente, tasa_porcentaje=TASA_INTERES_DEFAULT):
     """
-    Interes de una quincena = capital_pendiente * tasa% / 2. Sin redondeo
-    (decision explicita del dueno: "no hay que redondear" -- reemplaza la
-    regla anterior de redondeo al millar).
+    Interes de una quincena = capital_pendiente * tasa% / 2, redondeado a
+    la unidad peso (sin centavos -- decision explicita del dueno).
     """
     capital_pendiente = Decimal(capital_pendiente)
     tasa_porcentaje = Decimal(tasa_porcentaje)
     interes = capital_pendiente * (tasa_porcentaje / Decimal('100')) / Decimal('2')
-    return interes.quantize(Decimal('0.01'))
+    return interes.quantize(UNIDAD_MONETARIA)
 
 
 def generar_cronograma_interes(capital_base, tasa_porcentaje, num_cuotas):
@@ -47,7 +53,7 @@ def generar_cronograma_interes(capital_base, tasa_porcentaje, num_cuotas):
     intereses = []
     for i in range(num_cuotas):
         par_index = i // 2
-        intereses.append((base / (Decimal('2') ** par_index)).quantize(Decimal('0.01')))
+        intereses.append((base / (Decimal('2') ** par_index)).quantize(UNIDAD_MONETARIA))
     return intereses
 
 

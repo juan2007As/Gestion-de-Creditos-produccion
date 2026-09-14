@@ -15,16 +15,17 @@ def abs_value(value):
 @register.filter
 def formato_colombiano(valor):
     """
-    Formatea números al estilo colombiano: 1.000,00
-    Usa punto como separador de miles y coma para decimales
+    Formatea números al estilo colombiano: 1.000
+    Pesos colombianos enteros, sin centavos -- usa punto como separador
+    de miles.
     """
     if valor is None or valor == '':
         return '-'
-    
+
     try:
         valor = float(valor)
-        # Convertir a string con 2 decimales y usar separador de miles
-        formateado = f"{valor:,.2f}"
+        # Redondear a pesos enteros y usar separador de miles
+        formateado = f"{valor:,.0f}"
         # Reemplazar comas por X (temporal), puntos por comas, X por puntos
         formateado = formateado.replace(',', 'X').replace('.', ',').replace('X', '.')
         return formateado
@@ -35,17 +36,17 @@ def formato_colombiano(valor):
 @register.filter
 def formato_moneda_co(valor):
     """
-    Formato moneda colombiana con símbolo: $1.000,00
+    Formato moneda colombiana con símbolo: $1.000 (pesos enteros, sin centavos)
     """
     if valor is None:
-        return '$0,00'
-    
+        return '$0'
+
     try:
         valor = float(valor)
-        formateado = f"{valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        formateado = f"{valor:,.0f}".replace(',', 'X').replace('.', ',').replace('X', '.')
         return f"${formateado}"
     except (ValueError, TypeError):
-        return '$0,00'
+        return '$0'
 
 
 @register.filter

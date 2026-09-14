@@ -736,13 +736,16 @@ def crear_prestamo(request, cliente_id=None):
             errores.append("[V4] El monto es requerido")
         else:
             try:
-                monto = Decimal(monto_str)
+                # Pesos colombianos enteros, sin centavos (decision explicita
+                # del dueno) -- se redondea cualquier valor con decimales que
+                # llegue del formulario en vez de rechazarlo.
+                monto = Decimal(monto_str).quantize(Decimal('1'))
                 if monto <= 0:
                     errores.append("[V4] El monto debe ser mayor a $0")
                 elif monto > Decimal('999999999'):
                     errores.append("[V4] El monto no puede exceder $999,999,999")
             except (ValueError, ArithmeticError):
-                errores.append("[V4] El monto debe ser un número válido (máximo 2 decimales)")
+                errores.append("[V4] El monto debe ser un número válido")
                 monto = None
         
         # ============================================================================
@@ -832,7 +835,8 @@ def crear_prestamo(request, cliente_id=None):
 
             # Capital de referencia por cuota -- solo informativo para la UI,
             # el capital real vive en prestamo.capital_pendiente (ver spec).
-            capital_por_cuota = (monto / Decimal(num_cuotas)).quantize(Decimal('0.01'))
+            # Pesos enteros, sin centavos.
+            capital_por_cuota = (monto / Decimal(num_cuotas)).quantize(Decimal('1'))
 
             # Cronograma de interes completo: el interes de las primeras 2
             # cuotas (1 mes) es capital*tasa/2; cada par siguiente es la
@@ -1295,9 +1299,12 @@ def pagar_cuota_especifica(request, cuota_id):
     mora_actual = cuota.calcular_mora_diaria()
 
     if request.method == 'POST':
-        monto_principal = Decimal(request.POST.get('monto_principal', '0').strip() or '0')
-        monto_interes = Decimal(request.POST.get('monto_interes', '0').strip() or '0')
-        monto_mora = Decimal(request.POST.get('monto_mora', '0').strip() or '0')
+        # Pesos colombianos enteros, sin centavos (decision explicita del
+        # dueno) -- se redondea cualquier valor con decimales que llegue
+        # del formulario en vez de dejar sueltos "33 centavos".
+        monto_principal = Decimal(request.POST.get('monto_principal', '0').strip() or '0').quantize(Decimal('1'))
+        monto_interes = Decimal(request.POST.get('monto_interes', '0').strip() or '0').quantize(Decimal('1'))
+        monto_mora = Decimal(request.POST.get('monto_mora', '0').strip() or '0').quantize(Decimal('1'))
         referencia = request.POST.get('referencia', '')
         notas = request.POST.get('notas', '')
 
@@ -2676,7 +2683,7 @@ def _avanzar_a_siguiente_cuota(prestamo, cuota_actual, capital_pagado):
             nueva_fecha = siguiente_fecha_en_par(cuota_actual.fecha_pago_esperada, par)
             futuras = [Cuota(prestamo=prestamo, numero_cuota=cuota_actual.numero_cuota + 1, fecha_pago_esperada=nueva_fecha)]
 
-        nuevo_capital_por_cuota = (prestamo.capital_pendiente / len(futuras)).quantize(Decimal('0.01'))
+        nuevo_capital_por_cuota = (prestamo.capital_pendiente / len(futuras)).quantize(Decimal('1'))
         nuevos_intereses = generar_cronograma_interes(prestamo.capital_pendiente, prestamo.interes_porcentaje, len(futuras))
         for cuota_futura, interes in zip(futuras, nuevos_intereses):
             cuota_futura.monto_original = nuevo_capital_por_cuota
@@ -2727,7 +2734,7 @@ def _avanzar_a_siguiente_cuota_rapida(prestamo, cuota_actual, capital_pagado):
             nueva_fecha = siguiente_fecha_en_par(cuota_actual.fecha_pago_esperada, par)
             futuras = [CuotaRapida(prestamo_rapido=prestamo, numero_cuota=cuota_actual.numero_cuota + 1, fecha_pago_esperada=nueva_fecha)]
 
-        nuevo_capital_por_cuota = (prestamo.capital_pendiente / len(futuras)).quantize(Decimal('0.01'))
+        nuevo_capital_por_cuota = (prestamo.capital_pendiente / len(futuras)).quantize(Decimal('1'))
         nuevos_intereses = generar_cronograma_interes(prestamo.capital_pendiente, prestamo.interes_porcentaje, len(futuras))
         for cuota_futura, interes in zip(futuras, nuevos_intereses):
             cuota_futura.monto_original = nuevo_capital_por_cuota
@@ -2934,7 +2941,7 @@ def crear_prestamo_rapido(request):
                 prestamo_rapido.capital_pendiente = capital_total
                 prestamo_rapido.save(update_fields=['capital_pendiente'])
 
-                capital_por_cuota = (capital_total / Decimal(num_cuotas)).quantize(Decimal('0.01'))
+                capital_por_cuota = (capital_total / Decimal(num_cuotas)).quantize(Decimal('1'))
                 intereses = generar_cronograma_interes(capital_total, tasa, num_cuotas)
 
                 for i, (fecha_pago, interes_cuota) in enumerate(zip(fechas_pago, intereses), 1):

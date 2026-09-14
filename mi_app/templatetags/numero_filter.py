@@ -24,8 +24,8 @@ def formato_colombiano(valor):
         else:
             valor_float = float(valor)
         
-        # Formatear con 2 decimales
-        valor_formateado = f"{valor_float:,.2f}"
+        # Pesos colombianos enteros, sin centavos
+        valor_formateado = f"{valor_float:,.0f}"
         
         # Reemplazar comas por X, puntos por comas, X por puntos (formato colombiano)
         resultado = valor_formateado.replace(",", "X").replace(".", ",").replace("X", ".")

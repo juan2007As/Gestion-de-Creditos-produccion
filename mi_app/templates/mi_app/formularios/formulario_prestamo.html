@@ -85,11 +85,11 @@
                             <span class="currency-symbol">$</span>
                             <input 
                                 type="number" 
-                                id="monto_total" 
+                                id="monto_total"
                                 name="monto_total"
-                                class="form-control" 
+                                class="form-control"
                                 placeholder="100000"
-                                step="0.01"
+                                step="1"
                                 min="0"
                                 required
                             />
@@ -662,8 +662,8 @@ function formatearMonedaColombia(valor) {
     return new Intl.NumberFormat('es-CO', {
         style: 'currency',
         currency: 'COP',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
     }).format(valor || 0);
 }
 
@@ -817,11 +817,13 @@ function generarFechasPago(numCuotas) {
 // cuotas (1 mes) = capital_total * tasa% / 2; cada par siguiente es la
 // MITAD del anterior. Sin redondeo (decision explicita del dueno).
 function generarCronogramaInteres(capitalTotal, tasaPorcentaje, numCuotas) {
-    const base = capitalTotal * (tasaPorcentaje / 100) / 2;
+    // Pesos colombianos enteros, sin centavos -- mismo redondeo que
+    // amortizacion_service.py::generar_cronograma_interes().
+    const base = Math.round(capitalTotal * (tasaPorcentaje / 100) / 2);
     const intereses = [];
     for (let i = 0; i < numCuotas; i++) {
         const parIndex = Math.floor(i / 2);
-        intereses.push(base / Math.pow(2, parIndex));
+        intereses.push(Math.round(base / Math.pow(2, parIndex)));
     }
     return intereses;
 }
@@ -860,11 +862,11 @@ function generarCuotas() {
     // Generar fechas cada 15 días
     const fechasPago = generarFechasPago(numCuotas);
 
-    // Capital por cuota: division simple, sin redondeo especial ni
+    // Capital por cuota: division simple redondeada a pesos enteros, sin
     // "ultima cuota absorbe la diferencia" -- el capital real vive en
     // capital_pendiente, esto es solo referencia informativa (igual que
     // en crear_prestamo).
-    const capitalPorCuota = montoTotal / numCuotas;
+    const capitalPorCuota = Math.round(montoTotal / numCuotas);
 
     // Cronograma de interes fijo (mitad cada par de cuotas)
     const intereses = generarCronogramaInteres(montoTotal, interesPorcentaje, numCuotas);

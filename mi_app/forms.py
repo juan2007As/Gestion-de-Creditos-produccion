@@ -302,7 +302,7 @@ class ConfiguracionForm(forms.ModelForm):
             }),
             'tasa_mora_diaria': forms.NumberInput(attrs={
                 'class': 'form-control',
-                'step': '0.01',
+                'step': '1',
                 'min': '0',
                 'placeholder': 'Ej: 2000'
             }),
@@ -336,13 +336,14 @@ class ConfiguracionForm(forms.ModelForm):
         return tasa
     
     def clean_tasa_mora_diaria(self):
-        """Validar tasa de mora"""
+        """Validar tasa de mora -- pesos colombianos enteros, sin centavos."""
+        from decimal import Decimal
         tasa = self.cleaned_data.get('tasa_mora_diaria')
         if tasa is None:
             raise ValidationError('La mora diaria es requerida.')
         if float(tasa) < 0:
             raise ValidationError('La mora diaria no puede ser negativa.')
-        return tasa
+        return Decimal(tasa).quantize(Decimal('1'))
 
 
 class PrestamoRapidoForm(forms.ModelForm):
@@ -375,7 +376,7 @@ class PrestamoRapidoForm(forms.ModelForm):
         widgets = {
             'monto': forms.NumberInput(attrs={
                 'class': 'form-control',
-                'step': '0.01',
+                'step': '1',
                 'min': '0',
                 'placeholder': 'Monto del préstamo'
             }),
@@ -420,7 +421,8 @@ class PrestamoRapidoForm(forms.ModelForm):
                 pass
     
     def clean_monto(self):
-        """Validar monto"""
+        """Validar monto -- pesos colombianos enteros, sin centavos."""
+        from decimal import Decimal
         monto = self.cleaned_data.get('monto')
         if monto is None:
             raise ValidationError('El monto es requerido.')
@@ -428,7 +430,7 @@ class PrestamoRapidoForm(forms.ModelForm):
             raise ValidationError('El monto debe ser mayor a 0.')
         if float(monto) > 100000000:
             raise ValidationError('El monto no puede ser mayor a 100,000,000.')
-        return monto
+        return Decimal(monto).quantize(Decimal('1'))
     
     def clean_interes_porcentaje(self):
         """Validar interés"""
@@ -470,7 +472,7 @@ class PagoPrestamoRapidoForm(forms.Form):
         decimal_places=2,
         widget=forms.NumberInput(attrs={
             'class': 'form-control',
-            'step': '0.01',
+            'step': '1',
             'min': '0',
             'placeholder': 'Monto a pagar'
         }),
@@ -505,11 +507,12 @@ class PagoPrestamoRapidoForm(forms.Form):
     )
     
     def clean_monto_pagado(self):
-        """Validar monto"""
+        """Validar monto -- pesos colombianos enteros, sin centavos."""
+        from decimal import Decimal
         monto = self.cleaned_data.get('monto_pagado')
         if monto is None or float(monto) <= 0:
             raise ValidationError('El monto debe ser mayor a 0.')
-        return monto
+        return Decimal(monto).quantize(Decimal('1'))
 
 
 class ReporteCuotasVencidasForm(forms.Form):

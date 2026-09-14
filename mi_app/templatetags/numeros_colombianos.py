@@ -8,17 +8,19 @@ register = template.Library()
 
 
 @register.filter
-def formato_colombiano(valor, decimales=2):
+def formato_colombiano(valor, decimales=0):
     """
-    Formatea número al estándar colombiano.
-    Uso: {{ monto|formato_colombiano }} o {{ monto|formato_colombiano:0 }}
-    
+    Formatea número al estándar colombiano. Pesos colombianos enteros,
+    sin centavos, por defecto -- pasar :2 explícito para casos que sí
+    necesiten decimales (p. ej. porcentajes).
+    Uso: {{ monto|formato_colombiano }} o {{ tasa|formato_colombiano:2 }}
+
     Args:
         valor: Número a formatear (int, float, Decimal, string)
-        decimales: Cantidad de decimales (default 2)
-    
+        decimales: Cantidad de decimales (default 0)
+
     Returns:
-        String formateado: "1.234.567,89"
+        String formateado: "1.234.567"
     """
     try:
         # Si es None o vacío, retornar 0

@@ -2566,3 +2566,130 @@ class PagoParcialTrasladadaTests(TestCase):
         )
         estado_visual = _obtener_estado_visual_cuota(cuota_trasladada_completa)
         self.assertEqual(estado_visual['estado'], 'PAGADA')
+
+
+class PesosEnterosSinCentavosTests(TestCase):
+    """
+    Decision explicita del dueno: "no son dolares, son pesos" -- el
+    sistema entero trabaja en pesos colombianos enteros, sin centavos.
+    Antes, repartir el capital entre N cuotas (capital_total / N,
+    quantize a centavos) dejaba "33 centavos sueltos" tipo $166.666,67;
+    ahora se redondea a la unidad peso en cada paso del motor de
+    amortizacion (capital por cuota, interes por periodo, cronograma) y
+    en cualquier monto que entre por un formulario de pago. Ver
+    DEUDA-TECNICA.md #27.
+    """
+
+    def setUp(self):
+        self.client_obj = Client()
+
+        rol, _ = Rol.objects.get_or_create(
+            nombre='ADMIN',
+            defaults={'descripcion': 'Rol admin para tests', 'activo': True}
+        )
+        for codigo in ('prestamo.create', 'pago.create'):
+            perm, _ = Permiso.objects.get_or_create(
+                codigo=codigo,
+                defaults={'descripcion': codigo, 'activo': True}
+            )
+            RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+
+        self.user = User.objects.create_user(
+            username='testuser_pesos_enteros',
+            password='testpass123'  # pragma: allowlist secret
+        )
+        UsuarioProfile.objects.get_or_create(
+            usuario=self.user,
+            defaults={'rol': rol, 'activo': True}
+        )
+        self.client_obj.login(username='testuser_pesos_enteros', password='testpass123')  # pragma: allowlist secret
+
+    def test_capital_por_cuota_sin_centavos_al_crear_prestamo(self):
+        # 500000/3 = 166666.666... -- bajo el motor viejo (centavos) daba
+        # 166666,67 con centavos sueltos; en pesos enteros debe dar 166667.
+        cliente = Cliente.objects.create(nombre="Test Pesos Enteros Crear", celular="3000000014", cedula="999888795")
+
+        response = self.client_obj.post(reverse('crear_prestamo'), {
+            'cliente': cliente.id,
+            'monto_total': '500000',
+            'interes_porcentaje': '15',
+            'num_cuotas': '3',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        prestamo = Prestamo.objects.get(cliente=cliente)
+        cuotas = list(prestamo.cuotas.order_by('numero_cuota'))
+        for cuota in cuotas:
+            self.assertEqual(cuota.monto_original % 1, 0, f"cuota {cuota.numero_cuota} tiene centavos: {cuota.monto_original}")
+            self.assertEqual(cuota.interes_normal % 1, 0, f"cuota {cuota.numero_cuota} tiene centavos de interes: {cuota.interes_normal}")
+
+    def test_pago_manual_con_centavos_se_redondea_a_peso_entero(self):
+        cliente = Cliente.objects.create(nombre="Test Pesos Enteros Pago", celular="3000000015", cedula="999888796")
+        prestamo = Prestamo.objects.create(
+            cliente=cliente,
+            monto_total=Decimal('500000'),
+            interes_porcentaje=Decimal('15'),
+            fecha_inicio=date.today(),
+            fecha_fin_estimada=date.today() + timedelta(days=60),
+            estado='ACTIVO',
+            capital_pendiente=Decimal('500000'),
+        )
+        cuota = Cuota.objects.create(
+            prestamo=prestamo,
+            numero_cuota=1,
+            monto_original=Decimal('166667'),
+            monto_pendiente=Decimal('500000'),
+            interes_normal=Decimal('37500'),
+            monto_pendiente_interes=Decimal('37500'),
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+
+        # El operario escribe un monto con centavos a mano -- no debe
+        # quedar guardado con centavos sueltos.
+        response = self.client_obj.post(reverse('pagar_cuota_especifica', args=[cuota.id]), {
+            'monto_principal': '83333.33',
+            'monto_interes': '10000.49',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        prestamo.refresh_from_db()
+        cuota.refresh_from_db()
+        self.assertEqual(cuota.monto_pagado_principal, Decimal('83333'))
+        self.assertEqual(cuota.monto_pagado_interes, Decimal('10000'))
+        self.assertEqual(prestamo.capital_pendiente, Decimal('416667'))
+
+    def test_cierre_por_pagos_nominales_sigue_cerrando_en_cero_con_residuo_de_pesos(self):
+        # 500000/6 = 83333.33... -> en pesos enteros: 83333 x 6 = 499998,
+        # deja $2 de residuo de redondeo (antes eran $0.02). Debe seguir
+        # cerrando exacto en $0 gracias a TOLERANCIA_CIERRE.
+        cliente = Cliente.objects.create(nombre="Test Pesos Enteros Cierre", celular="3000000016", cedula="999888797")
+
+        response = self.client_obj.post(reverse('crear_prestamo'), {
+            'cliente': cliente.id,
+            'monto_total': '500000',
+            'interes_porcentaje': '15',
+            'num_cuotas': '6',
+        })
+        self.assertEqual(response.status_code, 302)
+        prestamo = Prestamo.objects.get(cliente=cliente)
+
+        for _ in range(6):
+            cuota_activa = prestamo.cuotas.exclude(estado__in=('TRASLADADA', 'ANULADA', 'PAGADA')).order_by('numero_cuota').first()
+            response = self.client_obj.post(reverse('pagar_cuota_especifica', args=[cuota_activa.id]), {
+                'monto_principal': str(cuota_activa.monto_original),
+                'monto_interes': str(cuota_activa.interes_normal),
+            })
+            self.assertEqual(response.status_code, 302)
+
+        prestamo.refresh_from_db()
+        self.assertEqual(prestamo.capital_pendiente, Decimal('0'))
+        self.assertEqual(prestamo.interes_acumulado_sin_pagar, Decimal('0'))
+        self.assertEqual(prestamo.estado, 'COMPLETADO')
+        self.assertEqual(prestamo.cuotas.filter(estado='PAGADA').count(), 1)
+        self.assertEqual(prestamo.cuotas.count(), 6, "no debe generarse una 7ma cuota fantasma por el residuo de redondeo")
+
+    def test_formato_colombiano_no_muestra_centavos(self):
+        from mi_app.templatetags.custom_filters import formato_colombiano, formato_moneda_co
+
+        self.assertEqual(formato_colombiano(Decimal('166667')), '166.667')
+        self.assertEqual(formato_moneda_co(Decimal('166667')), '$166.667')

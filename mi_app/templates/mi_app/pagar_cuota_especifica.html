@@ -217,22 +217,20 @@
                             <label class="form-label fw-bold small">💵 Principal a Pagar</label>
                             <div style="display: flex; gap: 0; width: 100%;">
                                 <span class="currency-symbol">$</span>
-                                <input 
-                                    type="number" 
+                                <input
+                                    type="number"
                                     id="monto_principal"
                                     name="monto_principal"
-                                    class="form-control" 
-                                    placeholder="0.00"
-                                    step="0.01"
+                                    class="form-control"
+                                    placeholder="0"
+                                    step="1"
                                     min="0"
-                                    max="{{ capital_pendiente }}"
+                                    max="{{ capital_pendiente|stringformat:".0f" }}"
                                     value="0"
                                     style="border-left: none; border-radius: 0 0.375rem 0.375rem 0; flex: 1;"
                                 >
                             </div>
-                            <button type="button" class="btn btn-sm btn-link text-primary p-0 mt-1" onclick="adicionarPrincipal()">
-                                Máximo: {{ capital_pendiente|formato_colombiano }}
-                            </button>
+                            <small class="text-muted d-block mt-1">Máximo: {{ capital_pendiente|formato_colombiano }}</small>
                         </div>
 
                         <!-- MONTO INTERÉS -->
@@ -240,22 +238,20 @@
                             <label class="form-label fw-bold small">📈 Interés a Pagar</label>
                             <div style="display: flex; gap: 0; width: 100%;">
                                 <span class="currency-symbol">$</span>
-                                <input 
-                                    type="number" 
+                                <input
+                                    type="number"
                                     id="monto_interes"
                                     name="monto_interes"
-                                    class="form-control" 
-                                    placeholder="0.00"
-                                    step="0.01"
+                                    class="form-control"
+                                    placeholder="0"
+                                    step="1"
                                     min="0"
-                                    max="{{ interes_pendiente }}"
+                                    max="{{ interes_pendiente|stringformat:".0f" }}"
                                     value="0"
                                     style="border-left: none; border-radius: 0 0.375rem 0.375rem 0; flex: 1;"
                                 >
                             </div>
-                            <button type="button" class="btn btn-sm btn-link text-warning p-0 mt-1" onclick="adicionarInteres()">
-                                Máximo: {{ interes_pendiente|formato_colombiano }}
-                            </button>
+                            <small class="text-muted d-block mt-1">Máximo: {{ interes_pendiente|formato_colombiano }}</small>
                         </div>
 
                         <!-- MONTO MORA -->
@@ -263,21 +259,19 @@
                             <label class="form-label fw-bold small">⚠️ Mora a Pagar (Opcional)</label>
                             <div style="display: flex; gap: 0; width: 100%;">
                                 <span class="currency-symbol">$</span>
-                                <input 
-                                    type="number" 
+                                <input
+                                    type="number"
                                     id="monto_mora"
                                     name="monto_mora"
-                                    class="form-control" 
-                                    placeholder="0.00"
-                                    step="0.01"
+                                    class="form-control"
+                                    placeholder="0"
+                                    step="1"
                                     min="0"
                                     value="0"
                                     style="border-left: none; border-radius: 0 0.375rem 0.375rem 0; flex: 1;"
                                 >
                             </div>
-                            <button type="button" class="btn btn-sm btn-link text-info p-0 mt-1" onclick="adicionarMora()">
-                                Máximo: {{ detalles.pendiente_mora|formato_colombiano }}
-                            </button>
+                            <small class="text-muted d-block mt-1">Máximo: {{ detalles.pendiente_mora|formato_colombiano }}</small>
                         </div>
 
                         <!-- BOTONES RÁPIDOS -->
@@ -425,16 +419,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const resumenT = document.getElementById('resumen_total');
 
     // Valores máximos (forzar punto decimal para JavaScript)
-    const maxPrincipal = {{ capital_pendiente|stringformat:".2f"|default:0 }};
-    const maxInteres = {{ interes_pendiente|stringformat:".2f"|default:0 }};
-    const maxMora = {{ detalles.pendiente_mora|stringformat:".2f"|default:0 }};
+    const maxPrincipal = {{ capital_pendiente|stringformat:".0f"|default:0 }};
+    const maxInteres = {{ interes_pendiente|stringformat:".0f"|default:0 }};
+    const maxMora = {{ detalles.pendiente_mora|stringformat:".0f"|default:0 }};
 
     function formatearMoneda(valor) {
         return new Intl.NumberFormat('es-CO', {
             style: 'currency',
             currency: 'COP',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
         }).format(valor || 0);
     }
 
@@ -446,31 +440,6 @@ document.addEventListener('DOMContentLoaded', function() {
     actualizarResumen();
 });
 
-// Funciones para botones rápidos (ADITIVOS - suman en lugar de reemplazar)
-function adicionarPrincipal() {
-    const maxP = {{ capital_pendiente|stringformat:".2f"|default:0 }};
-    const actual = parseFloat(document.getElementById('monto_principal').value) || 0;
-    const nuevo = Math.min(actual + maxP, maxP);
-    document.getElementById('monto_principal').value = nuevo.toFixed(2);
-    actualizarResumen();
-}
-
-function adicionarInteres() {
-    const maxI = {{ interes_pendiente|stringformat:".2f"|default:0 }};
-    const actual = parseFloat(document.getElementById('monto_interes').value) || 0;
-    const nuevo = Math.min(actual + maxI, maxI);
-    document.getElementById('monto_interes').value = nuevo.toFixed(2);
-    actualizarResumen();
-}
-
-function adicionarMora() {
-    const maxM = {{ detalles.pendiente_mora|stringformat:".2f"|default:0 }};
-    const actual = parseFloat(document.getElementById('monto_mora').value) || 0;
-    const nuevo = actual + maxM;
-    document.getElementById('monto_mora').value = nuevo.toFixed(2);
-    actualizarResumen();
-}
-
 // "Capital + Interés" y "Solo Capital" llenan el pedacito NOMINAL de esta
 // cuota puntual (cuota.monto_original) -- el pago rutinario esperado --
 // no el capital_pendiente completo del credito. Pagar mas que eso es un
@@ -478,31 +447,32 @@ function adicionarMora() {
 // operario debe tomar a proposito editando el monto, no un click de
 // atajo. Se limita ademas al capital_pendiente real por si ya quedara
 // menos que el nominal (tramo final de un cronograma recalculado).
+// Pesos colombianos enteros -- sin centavos.
 function rellenarAmbos() {
-    const maxP = {{ capital_pendiente|stringformat:".2f"|default:0 }};
-    const nominalP = {{ cuota.monto_original|stringformat:".2f"|default:0 }};
-    const maxI = {{ interes_pendiente|stringformat:".2f"|default:0 }};
+    const maxP = {{ capital_pendiente|stringformat:".0f"|default:0 }};
+    const nominalP = {{ cuota.monto_original|stringformat:".0f"|default:0 }};
+    const maxI = {{ interes_pendiente|stringformat:".0f"|default:0 }};
     const principal = Math.min(nominalP, maxP);
-    document.getElementById('monto_principal').value = principal.toFixed(2);
-    document.getElementById('monto_interes').value = maxI.toFixed(2);
+    document.getElementById('monto_principal').value = principal;
+    document.getElementById('monto_interes').value = maxI;
     document.getElementById('monto_mora').value = 0;
     actualizarResumen();
 }
 
 function rellenarSoloPrincipal() {
-    const maxP = {{ capital_pendiente|stringformat:".2f"|default:0 }};
-    const nominalP = {{ cuota.monto_original|stringformat:".2f"|default:0 }};
+    const maxP = {{ capital_pendiente|stringformat:".0f"|default:0 }};
+    const nominalP = {{ cuota.monto_original|stringformat:".0f"|default:0 }};
     const principal = Math.min(nominalP, maxP);
-    document.getElementById('monto_principal').value = principal.toFixed(2);
+    document.getElementById('monto_principal').value = principal;
     document.getElementById('monto_interes').value = 0;
     document.getElementById('monto_mora').value = 0;
     actualizarResumen();
 }
 
 function rellenarSoloInteres() {
-    const max = {{ interes_pendiente|stringformat:".2f"|default:0 }};
+    const max = {{ interes_pendiente|stringformat:".0f"|default:0 }};
     document.getElementById('monto_principal').value = 0;
-    document.getElementById('monto_interes').value = max.toFixed(2);
+    document.getElementById('monto_interes').value = max;
     document.getElementById('monto_mora').value = 0;
     actualizarResumen();
 }
@@ -521,8 +491,8 @@ function actualizarResumen() {
         return new Intl.NumberFormat('es-CO', {
             style: 'currency',
             currency: 'COP',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
         }).format(valor || 0);
     }
 
