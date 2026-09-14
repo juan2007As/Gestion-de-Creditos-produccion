@@ -974,10 +974,11 @@ def buscar_cliente_pago(request):
     
     # PASO 3: Mostrar cuotas del préstamo seleccionado
     prestamo = get_object_or_404(Prestamo, id=prestamo_id, cliente=cliente)
-    # TRASLADADA tambien tiene pagado=False (su saldo se movio a la
-    # siguiente cuota, no es que se pago) -- se excluye para no mostrarla
-    # como si todavia hubiera que pagarla.
-    cuotas = prestamo.cuotas.filter(pagado=False).exclude(estado='TRASLADADA').order_by('numero_cuota')
+    # TRASLADADA y ANULADA tambien tienen pagado=False (su saldo se movio
+    # a la siguiente cuota, o el credito cerro antes de que les tocara el
+    # turno) -- se excluyen para no mostrarlas como si todavia hubiera
+    # que pagarlas.
+    cuotas = prestamo.cuotas.filter(pagado=False).exclude(estado__in=('TRASLADADA', 'ANULADA')).order_by('numero_cuota')
     resumen = prestamo.resumen_financiero()
     
     contexto = {
@@ -1839,20 +1840,20 @@ def reporte_cuotas_completo(request):
     # 2. Filtro por estado
     estado_filtro = request.GET.get('estado')
     if estado_filtro == 'pendiente':
-        # Cuotas sin pagar (ambos montos pendientes) -- excluye TRASLADADA:
-        # su saldo ya se movio a la siguiente cuota, no esta "pendiente".
+        # Cuotas sin pagar (ambos montos pendientes) -- excluye
+        # TRASLADADA/ANULADA: ninguna de las dos debe nada ya.
         cuotas = cuotas.filter(
             pagado=False,
             monto_pendiente__gt=0,
             monto_pendiente_interes__gt=0
-        ).exclude(estado='TRASLADADA')
+        ).exclude(estado__in=('TRASLADADA', 'ANULADA'))
     elif estado_filtro == 'parcial':
         # Cuotas parcialmente pagadas
         from django.db.models import Q as DjangoQ
         cuotas = cuotas.filter(
             DjangoQ(monto_pagado_principal__gt=0) | DjangoQ(monto_pagado_interes__gt=0),
             DjangoQ(monto_pendiente__gt=0) | DjangoQ(monto_pendiente_interes__gt=0)
-        ).exclude(estado='TRASLADADA')
+        ).exclude(estado__in=('TRASLADADA', 'ANULADA'))
     elif estado_filtro == 'pagada':
         # Cuotas completamente pagadas
         cuotas = cuotas.filter(pagado=True)
@@ -1860,13 +1861,17 @@ def reporte_cuotas_completo(request):
         # Cuotas cuyo saldo ya se movio a la siguiente cuota (no pagadas,
         # no pendientes -- estado terminal propio, ver TRASLADADA).
         cuotas = cuotas.filter(estado='TRASLADADA')
+    elif estado_filtro == 'anulada':
+        # Cuotas que nunca llegaron a usarse porque el credito cerro
+        # antes -- otro estado terminal propio, ver ANULADA.
+        cuotas = cuotas.filter(estado='ANULADA')
     elif estado_filtro == 'vencida':
-        # Cuotas vencidas pero no pagadas -- excluye TRASLADADA: su fecha
-        # original puede haber pasado, pero su saldo ya no esta activo ahi.
+        # Cuotas vencidas pero no pagadas -- excluye TRASLADADA/ANULADA:
+        # su fecha original puede haber pasado, pero ninguna debe nada ya.
         cuotas = cuotas.filter(
             pagado=False,
             fecha_pago_esperada__lt=date.today()
-        ).exclude(estado='TRASLADADA')
+        ).exclude(estado__in=('TRASLADADA', 'ANULADA'))
     
     # 3. Filtro por tipo de pago (principal, interés, ambos)
     tipo_pago = request.GET.get('tipo_pago')

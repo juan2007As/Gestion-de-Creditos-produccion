@@ -43,7 +43,7 @@
                         <td>#{{ cuota.numero_cuota }}/{{ cuota.prestamo.cuotas.count }}</td>
                         <td>{{ cuota.monto_original|formato_colombiano }}</td>
                         <td style="{% if cuota.pagado %}color: #28a745; text-decoration: line-through;{% endif %}">
-                            {% if cuota.estado == 'TRASLADADA' or cuota.pagado %}
+                            {% if cuota.estado == 'TRASLADADA' or cuota.estado == 'ANULADA' or cuota.pagado %}
                                 {{ cuota.monto_pendiente|formato_colombiano }}
                             {% elif cuota.monto_pendiente == 0 %}
                                 <span style="color: #888;">— <small>(aún no vence su turno)</small></span>
@@ -63,6 +63,14 @@
                                 </span>
                                 <br>
                                 <small style="color: #666;">{{ cuota.fecha_pago_real|date:"d/m/Y" }}</small>
+                            {% elif cuota.estado == 'TRASLADADA' %}
+                                <span style="background-color: #6c757d; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.85em;">
+                                    ↷ Trasladada
+                                </span>
+                            {% elif cuota.estado == 'ANULADA' %}
+                                <span style="background-color: #6c757d; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.85em;">
+                                    ⊘ Anulada
+                                </span>
                             {% else %}
                                 <span style="background-color: #ffc107; color: #333; padding: 5px 10px; border-radius: 4px; font-size: 0.85em;">
                                     ⏳ Pendiente
@@ -70,8 +78,8 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if cuota.pagado %}
-                                <button class="btn btn-secondary btn-sm" disabled>Registrar Pago</button>
+                            {% if cuota.pagado or cuota.estado == 'ANULADA' %}
+                                <button class="btn btn-secondary btn-sm" disabled>{% if cuota.estado == 'ANULADA' %}Anulada{% else %}Registrar Pago{% endif %}</button>
                             {% else %}
                                 <a href="{% url 'pagar_cuota_especifica' cuota.id %}" class="btn btn-success btn-sm">Registrar Pago</a>
                             {% endif %}

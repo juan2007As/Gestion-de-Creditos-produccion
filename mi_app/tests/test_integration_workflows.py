@@ -1542,6 +1542,29 @@ class BuscarClientePagoTrasladadaTests(TestCase):
             monto_pendiente_interes=Decimal('37500'),
             fecha_pago_esperada=date.today() + timedelta(days=2),
         )
+        self.cuota_anulada = Cuota.objects.create(
+            prestamo=self.prestamo,
+            numero_cuota=3,
+            monto_original=Decimal('83333.33'),
+            monto_pendiente=Decimal('0'),
+            interes_normal=Decimal('18750'),
+            monto_pendiente_interes=Decimal('0'),
+            fecha_pago_esperada=date.today() + timedelta(days=17),
+        )
+        Cuota.objects.filter(id=self.cuota_anulada.id).update(estado='ANULADA')
+        self.cuota_anulada.refresh_from_db()
+
+    def test_paso_3_excluye_cuota_anulada(self):
+        from mi_app.views_core import buscar_cliente_pago
+
+        request = self.factory.get(f'/pagos/buscar/?cliente_id={self.cliente.id}&prestamo_id={self.prestamo.id}')
+        request.user = self.user
+        response = buscar_cliente_pago(request)
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        fecha_anulada = self.cuota_anulada.fecha_pago_esperada.strftime('%d/%m/%Y')
+        self.assertNotIn(fecha_anulada, content)
 
     def test_paso_3_excluye_cuota_trasladada(self):
         from mi_app.views_core import buscar_cliente_pago

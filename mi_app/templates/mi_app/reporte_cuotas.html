@@ -162,6 +162,7 @@
                             <option value="pagada" {% if estado_filtro == "pagada" %}selected{% endif %}>Pagada</option>
                             <option value="vencida" {% if estado_filtro == "vencida" %}selected{% endif %}>Vencida</option>
                             <option value="trasladada" {% if estado_filtro == "trasladada" %}selected{% endif %}>Trasladada</option>
+                            <option value="anulada" {% if estado_filtro == "anulada" %}selected{% endif %}>Anulada</option>
                         </select>
                     </div>
 
@@ -279,7 +280,7 @@
                             data-cedula="{{ cuota.prestamo.cliente.cedula }}"
                             data-celular="{{ cuota.prestamo.cliente.celular }}"
                             data-monto="{{ total_pendiente }}"
-                            data-estado="{% if cuota.estado == 'TRASLADADA' %}trasladada{% elif cuota.pagado %}pagada{% elif cuota.fecha_pago_esperada < now %}vencida{% else %}pendiente{% endif %}"
+                            data-estado="{% if cuota.estado == 'TRASLADADA' %}trasladada{% elif cuota.estado == 'ANULADA' %}anulada{% elif cuota.pagado %}pagada{% elif cuota.fecha_pago_esperada < now %}vencida{% else %}pendiente{% endif %}"
                             data-tipo="{% if cuota.interes_normal > 0 %}interes{% elif cuota.monto_original > 0 %}principal{% else %}mora{% endif %}"
                         >
                             <!-- Cliente -->
@@ -349,6 +350,8 @@
                             <td>
                                 {% if cuota.estado == 'TRASLADADA' %}
                                     <span class="badge bg-secondary">↷ TRASLADADA</span>
+                                {% elif cuota.estado == 'ANULADA' %}
+                                    <span class="badge bg-secondary">⊘ ANULADA</span>
                                 {% elif cuota.pagado %}
                                     <span class="badge bg-success">✅ PAGADA</span>
                                 {% elif total_pagado > 0 and total_pendiente > 0 %}

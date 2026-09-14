@@ -209,7 +209,11 @@
             <a href="{% url 'detalles_prestamo' prestamo.id %}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Volver al Préstamo
             </a>
-            {% if cuota.pagado == False %}
+            {% if cuota.estado == 'ANULADA' %}
+                <button class="btn btn-secondary" disabled title="El crédito se cerró antes de que le tocara el turno a esta cuota">
+                    <i class="fas fa-ban"></i> Anulada
+                </button>
+            {% elif cuota.pagado == False %}
                 <a href="{% url 'pagar_cuota_especifica' cuota.id %}" class="btn btn-success">
                     <i class="fas fa-money-bill-wave"></i> Pagar Esta Cuota
                 </a>
