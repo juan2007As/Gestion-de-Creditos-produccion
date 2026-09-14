@@ -886,7 +886,7 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
 
         cliente = Cliente.objects.create(nombre="Test Motor Nuevo", celular="3000000000", cedula="999888777")
 
-        self.client.login(username='admin', password='adminpass')  # ajustar segun fixture de auth disponible
+        self.client.login(username='admin', password='adminpass')  # pragma: allowlist secret -- ajustar segun fixture de auth disponible
         response = self.client.post(reverse('crear_prestamo'), {
             'cliente': cliente.id,
             'monto': '500000',
@@ -1012,7 +1012,7 @@ Append a la misma clase o una nueva en `mi_app/tests/test_integration_workflows.
 
         cliente = Cliente.objects.create(nombre="Test Rapido Motor Nuevo", celular="3000000001", cedula="999888778")
 
-        self.client.login(username='admin', password='adminpass')
+        self.client.login(username='admin', password='adminpass')  # pragma: allowlist secret
         response = self.client.post(reverse('crear_prestamo_rapido'), {
             'cliente_id': cliente.id,
             'monto': '300000',
@@ -1136,7 +1136,7 @@ class PagarCuotaEspecificaMotorNuevoTests(TestCase):
             fecha_pago_esperada=date.today() + timedelta(days=16),
         )
 
-        self.client.login(username='admin', password='adminpass')
+        self.client.login(username='admin', password='adminpass')  # pragma: allowlist secret
         response = self.client.post(
             reverse('pagar_cuota_especifica', kwargs={'cuota_id': cuota.id}),
             {'monto_principal': '150000', 'monto_interes': '15000', 'monto_mora': '0'},
@@ -1313,7 +1313,7 @@ class RegistrarPagoRapidoMotorNuevoTests(TestCase):
             fecha_pago_esperada=date.today() + timedelta(days=16),
         )
 
-        self.client.login(username='admin', password='adminpass')
+        self.client.login(username='admin', password='adminpass')  # pragma: allowlist secret
         self.client.post(
             reverse('registrar_pago_rapido', kwargs={'cuota_id': cuota.id}),
             {'monto_pagado': '80000', 'usuario_registra': 'admin'},
