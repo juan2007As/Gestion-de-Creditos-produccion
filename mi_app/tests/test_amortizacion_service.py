@@ -4,6 +4,8 @@ from django.test import SimpleTestCase
 
 from mi_app.services.amortizacion_service import (
     calcular_interes_periodo,
+    tasa_diaria,
+    interes_para_cuota,
     generar_cronograma_interes,
     ultimo_dia_valido_mes,
     determinar_par_y_primera_fecha,
@@ -26,26 +28,68 @@ class CalcularInteresPeriodoTests(SimpleTestCase):
         self.assertEqual(calcular_interes_periodo(Decimal('0')), Decimal('0'))
 
 
+class TasaDiariaTests(SimpleTestCase):
+    def test_capital_200000_tasa_15_da_1000_por_dia(self):
+        # El mismo ejemplo real del cliente: 200000 * 15% / 2 / 15 = 1000/dia.
+        self.assertEqual(tasa_diaria(Decimal('200000'), Decimal('15')), Decimal('1000'))
+
+    def test_capital_500000_tasa_15_da_2500_por_dia(self):
+        self.assertEqual(tasa_diaria(Decimal('500000'), Decimal('15')), Decimal('2500'))
+
+
+class InteresParaCuotaTests(SimpleTestCase):
+    def test_ejemplo_real_del_cliente_18000_por_17_dias_de_diferencia(self):
+        # 200000 al 15%, desembolsado el 13/09, primera cuota el 30/09:
+        # 17 dias de diferencia + 1 (conteo inclusivo, confirmado con el
+        # dueno para que calce con el ejemplo real) = 18 dias x 1000/dia.
+        interes = interes_para_cuota(
+            Decimal('200000'), Decimal('15'), 0,
+            date(2026, 9, 13), date(2026, 9, 30),
+        )
+        self.assertEqual(interes, Decimal('18000'))
+
+    def test_par_index_1_es_la_mitad_de_la_tasa_diaria(self):
+        # tasa del par 1 = 500/dia; 15 dias de diferencia + 1 = 16 dias.
+        interes = interes_para_cuota(
+            Decimal('200000'), Decimal('15'), 1,
+            date(2026, 10, 15), date(2026, 10, 30),
+        )
+        self.assertEqual(interes, Decimal('8000'))
+
+
 class GenerarCronogramaInteresTests(SimpleTestCase):
-    def test_ejemplo_del_cliente_500000_15_por_ciento_6_cuotas(self):
-        cronograma = generar_cronograma_interes(Decimal('500000'), Decimal('15'), 6)
+    def test_ejemplo_real_del_cliente_200000_15_por_ciento_desembolso_irregular(self):
+        # Caso real reportado por el cliente: prestado el 13/09, primera
+        # cuota cae el 30/09 (17 dias, no 15, porque el 13 no es fecha
+        # ancla). El cronograma completo (4 cuotas) cobra los dias reales
+        # de cada tramo, con la tasa diaria bajando a la mitad cada 2
+        # cuotas (igual patron que el cronograma fijo de antes).
+        fecha_desembolso = date(2026, 9, 13)
+        fechas = [date(2026, 9, 30), date(2026, 10, 15), date(2026, 10, 30), date(2026, 11, 15)]
+        cronograma = generar_cronograma_interes(Decimal('200000'), Decimal('15'), fecha_desembolso, fechas)
         self.assertEqual(
             cronograma,
-            [
-                Decimal('37500.00'), Decimal('37500.00'),
-                Decimal('18750.00'), Decimal('18750.00'),
-                Decimal('9375.00'), Decimal('9375.00'),
-            ],
+            [Decimal('18000'), Decimal('16000'), Decimal('8000'), Decimal('8500')],
         )
 
-    def test_cada_par_es_la_mitad_del_anterior_con_num_cuotas_impar(self):
-        cronograma = generar_cronograma_interes(Decimal('400000'), Decimal('15'), 3)
-        # base = 400000*7.5% = 30000
-        self.assertEqual(cronograma, [Decimal('30000.00'), Decimal('30000.00'), Decimal('15000.00')])
+    def test_periodos_de_15_dias_exactos_dan_igual_que_el_cronograma_fijo_de_antes(self):
+        # Si cada tramo mide exactamente 15 dias (conteo inclusivo, 14 de
+        # diferencia real entre fechas), el resultado coincide con el
+        # viejo cronograma fijo -- confirma que el cambio no rompe el caso
+        # "normal" sin desembolso irregular.
+        fecha_desembolso = date(2026, 1, 1)
+        fechas = [date(2026, 1, 15), date(2026, 1, 29), date(2026, 2, 12), date(2026, 2, 26)]
+        cronograma = generar_cronograma_interes(Decimal('500000'), Decimal('15'), fecha_desembolso, fechas)
+        self.assertEqual(
+            cronograma,
+            [Decimal('37500'), Decimal('37500'), Decimal('18750'), Decimal('18750')],
+        )
 
     def test_una_sola_cuota(self):
-        cronograma = generar_cronograma_interes(Decimal('100000'), Decimal('15'), 1)
-        self.assertEqual(cronograma, [Decimal('7500.00')])
+        cronograma = generar_cronograma_interes(
+            Decimal('100000'), Decimal('15'), date(2026, 1, 1), [date(2026, 1, 15)]
+        )
+        self.assertEqual(cronograma, [Decimal('7500')])
 
 
 class UltimoDiaValidoMesTests(SimpleTestCase):

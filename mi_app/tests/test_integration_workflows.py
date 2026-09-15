@@ -538,6 +538,7 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
         self.client_obj.login(username='testuser_motor', password='testpass123')  # pragma: allowlist secret
 
     def test_crear_prestamo_setea_capital_pendiente_y_cronograma_completo_de_interes(self):
+        from mi_app.services.amortizacion_service import generar_fechas_cuotas, generar_cronograma_interes
         cliente = Cliente.objects.create(nombre="Test Motor Nuevo", celular="3000000000", cedula="999888777")
 
         response = self.client_obj.post(reverse('crear_prestamo'), {
@@ -553,12 +554,15 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
 
         cuotas = list(prestamo.cuotas.order_by('numero_cuota'))
         self.assertEqual(len(cuotas), 4)
-        # Cronograma completo desde la creacion: base=500000*15%/2=37500 para
-        # el primer par (cuotas 1-2); el par siguiente (3-4) es la mitad.
-        self.assertEqual(cuotas[0].interes_normal, Decimal('37500.00'))
-        self.assertEqual(cuotas[1].interes_normal, Decimal('37500.00'))
-        self.assertEqual(cuotas[2].interes_normal, Decimal('18750.00'))
-        self.assertEqual(cuotas[3].interes_normal, Decimal('18750.00'))
+        # El cronograma depende de la fecha real de desembolso (dias reales
+        # entre fechas, no un valor fijo de quincena) -- se recalcula aqui
+        # con el mismo servicio que usa la vista, para no acoplar el test
+        # a "hoy".
+        fechas_esperadas = generar_fechas_cuotas(prestamo.fecha_inicio, 4)
+        intereses_esperados = generar_cronograma_interes(Decimal('500000'), Decimal('15'), prestamo.fecha_inicio, fechas_esperadas)
+        for cuota, interes_esperado, fecha_esperada in zip(cuotas, intereses_esperados, fechas_esperadas):
+            self.assertEqual(cuota.interes_normal, interes_esperado)
+            self.assertEqual(cuota.fecha_pago_esperada, fecha_esperada)
 
         # Regresion: las cuotas 2-4 nacen con pendiente=0 porque todavia no
         # les toca su turno (no porque ya se pagaron) -- no deben marcarse
@@ -574,12 +578,12 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
         Regresion: 'En Circulacion'/'Total Pendiente' deben mostrar la
         obligacion COMPLETA del credito (capital + interes de TODAS las
         cuotas restantes ya precalculadas), no solo el interes del periodo
-        activo. Ejemplo real reportado por el usuario: 500000 al 15% en 6
-        cuotas -- interes total del cronograma es 37500+37500+18750+18750
-        +9375+9375=131250, asi que el total pendiente recien creado el
-        prestamo debe ser 500000+131250=631250, no 537500 (que era el bug:
-        solo sumaba el interes de la primera cuota activa).
+        activo -- no solo el interes de la primera cuota (ese era el bug
+        original). El monto exacto depende de la fecha real de desembolso
+        (motor por dias reales), asi que se recalcula con el mismo
+        servicio que usa la vista en vez de hardcodear un numero.
         """
+        from mi_app.services.amortizacion_service import generar_fechas_cuotas, generar_cronograma_interes
         cliente = Cliente.objects.create(nombre="Test Total Pendiente Completo", celular="3000000002", cedula="999888779")
 
         response = self.client_obj.post(reverse('crear_prestamo'), {
@@ -591,15 +595,21 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
         self.assertEqual(response.status_code, 302)
 
         prestamo = Prestamo.objects.get(cliente=cliente)
-        self.assertEqual(prestamo.total_pendiente, 631250.0)
+        fechas_esperadas = generar_fechas_cuotas(prestamo.fecha_inicio, 6)
+        interes_total_esperado = float(sum(
+            generar_cronograma_interes(Decimal('500000'), Decimal('15'), prestamo.fecha_inicio, fechas_esperadas)
+        ))
+        total_esperado = 500000.0 + interes_total_esperado
+        self.assertEqual(prestamo.total_pendiente, total_esperado)
 
         resumen = prestamo.resumen_financiero()
         self.assertEqual(resumen['total_pendiente_principal'], 500000.0)
-        self.assertEqual(resumen['total_pendiente_interes'], 131250.0)
-        self.assertEqual(resumen['total_credito'], 631250.0)
+        self.assertEqual(resumen['total_pendiente_interes'], interes_total_esperado)
+        self.assertEqual(resumen['total_credito'], total_esperado)
 
     def test_crear_prestamo_rapido_setea_capital_pendiente_y_solo_primera_cuota(self):
         from mi_app.models import PrestamoRapido
+        from mi_app.services.amortizacion_service import generar_fechas_cuotas, generar_cronograma_interes
 
         cliente = Cliente.objects.create(nombre="Test Rapido Motor Nuevo", celular="3000000001", cedula="999888778")
 
@@ -616,10 +626,13 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
         self.assertEqual(prestamo.capital_pendiente, Decimal('300000'))
 
         cuotas = list(prestamo.cuotas_rapidas.order_by('numero_cuota'))
-        # 300000 * 15% / 2 = 22500, sin redondeo; ambas cuotas son del mismo
-        # par (1 mes) asi que comparten el mismo interes.
-        self.assertEqual(cuotas[0].interes_normal, Decimal('22500.00'))
-        self.assertEqual(cuotas[1].interes_normal, Decimal('22500.00'))
+        # El cronograma depende de la fecha real de desembolso (dias
+        # reales entre fechas) -- se recalcula aqui con el mismo servicio
+        # que usa la vista, para no acoplar el test a "hoy".
+        fechas_esperadas = generar_fechas_cuotas(date.today(), 2)
+        intereses_esperados = generar_cronograma_interes(Decimal('300000'), Decimal('15'), date.today(), fechas_esperadas)
+        self.assertEqual(cuotas[0].interes_normal, intereses_esperados[0])
+        self.assertEqual(cuotas[1].interes_normal, intereses_esperados[1])
 
         # Regresion: la cuota 2 no debe marcarse sola como pagada solo por
         # tener capital pendiente en 0 (todavia no le toca su turno).
@@ -629,12 +642,14 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
     def test_saldo_pendiente_rapido_incluye_interes_de_todas_las_cuotas_futuras(self):
         """
         Mismo caso que test_total_pendiente_incluye_interes_de_todas_las_cuotas_futuras
-        pero para PrestamoRapido: 300000 al 15% en 4 cuotas -- cronograma es
-        22500+22500+11250+11250=67500, asi que saldo_pendiente recien creado
-        debe ser 300000+67500=367500, no solo 322500 (capital + interes de
-        la primera cuota activa).
+        pero para PrestamoRapido: saldo_pendiente recien creado debe ser
+        capital + interes de TODAS las cuotas restantes, no solo el
+        interes de la primera cuota activa. El monto exacto depende de la
+        fecha real de desembolso (motor por dias reales), asi que se
+        recalcula con el mismo servicio que usa la vista.
         """
         from mi_app.models import PrestamoRapido
+        from mi_app.services.amortizacion_service import generar_fechas_cuotas, generar_cronograma_interes
 
         cliente = Cliente.objects.create(nombre="Test Rapido Total Pendiente", celular="3000000003", cedula="999888780")
 
@@ -648,7 +663,11 @@ class CrearPrestamoConMotorNuevoTests(TestCase):
         self.assertEqual(response.status_code, 302)
 
         prestamo = PrestamoRapido.objects.get(cliente=cliente)
-        self.assertEqual(prestamo.saldo_pendiente, Decimal('367500.00'))
+        fechas_esperadas = generar_fechas_cuotas(date.today(), 4)
+        interes_total_esperado = sum(
+            generar_cronograma_interes(Decimal('300000'), Decimal('15'), date.today(), fechas_esperadas)
+        )
+        self.assertEqual(prestamo.saldo_pendiente, Decimal('300000') + interes_total_esperado)
 
 
 class PagarCuotaEspecificaMotorNuevoTests(TestCase):
@@ -938,6 +957,8 @@ class AvanzarCuotaTests(TestCase):
         self.assertEqual(self.cuota2.monto_pendiente, Decimal('500000'))
 
     def test_pago_solo_interes_crea_cuota_nueva_si_no_hay_siguiente(self):
+        from mi_app.services.amortizacion_service import inferir_par, siguiente_fecha_en_par, interes_para_cuota
+
         response = self._pagar(self.cuota1.id, {'monto_principal': '0', 'monto_interes': '37500', 'monto_mora': '0'})
 
         self.cuota1.refresh_from_db()
@@ -949,16 +970,28 @@ class AvanzarCuotaTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse('pagar_cuota_especifica', args=[nueva_cuota.id]))
         self.assertEqual(self.cuota1.estado, 'TRASLADADA')
+
         # Cuota 1 es numero impar (primera de su par) -> la 2 sigue en el
-        # mismo par, mismo interes (sin abono extra).
-        self.assertEqual(nueva_cuota.interes_normal, Decimal('37500'))
-        self.assertEqual(nueva_cuota.fecha_pago_esperada, self.cuota1.fecha_pago_esperada + timedelta(days=15))
+        # mismo par (misma tasa), pero el interes real depende de los dias
+        # reales entre fechas -- se recalcula aqui con el mismo servicio
+        # que usa la vista en vez de asumir "+15 dias" (esa asuncion no
+        # siempre calza con el calendario real de anclas 5/15/20/30).
+        par = inferir_par(self.cuota1.fecha_pago_esperada)
+        fecha_esperada = siguiente_fecha_en_par(self.cuota1.fecha_pago_esperada, par)
+        interes_esperado = interes_para_cuota(
+            self.prestamo.capital_pendiente, self.prestamo.interes_porcentaje, 0,
+            self.cuota1.fecha_pago_esperada, fecha_esperada,
+        )
+        self.assertEqual(nueva_cuota.fecha_pago_esperada, fecha_esperada)
+        self.assertEqual(nueva_cuota.interes_normal, interes_esperado)
 
     def test_abono_extra_recalcula_el_cronograma_restante_ejemplo_del_cliente(self):
         # Reproduce el ejemplo confirmado: 500000 al 15%, con 6 cuotas.
-        # Cuotas 1-2: 37500. Abono extra en la cuota 2 deja 200000 de
-        # capital real. Cuotas 3-4 deben recalcularse a 15000 (200000*15%/2)
-        # y cuotas 5-6 a 7500 (la mitad), con capital por cuota = 200000/4=50000.
+        # Abono extra en la cuota 2 deja 200000 de capital real -- las
+        # cuotas 3-6 se recalculan con capital por cuota = 200000/4=50000
+        # y el interes real (dias desde "hoy" x tasa del par que le toca).
+        from mi_app.services.amortizacion_service import generar_cronograma_interes
+
         for n in range(2, 7):
             Cuota.objects.create(
                 prestamo=self.prestamo,
@@ -988,10 +1021,17 @@ class AvanzarCuotaTests(TestCase):
 
         for c in (cuota3, cuota4, cuota5, cuota6):
             self.assertEqual(c.monto_original, Decimal('50000.00'))
-        self.assertEqual(cuota3.interes_normal, Decimal('15000.00'))
-        self.assertEqual(cuota4.interes_normal, Decimal('15000.00'))
-        self.assertEqual(cuota5.interes_normal, Decimal('7500.00'))
-        self.assertEqual(cuota6.interes_normal, Decimal('7500.00'))
+
+        # El interes recalculado sigue el mismo motor real (dias reales
+        # entre fechas x tasa del par, arrancando desde "hoy" -- el dia
+        # del abono extra); se recomputa aqui con el mismo servicio en vez
+        # de hardcodear un numero que depende de "hoy".
+        fechas_futuras = [cuota3.fecha_pago_esperada, cuota4.fecha_pago_esperada, cuota5.fecha_pago_esperada, cuota6.fecha_pago_esperada]
+        intereses_esperados = generar_cronograma_interes(Decimal('200000'), Decimal('15'), date.today(), fechas_futuras)
+        self.assertEqual(
+            [cuota3.interes_normal, cuota4.interes_normal, cuota5.interes_normal, cuota6.interes_normal],
+            intereses_esperados,
+        )
 
     def test_pago_que_cierra_prestamo_no_crea_cuota_nueva(self):
         response = self._pagar(self.cuota1.id, {'monto_principal': '500000', 'monto_interes': '37500', 'monto_mora': '0'})
@@ -1080,6 +1120,8 @@ class AvanzarCuotaRapidaTests(TestCase):
         )
 
     def test_pago_solo_interes_mantiene_interes_y_crea_nueva_cuota(self):
+        from mi_app.services.amortizacion_service import inferir_par, siguiente_fecha_en_par, interes_para_cuota
+
         response = self.client_obj.post(
             reverse('registrar_pago_cuota_rapida', kwargs={'cuota_id': self.cuota1.id}),
             {'monto_pagado': '22500', 'usuario_registra': 'admin'},
@@ -1094,9 +1136,19 @@ class AvanzarCuotaRapidaTests(TestCase):
         self.assertEqual(self.prestamo.capital_pendiente, Decimal('300000'))
         self.assertEqual(self.cuota1.estado, 'TRASLADADA')
         self.assertIsNotNone(nueva_cuota)
-        # Cuota 1 es numero impar -> la 2 sigue en el mismo par, mismo interes
-        self.assertEqual(nueva_cuota.interes_normal, Decimal('22500'))
-        self.assertEqual(nueva_cuota.fecha_pago_esperada, self.cuota1.fecha_pago_esperada + timedelta(days=15))
+
+        # Cuota 1 es numero impar -> la 2 sigue en el mismo par (misma
+        # tasa), pero el interes real depende de los dias reales entre
+        # fechas -- se recalcula aqui con el mismo servicio que usa la
+        # vista en vez de asumir "+15 dias".
+        par = inferir_par(self.cuota1.fecha_pago_esperada)
+        fecha_esperada = siguiente_fecha_en_par(self.cuota1.fecha_pago_esperada, par)
+        interes_esperado = interes_para_cuota(
+            self.prestamo.capital_pendiente, self.prestamo.interes_porcentaje, 0,
+            self.cuota1.fecha_pago_esperada, fecha_esperada,
+        )
+        self.assertEqual(nueva_cuota.fecha_pago_esperada, fecha_esperada)
+        self.assertEqual(nueva_cuota.interes_normal, interes_esperado)
 
     def test_pagar_cuota_rapida_trasladada_redirige_a_la_activa(self):
         self.client_obj.post(
@@ -1114,6 +1166,7 @@ class AvanzarCuotaRapidaTests(TestCase):
 
     def test_abono_extra_recalcula_cronograma_restante(self):
         from mi_app.models import CuotaRapida
+        from mi_app.services.amortizacion_service import generar_cronograma_interes
 
         self.cuota2 = CuotaRapida.objects.create(
             prestamo_rapido=self.prestamo,
@@ -1136,8 +1189,13 @@ class AvanzarCuotaRapidaTests(TestCase):
 
         self.cuota2.refresh_from_db()
         self.assertEqual(self.cuota2.monto_original, Decimal('100000.00'))
-        # 100000*15%/2 = 7500, sin redondeo
-        self.assertEqual(self.cuota2.interes_normal, Decimal('7500.00'))
+        # El interes real depende de los dias reales desde "hoy" (el dia
+        # del abono extra) hasta la fecha de la cuota -- se recalcula aqui
+        # con el mismo servicio que usa la vista.
+        interes_esperado = generar_cronograma_interes(
+            Decimal('100000'), Decimal('15'), date.today(), [self.cuota2.fecha_pago_esperada]
+        )[0]
+        self.assertEqual(self.cuota2.interes_normal, interes_esperado)
 
 
 class PrestamoRapidoSaldoPendienteTests(TestCase):

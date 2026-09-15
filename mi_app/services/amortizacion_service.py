@@ -30,8 +30,12 @@ TOLERANCIA_CIERRE = Decimal('10')
 
 def calcular_interes_periodo(capital_pendiente, tasa_porcentaje=TASA_INTERES_DEFAULT):
     """
-    Interes de una quincena = capital_pendiente * tasa% / 2, redondeado a
-    la unidad peso (sin centavos -- decision explicita del dueno).
+    Interes de una quincena "de referencia" = capital_pendiente * tasa% / 2,
+    redondeado a la unidad peso (sin centavos -- decision explicita del
+    dueno). Usado hoy solo como estimado/preview (ej. antes de conocer las
+    fechas reales de las cuotas) -- el interes REAL que se cobra por cuota
+    sale de interes_para_cuota()/generar_cronograma_interes(), que cuentan
+    los dias reales entre fechas en vez de asumir 15 dias fijos.
     """
     capital_pendiente = Decimal(capital_pendiente)
     tasa_porcentaje = Decimal(tasa_porcentaje)
@@ -39,21 +43,56 @@ def calcular_interes_periodo(capital_pendiente, tasa_porcentaje=TASA_INTERES_DEF
     return interes.quantize(UNIDAD_MONETARIA)
 
 
-def generar_cronograma_interes(capital_base, tasa_porcentaje, num_cuotas):
+def tasa_diaria(capital_pendiente, tasa_porcentaje=TASA_INTERES_DEFAULT):
     """
-    Genera la lista de `num_cuotas` intereses por cuota segun la regla real
-    del negocio: el interes de las primeras 2 cuotas (1 mes) es
-    calcular_interes_periodo(capital_base, tasa); cada PAR siguiente de
-    cuotas es la MITAD del par anterior, de forma fija -- no se recalcula
-    dinamicamente cuota a cuota. Solo un abono extraordinario a capital
-    dispara un recalculo (ver vistas de pago), que vuelve a arrancar esta
-    misma secuencia desde el nuevo capital restante.
+    Interes por dia sobre el capital pendiente: el interes de una quincena
+    completa (capital*tasa%/2) dividido entre 15. Sin redondear aqui -- se
+    redondea el interes final de cada cuota, despues de multiplicar por
+    los dias reales del periodo, para no perder precision en el camino.
     """
-    base = calcular_interes_periodo(capital_base, tasa_porcentaje)
+    capital_pendiente = Decimal(capital_pendiente)
+    tasa_porcentaje = Decimal(tasa_porcentaje)
+    return capital_pendiente * (tasa_porcentaje / Decimal('100')) / Decimal('2') / Decimal('15')
+
+
+def interes_para_cuota(capital_base, tasa_porcentaje, par_index, fecha_anterior, fecha_cuota):
+    """
+    Interes real de una cuota individual: la tasa diaria del par que le
+    toca (par_index 0 = primeras 2 cuotas, 1 = siguiente par -- la mitad de
+    la tasa, 2 -- un cuarto, etc; el mismo patron "mitad cada 2 cuotas" que
+    ya regia el cronograma fijo) multiplicada por los dias reales entre
+    `fecha_anterior` (la fecha del periodo previo, o el desembolso si es
+    la primera cuota) y `fecha_cuota`.
+
+    Conteo de dias INCLUSIVO (+1): del 13 al 15 son 3 dias, no 2 --
+    decision explicita del dueno/cliente (caso real: prestamo el 13,
+    primera cuota el 30 -> cobra por 18 dias, no 17), confirmada aun
+    sabiendo que un periodo "normal" de 15 dias de diferencia calendario
+    tambien cuenta como 15 dias de interes bajo este conteo (14 dias de
+    diferencia + 1).
+    """
+    dias = (fecha_cuota - fecha_anterior).days + 1
+    tasa_del_par = tasa_diaria(capital_base, tasa_porcentaje) / (Decimal('2') ** par_index)
+    return (tasa_del_par * dias).quantize(UNIDAD_MONETARIA)
+
+
+def generar_cronograma_interes(capital_base, tasa_porcentaje, fecha_desde, fechas_cuotas):
+    """
+    Genera el interes REAL (por dias transcurridos, ver interes_para_cuota)
+    de cada cuota en `fechas_cuotas`, contando desde `fecha_desde` (el
+    desembolso del prestamo, o la fecha desde la que arranca un recalculo
+    por abono extraordinario) para la primera cuota, y desde la fecha de
+    la cuota anterior para las siguientes. La tasa se sigue reduciendo a
+    la mitad cada 2 cuotas (mismo patron que el cronograma fijo de antes),
+    pero ya no se recalcula dinamicamente cuota a cuota salvo por un nuevo
+    abono extraordinario a capital (ver vistas de pago), que vuelve a
+    arrancar esta misma secuencia desde el nuevo capital restante.
+    """
     intereses = []
-    for i in range(num_cuotas):
-        par_index = i // 2
-        intereses.append((base / (Decimal('2') ** par_index)).quantize(UNIDAD_MONETARIA))
+    fecha_anterior = fecha_desde
+    for i, fecha_cuota in enumerate(fechas_cuotas):
+        intereses.append(interes_para_cuota(capital_base, tasa_porcentaje, i // 2, fecha_anterior, fecha_cuota))
+        fecha_anterior = fecha_cuota
     return intereses
 
 
