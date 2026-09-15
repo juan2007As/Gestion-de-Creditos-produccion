@@ -16,9 +16,22 @@ jobs:
 
     steps:
     - name: Instalar cliente de Postgres (pg_dump/pg_restore)
+      # El cliente por defecto de Ubuntu (postgresql-client, hoy v16) es mas
+      # viejo que el Postgres 18 de produccion en Render -- pg_dump se niega
+      # a volcar un servidor mas nuevo que el cliente ("server version
+      # mismatch"). Se instala el cliente oficial v18 desde el repo de
+      # PostgreSQL para que siempre sea >= la version del servidor. Si
+      # Render vuelve a subir la version mayor de Postgres, actualizar el
+      # "18" de mas abajo (y el postgres:18 del paso de prueba de
+      # restauracion) para que coincida.
       run: |
         sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends postgresql-client
+        sudo apt-get install -y --no-install-recommends wget ca-certificates gnupg lsb-release
+        sudo install -d /usr/share/postgresql-common/pgdg
+        sudo wget -O /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --no-verbose https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends postgresql-client-18
 
     - name: Generar dump de la base de producción
       env:
@@ -48,7 +61,7 @@ jobs:
           -e POSTGRES_USER=postgres \
           -e POSTGRES_PASSWORD="$TEST_DB_PASSWORD" \
           -p 5433:5432 \
-          postgres:15
+          postgres:18
         for i in $(seq 1 30); do
           docker exec backup-restore-test pg_isready -U postgres && break
           sleep 2
