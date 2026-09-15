@@ -622,6 +622,36 @@ def crear_cliente(request):
     
     return render(request, 'mi_app/formularios/formulario_cliente.html', {'form': form, 'titulo': 'Crear Nuevo Cliente'})
 
+@require_any_permission('cliente.create')
+@login_required(login_url='login')
+def crear_cliente_ajax(request):
+    """
+    Crea un cliente desde el modal de "cliente rapido" en los formularios
+    de prestamo (normal y rapido) -- mismo ClienteForm, mismos permisos y
+    mismas validaciones que crear_cliente, pero responde JSON en vez de
+    redirigir, para no perder lo que el operario ya llevaba llenado en el
+    formulario de prestamo que lo abrio.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'errors': {'__all__': ['Metodo no permitido.']}}, status=405)
+
+    form = ClienteForm(request.POST)
+    if form.is_valid():
+        cliente = form.save(commit=False)
+        if not cliente.estado or cliente.estado.strip() == '':
+            cliente.estado = 'ACTIVO'
+        cliente.save()
+        return JsonResponse({
+            'success': True,
+            'cliente': {
+                'id': cliente.id,
+                'nombre': cliente.nombre,
+                'cedula': cliente.cedula or '',
+                'celular': cliente.celular,
+            },
+        })
+    return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+
 @require_permission('cliente.edit')
 @login_required(login_url='login')
 def editar_cliente(request, cliente_id):

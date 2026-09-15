@@ -46,13 +46,18 @@
                         <div class="mb-3">
                             <label for="search_input" class="form-label">Cliente *</label>
                             <input type="hidden" id="cliente_id" name="cliente_id" value="">
-                            <input 
-                                type="text" 
-                                class="cliente-search-input" 
-                                id="cliente_search_rapido" 
-                                placeholder="Buscar por nombre, cédula o teléfono..."
-                                autocomplete="off"
-                            >
+                            <div class="d-flex gap-2">
+                                <input
+                                    type="text"
+                                    class="cliente-search-input flex-grow-1"
+                                    id="cliente_search_rapido"
+                                    placeholder="Buscar por nombre, cédula o teléfono..."
+                                    autocomplete="off"
+                                >
+                                <button type="button" class="btn btn-outline-primary flex-shrink-0" data-bs-toggle="modal" data-bs-target="#modalClienteRapido_rapido" title="Crear cliente nuevo">
+                                    <i class="fas fa-user-plus"></i>
+                                </button>
+                            </div>
                             <small class="text-muted">Comience a escribir el nombre del cliente</small>
                         </div>
 
@@ -181,6 +186,65 @@
                     </a>
                 </div>
             </form>
+
+            <style>
+                /* Resaltado del boton Activo/Inactivo del modal "Crear
+                   Cliente Rapido" -- el patron CSS-puro .btn-check:checked+.btn
+                   de Bootstrap no se re-evalua al hacer click en este entorno
+                   (queda pintado con el estado inicial aunque el radio
+                   subyacente ya cambio), asi que el JS del modal marca/
+                   desmarca esta clase explicitamente en cada cambio en vez
+                   de depender de :checked. */
+                label.estado-toggle-selected {
+                    background-color: var(--bs-btn-active-bg) !important;
+                    color: var(--bs-btn-active-color) !important;
+                    border-color: var(--bs-btn-active-border-color) !important;
+                }
+            </style>
+
+            <!-- Modal: crear cliente rapido (sin salir del formulario de prestamo rapido).
+                 A proposito FUERA del <form> y de las .card -- Bootstrap recomienda que
+                 los modales no queden anidados dentro de elementos con position/overflow/
+                 transform propios, o el backdrop puede pintarse encima del modal en vez
+                 de detras (bug visual real, reportado y confirmado en pantalla). -->
+            <div class="modal fade" id="modalClienteRapido_rapido" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><i class="fas fa-user-plus"></i> Crear Cliente Rápido</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="modalClienteRapido_rapido_error" class="alert alert-danger d-none"></div>
+                            <div class="mb-3">
+                                <label class="form-label">Nombre *</label>
+                                <input type="text" id="modalClienteRapido_rapido_nombre" class="form-control" placeholder="Nombre completo">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Celular *</label>
+                                <input type="text" id="modalClienteRapido_rapido_celular" class="form-control" placeholder="Número de celular">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Cédula (opcional)</label>
+                                <input type="text" id="modalClienteRapido_rapido_cedula" class="form-control" placeholder="Cédula">
+                            </div>
+                            <div class="mb-1">
+                                <label class="form-label d-block">Estado</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="modalClienteRapido_rapido_estado" id="modalClienteRapido_rapido_activo" value="ACTIVO" checked>
+                                    <label class="btn btn-outline-success" for="modalClienteRapido_rapido_activo">Activo</label>
+                                    <input type="radio" class="btn-check" name="modalClienteRapido_rapido_estado" id="modalClienteRapido_rapido_inactivo" value="INACTIVO">
+                                    <label class="btn btn-outline-secondary" for="modalClienteRapido_rapido_inactivo">Inactivo</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" id="modalClienteRapido_rapido_crear">Crear</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -290,6 +354,140 @@ async function cargarClientes_rapido() {
         console.error('❌ Error cargando clientes:', error);
     }
 }
+
+// ✅ Modal "Crear Cliente Rápido" -- crea el cliente sin salir del
+// formulario de prestamo rapido y lo deja preseleccionado, igual que si
+// se hubiera elegido desde el buscador.
+//
+// NOTA IMPORTANTE: algunas extensiones de navegador (antivirus/seguridad,
+// ej. Avast/AVG "Online Security") no solo eliminan del DOM tarjetas que
+// muestran cédula/teléfono por parecer datos personales -- tambien pueden
+// REEMPLAZAR nodos del formulario (clonarlos "limpios" sin los listeners
+// que Javascript les habia enganchado). Por eso TODO este bloque usa
+// DELEGACION DE EVENTOS sobre `document` (que la extension nunca
+// reemplaza) en vez de agarrar referencias fijas a los botones/inputs una
+// sola vez al cargar la pagina -- asi el modal sigue funcionando aunque
+// esos nodos hayan sido reemplazados entre que la pagina cargo y el
+// operario efectivamente hace clic. Cada elemento se busca de nuevo con
+// `porId()` en el momento del evento, nunca antes.
+(function() {
+    const PREFIJO = 'modalClienteRapido_rapido';
+    const porId = (id) => document.getElementById(id);
+
+    function actualizarResaltadoEstado() {
+        document.querySelectorAll('input[name="' + PREFIJO + '_estado"]').forEach(function(radio) {
+            const label = document.querySelector('label[for="' + radio.id + '"]');
+            if (label) label.classList.toggle('estado-toggle-selected', radio.checked);
+        });
+    }
+
+    function mostrarError(mensaje) {
+        const errorDiv = porId(PREFIJO + '_error');
+        if (errorDiv) {
+            errorDiv.textContent = mensaje;
+            errorDiv.classList.remove('d-none');
+        } else {
+            alert(mensaje);
+        }
+    }
+
+    function limpiarError() {
+        const errorDiv = porId(PREFIJO + '_error');
+        if (errorDiv) {
+            errorDiv.classList.add('d-none');
+            errorDiv.innerHTML = '';
+        }
+    }
+
+    document.addEventListener('change', function(e) {
+        if (e.target && e.target.name === PREFIJO + '_estado') actualizarResaltadoEstado();
+    });
+    document.addEventListener('shown.bs.modal', function(e) {
+        if (e.target && e.target.id === PREFIJO) actualizarResaltadoEstado();
+    });
+
+    document.addEventListener('click', async function(e) {
+        const btnCrear = e.target.closest && e.target.closest('#' + PREFIJO + '_crear');
+        if (!btnCrear) return;
+
+        const inputNombre = porId(PREFIJO + '_nombre');
+        const inputCelular = porId(PREFIJO + '_celular');
+        const inputCedula = porId(PREFIJO + '_cedula');
+        if (!inputNombre || !inputCelular || !inputCedula) return;
+
+        limpiarError();
+
+        const nombre = (inputNombre.value || '').trim();
+        const celular = (inputCelular.value || '').trim();
+        const cedula = (inputCedula.value || '').trim();
+        const estadoInput = document.querySelector('input[name="' + PREFIJO + '_estado"]:checked');
+        const estado = estadoInput ? estadoInput.value : 'ACTIVO';
+
+        if (!nombre || !celular) {
+            mostrarError('Nombre y celular son obligatorios.');
+            return;
+        }
+
+        const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (!csrfInput) {
+            mostrarError('No se pudo verificar el formulario. Recarga la página e intenta de nuevo.');
+            return;
+        }
+        const formData = new FormData();
+        formData.append('nombre', nombre);
+        formData.append('celular', celular);
+        formData.append('cedula', cedula);
+        formData.append('estado', estado);
+
+        btnCrear.disabled = true;
+        try {
+            const response = await fetch('{% url "crear_cliente_ajax" %}', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfInput.value },
+                body: formData,
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                const cliente = data.cliente;
+                if (typeof clientesGlobales_rapido !== 'undefined') clientesGlobales_rapido.push(cliente);
+
+                const clienteIdInput = porId('cliente_id');
+                const clienteSearchInput = porId('cliente_search_rapido');
+                if (clienteIdInput) clienteIdInput.value = cliente.id;
+                if (clienteSearchInput) clienteSearchInput.value = cliente.nombre;
+
+                const nombreDisplay = porId('cliente_nombre_display');
+                const cedulaDisplay = porId('cliente_cedula_display');
+                const celularDisplay = porId('cliente_celular_display');
+                const seleccionadoDiv = porId('cliente_seleccionado');
+                if (nombreDisplay) nombreDisplay.textContent = cliente.nombre;
+                if (cedulaDisplay) cedulaDisplay.textContent = cliente.cedula || '-';
+                if (celularDisplay) celularDisplay.textContent = cliente.celular || '-';
+                if (seleccionadoDiv) seleccionadoDiv.style.display = 'block';
+
+                inputNombre.value = '';
+                inputCelular.value = '';
+                inputCedula.value = '';
+                document.querySelectorAll('input[name="' + PREFIJO + '_estado"]').forEach(function(radio) {
+                    radio.checked = (radio.value === 'ACTIVO');
+                });
+                actualizarResaltadoEstado();
+
+                const modalEl = porId(PREFIJO);
+                if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+            } else {
+                const mensajes = Object.values(data.errors || {}).flat().join(' ');
+                mostrarError(mensajes || 'No se pudo crear el cliente.');
+            }
+        } catch (error) {
+            console.error('❌ Error creando cliente rápido:', error);
+            mostrarError('Error de conexión. Intenta de nuevo.');
+        } finally {
+            btnCrear.disabled = false;
+        }
+    });
+})();
 
 // ✅ Inicializar dropdown
 document.addEventListener('DOMContentLoaded', function() {
