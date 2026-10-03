@@ -33,6 +33,22 @@ DEBUG = ENVIRONMENT == 'local'
 PRODUCTION = ENVIRONMENT == 'production'
 STAGING = ENVIRONMENT == 'staging'
 
+def _csrf_origin_for_host(host):
+    """
+    Convierte un host de ALLOWED_HOSTS a un origen de CSRF_TRUSTED_ORIGINS.
+    ALLOWED_HOSTS usa un punto al inicio para comodin de subdominio
+    (".onrender.com" = cualquier subdominio), pero CSRF_TRUSTED_ORIGINS usa
+    un asterisco ("https://*.onrender.com") -- son formatos distintos. Antes
+    esto se descartaba (host.startswith('.')), dejando CSRF_TRUSTED_ORIGINS
+    vacio del todo si PRODUCTION_HOST no quedaba resuelto (ej. cuenta nueva
+    de Render sin RENDER_EXTERNAL_HOSTNAME poblado a tiempo) -- bug real
+    reportado: 403 CSRF en el primer login de una cuenta de Render nueva.
+    """
+    if host.startswith('.'):
+        return f"https://*{host}"
+    return f"https://{host}"
+
+
 # ============= SEGURIDAD Y CONFIGURACIÓN BÁSICA =============
 if RENDER:
     # Render: dominio automatico + hosts del .env
@@ -40,11 +56,11 @@ if RENDER:
     _extra_hosts = [host.strip() for host in config('ALLOWED_HOSTS', default='').split(',') if host.strip()]
     _render_hosts = [PRODUCTION_HOST, '.onrender.com'] if PRODUCTION_HOST else ['.onrender.com']
     ALLOWED_HOSTS = _render_hosts + _extra_hosts
-    CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS if not host.startswith('.')]
+    CSRF_TRUSTED_ORIGINS = [_csrf_origin_for_host(host) for host in ALLOWED_HOSTS]
 elif PRODUCTION:
     SECRET_KEY = config('SECRET_KEY')  # Requerida en producción
     ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='tu-dominio.com').split(',')
-    CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS if host != 'localhost']
+    CSRF_TRUSTED_ORIGINS = [_csrf_origin_for_host(host) for host in ALLOWED_HOSTS if host != 'localhost']
 else:
     SECRET_KEY = config('SECRET_KEY', default='django-insecure-dev-key-change-in-production')
     ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,testserver').split(',')
