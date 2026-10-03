@@ -15,7 +15,7 @@ services:
     name: gestion-creditos
     runtime: python
     region: oregon  # US West — menor latencia desde Colombia
-    plan: free      # Cambiar a "starter" si necesitas 24/7
+    plan: starter   # Pago ($7/mes) — no se duerme por inactividad, 24/7
 
     # Rama que activa el deploy
     branch: main
@@ -58,9 +58,7 @@ services:
         sync: false                      # Se configura manual en el dashboard
 
       # Password fija del superusuario 'admin' (build.sh la usa si existe;
-      # si no, genera una al azar en cada build — y en el plan free, Render
-      # reconstruye la app cada vez que "despierta" de estar inactiva, así
-      # que sin esto la contraseña cambia todo el tiempo). Configurar manual.
+      # si no, genera una al azar en cada build). Configurar manual.
       - key: ADMIN_PASSWORD
         sync: false
       - key: DEFAULT_FROM_EMAIL
@@ -85,6 +83,6 @@ services:
 # =========================================================================
 databases:
   - name: creditos-db
-    plan: free   # 1GB storage, 256MB RAM — suficiente para empezar
+    plan: basic-256mb   # Pago (~$6/mes) — no expira a los 90 dias como el free
     databaseName: creditos_db
     user: creditos_user
