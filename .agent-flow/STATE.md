@@ -1,5 +1,8 @@
 # Estado operativo
 
+> **2026-10-13, actualizacion final**: commit `62aa360` pusheado a `origin/main` (ver HISTORY.md para el detalle completo del commit, la verificacion de backup previa, y el hallazgo de que `origin` no tiene rama `master`). CI/CD en curso o recien terminado en GitHub Actions -- pendiente de que la duena confirme que el pipeline y el deploy en Render quedaron en verde.
+
+
 - Tarea: Plan de acción de seguridad completo (auditoría "desde base de datos hasta protección general", 2026-10-13) -- Tier 0, Tier 1 y Tier 2, más 2 hallazgos menores encontrados de paso. Detalle completo de cada punto en HISTORY.md.
 - Objetivo: cerrar los huecos de infiltración/exposición de datos confirmados por auditoría, sin tocar producción ni dinero.
 - Estado: **terminado**. Todo lo acordado está implementado y verificado (resumen completo en el mensaje final al dueño). Los últimos 2 puntos tocados hoy (DEUDA-TECNICA #22bis/#22ter) resultaron, tras verificar, NO ser bugs reales:

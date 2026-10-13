@@ -172,15 +172,23 @@ jobs:
 
     - name: Check dependencies for vulnerabilities (bloquea, salvo deuda aceptada)
       run: |
-        # Ignorados: solo se corrigen subiendo a Django 5.2.15+ (salto de versión mayor,
-        # requiere su propio plan de migración — ver DEUDA-TECNICA.md cajón 2).
+        # Ignorados (6): solo se corrigen subiendo a Django 5.2.15+ (salto de versión
+        # mayor, requiere su propio plan de migración — ver DEUDA-TECNICA.md cajón 2).
+        #
+        # SFTY-20260824-60077 (CVE-2026-15307, GeoDjango GDALRaster SSRF/arbitrary
+        # file write vía filtros espaciales en el admin, CVSS 8.8): verificado el
+        # 2026-10-13 que NO aplica a este proyecto -- no hay `django.contrib.gis` en
+        # INSTALLED_APPS ni GDAL en requirements.txt, el codigo vulnerable no existe
+        # acá (confirmado por grep en todo el repo). No es "aceptamos el riesgo", es
+        # "el feature vulnerable no está presente".
         safety check -r requirements.txt \
           --ignore SFTY-20260603-18287 \
           --ignore SFTY-20260603-03325 \
           --ignore SFTY-20260603-81517 \
           --ignore SFTY-20260707-60059 \
           --ignore SFTY-20260707-97267 \
-          --ignore SFTY-20260707-99910
+          --ignore SFTY-20260707-99910 \
+          --ignore SFTY-20260824-60077
 
   secrets-scan:
     runs-on: ubuntu-latest
