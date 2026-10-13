@@ -60,7 +60,7 @@ jobs:
       # asi que no hace falta agregar mas secrets ficticios a este job.
       env:
         ENVIRONMENT: staging
-        SECRET_KEY: ci-deploy-check-dummy-key-not-used-anywhere-else-1a2b3c4d5e6f
+        SECRET_KEY: ci-deploy-check-dummy-key-not-used-anywhere-else-1a2b3c4d5e6f  # pragma: allowlist secret
       run: |
         python manage.py check --deploy
     
