@@ -56,6 +56,31 @@ class InteresParaCuotaTests(SimpleTestCase):
         )
         self.assertEqual(interes, Decimal('8000'))
 
+    def test_fecha_cuota_anterior_a_fecha_anterior_nunca_da_interes_negativo(self):
+        # Regresion de auditoria de seguridad/logica de dinero: cuando se
+        # recalcula el cronograma por un abono extraordinario, fecha_desde
+        # es HOY y fecha_cuota puede ser una fecha ya fijada de una cuota
+        # futura que quedo en el pasado (cliente atrasado). Sin este piso,
+        # "dias" da negativo y el interes tambien -- corrompe
+        # interes_acumulado_sin_pagar (puede incluso disparar un cierre
+        # prematuro via TOLERANCIA_CIERRE). El piso de 1 dia es el mismo
+        # minimo que ya rige el caso "mismo dia" del conteo inclusivo.
+        interes = interes_para_cuota(
+            Decimal('600000'), Decimal('15'), 0,
+            date(2026, 6, 1), date(2026, 2, 5),  # fecha_cuota ANTES de fecha_anterior
+        )
+        self.assertGreaterEqual(interes, Decimal('0'))
+        self.assertEqual(interes, Decimal('3000'))  # 1 dia (piso) x 3000/dia (600000*15%/2/15)
+
+    def test_fecha_cuota_igual_a_fecha_anterior_sigue_dando_1_dia(self):
+        # No debe cambiar el comportamiento ya establecido del caso limite
+        # "mismo dia" (0 dias de diferencia + 1 = 1 dia).
+        interes = interes_para_cuota(
+            Decimal('200000'), Decimal('15'), 0,
+            date(2026, 9, 13), date(2026, 9, 13),
+        )
+        self.assertEqual(interes, Decimal('1000'))
+
 
 class GenerarCronogramaInteresTests(SimpleTestCase):
     def test_ejemplo_real_del_cliente_200000_15_por_ciento_desembolso_irregular(self):

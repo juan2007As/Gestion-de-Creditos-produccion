@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
+from mi_app.utilities.decorators import admin_required
 
 @require_http_methods(["GET", "POST"])
 def login_view(request):
@@ -34,8 +35,19 @@ def logout_view(request):
     messages.success(request, "Sesión cerrada correctamente")
     return redirect('login')
 
+@admin_required
 def register_view(request):
-    """Vista de registro (opcional)"""
+    """
+    Crear un usuario nuevo (herramienta de ADMIN, no auto-registro).
+
+    Hallazgo de seguridad (auditoria 2026-10-13): esta vista estaba publica,
+    sin login ni rate-limit. Cualquiera en internet podia crear una cuenta
+    real, y la senal `crear_user_profile` (models.py) le asignaba el rol
+    OPERARIO automaticamente sin aprobacion de nadie -- infiltracion directa
+    en un sistema con dinero real y PII de clientes. Los usuarios de este
+    proyecto se crean via create_superuser.py/setup_roles.py o, para un
+    operario nuevo, por un ADMIN desde aqui -- nunca por auto-registro.
+    """
     if request.method == 'GET':
         return render(request, 'register.html')
     

@@ -624,6 +624,7 @@ def crear_cliente(request):
 
 @require_any_permission('cliente.create')
 @login_required(login_url='login')
+@ratelimit(key='user', rate='10/m', method='POST', block=True)
 def crear_cliente_ajax(request):
     """
     Crea un cliente desde el modal de "cliente rapido" en los formularios
@@ -631,6 +632,13 @@ def crear_cliente_ajax(request):
     mismas validaciones que crear_cliente, pero responde JSON en vez de
     redirigir, para no perder lo que el operario ya llevaba llenado en el
     formulario de prestamo que lo abrio.
+
+    Rate limit (auditoria de seguridad 2026-10-13, Tier 2 #19): a diferencia
+    de crear_cliente (la vista no-AJAX hermana, que redirige a una pagina
+    nueva en cada submit), este endpoint vive en un modal pensado para
+    enviarse rapido sin recargar -- el tipo de endpoint que normalmente si
+    se limita, para que un usuario con permiso `cliente.create` no pueda
+    automatizar creacion masiva de clientes en bucle.
     """
     if request.method != 'POST':
         return JsonResponse({'success': False, 'errors': {'__all__': ['Metodo no permitido.']}}, status=405)
@@ -928,7 +936,11 @@ def crear_prestamo(request, cliente_id=None):
     context = {
         'clientes': clientes,
         'clientes_con_lista_negra': clientes_con_lista_negra,
-        'clientes_lista_negra_json': json.dumps(clientes_lista_negra_map)
+        # Objeto Python crudo: el template lo serializa con el filtro
+        # |json_script, que escapa para uso seguro dentro de HTML/JS (evita XSS
+        # vía nombre/cédula de cliente). No pre-serializar aquí con json.dumps().
+        'clientes_lista_negra_json': clientes_lista_negra_map,
+        'cliente_preseleccionado_json': None,
     }
     
     # Si viene desde el perfil de un cliente, preseleccionarlo
@@ -952,7 +964,7 @@ def crear_prestamo(request, cliente_id=None):
             'cedula': cliente.cedula,
             'celular': cliente.celular
         }
-        context['cliente_preseleccionado_json'] = json.dumps(cliente_preselectc_data)
+        context['cliente_preseleccionado_json'] = cliente_preselectc_data
     
     return render(request, 'mi_app/formularios/formulario_prestamo.html', context)
 
@@ -1348,25 +1360,43 @@ def pagar_cuota_especifica(request, cuota_id):
             }
             return render(request, 'mi_app/pagar_cuota_especifica.html', contexto)
 
-        if monto_principal > prestamo.capital_pendiente:
-            contexto = {
-                'cuota': cuota, 'prestamo': prestamo, 'cliente': cliente,
-                'capital_pendiente': prestamo.capital_pendiente,
-                'interes_pendiente': interes_pendiente, 'mora_actual': mora_actual,
-                'error': f'❌ Capital pendiente del préstamo: ${prestamo.capital_pendiente}',
-            }
-            return render(request, 'mi_app/pagar_cuota_especifica.html', contexto)
-
-        if monto_interes > interes_pendiente:
-            contexto = {
-                'cuota': cuota, 'prestamo': prestamo, 'cliente': cliente,
-                'capital_pendiente': prestamo.capital_pendiente,
-                'interes_pendiente': interes_pendiente, 'mora_actual': mora_actual,
-                'error': f'❌ Interés pendiente: ${interes_pendiente}',
-            }
-            return render(request, 'mi_app/pagar_cuota_especifica.html', contexto)
-
         with transaction.atomic():
+            # Regresion de auditoria de seguridad (2026-10-08): las
+            # validaciones de capital/interes pendiente deben correr DESPUES
+            # de bloquear la fila, no antes -- si no, dos pagos simultaneos
+            # sobre el mismo prestamo (doble clic, dos operarios) pueden leer
+            # el mismo capital_pendiente, validar los dos contra ese mismo
+            # valor viejo, y el segundo .save() pisa el descuento del
+            # primero (plata que queda registrada como pagada pero nunca se
+            # descuenta del capital real). select_for_update() hace que el
+            # segundo pago espere a que el primero termine (commit) antes de
+            # leer -- en Postgres (produccion) es un lock de fila real; en
+            # SQLite (local) el motor no lo soporta y esta llamada es un
+            # no-op silencioso (confirmado: connection.features.has_select_for_update
+            # es False en sqlite), por eso el test de regresion de esto es
+            # @skipUnlessDBFeature('has_select_for_update').
+            cuota = Cuota.objects.select_for_update().get(pk=cuota.pk)
+            prestamo = Prestamo.objects.select_for_update().get(pk=prestamo.pk)
+            interes_pendiente = calcular_interes_pendiente_actual(prestamo, cuota)
+
+            if monto_principal > prestamo.capital_pendiente:
+                contexto = {
+                    'cuota': cuota, 'prestamo': prestamo, 'cliente': cliente,
+                    'capital_pendiente': prestamo.capital_pendiente,
+                    'interes_pendiente': interes_pendiente, 'mora_actual': mora_actual,
+                    'error': f'❌ Capital pendiente del préstamo: ${prestamo.capital_pendiente}',
+                }
+                return render(request, 'mi_app/pagar_cuota_especifica.html', contexto)
+
+            if monto_interes > interes_pendiente:
+                contexto = {
+                    'cuota': cuota, 'prestamo': prestamo, 'cliente': cliente,
+                    'capital_pendiente': prestamo.capital_pendiente,
+                    'interes_pendiente': interes_pendiente, 'mora_actual': mora_actual,
+                    'error': f'❌ Interés pendiente: ${interes_pendiente}',
+                }
+                return render(request, 'mi_app/pagar_cuota_especifica.html', contexto)
+
             resumen = aplicar_pago(prestamo, cuota, monto_principal, monto_interes, monto_mora)
 
             pago = Pago.objects.create(
@@ -2378,12 +2408,36 @@ def importar_excel(request):
         
         # ===== SINO: ES PREVIEW (FASE 1) =====
         archivo = request.FILES.get('archivo')
-        
+
         if not archivo:
             return render(request, 'mi_app/auditoria/importar_excel.html', {
                 'error': 'Por favor selecciona un archivo Excel'
             })
-        
+
+        # Hallazgo de seguridad (auditoria 2026-10-13): sin limite de tamano,
+        # cualquier ADMIN (unico rol con acceso a esta vista) podia subir un
+        # archivo arbitrariamente grande directo a pd.read_excel(), que lo
+        # carga entero en memoria -- DoS trivial contra el dyno de Render.
+        MAX_TAMANO_EXCEL_MB = 10
+        if archivo.size > MAX_TAMANO_EXCEL_MB * 1024 * 1024:
+            return render(request, 'mi_app/auditoria/importar_excel.html', {
+                'error': f'El archivo supera el tamaño máximo permitido ({MAX_TAMANO_EXCEL_MB} MB).'
+            })
+
+        # Hallazgo de seguridad (auditoria 2026-10-13, Tier 2 #21): antes se
+        # confiaba en que pd.read_excel() fallara solo ante un archivo que no
+        # fuera un Excel real -- gastando CPU/memoria parseando contenido
+        # arbitrario antes de rechazarlo. Chequeo barato de extension antes
+        # de intentar parsear (el Content-Type lo manda el navegador/cliente,
+        # no es una frontera de seguridad real -- esto es solo para rechazar
+        # rapido lo obviamente no-Excel, el parseo real sigue protegido por
+        # el try/except de abajo).
+        EXTENSIONES_EXCEL_VALIDAS = ('.xlsx', '.xls')
+        if not archivo.name.lower().endswith(EXTENSIONES_EXCEL_VALIDAS):
+            return render(request, 'mi_app/auditoria/importar_excel.html', {
+                'error': 'El archivo debe ser un Excel (.xlsx o .xls).'
+            })
+
         try:
             # Leer Excel
             df = pd.read_excel(archivo, sheet_name=0)
@@ -3153,29 +3207,40 @@ def registrar_pago_rapido(request, cuota_id):
             from decimal import Decimal
 
             monto_pagado = Decimal(str(monto_pagado))
-            mora = Decimal(str(cuota.calcular_mora_diaria()))
-            interes_pendiente = calcular_interes_pendiente_actual(prestamo, cuota)
-            total_debido = prestamo.capital_pendiente + interes_pendiente + mora
-
-            if monto_pagado > total_debido:
-                form.add_error('monto_pagado', f'El monto no puede ser mayor a {total_debido}')
-                return render(request, 'mi_app/registrar_pago_rapido.html', {
-                    'form': form,
-                    'prestamo': prestamo,
-                    'cuota': cuota,
-                    'total_debido': total_debido,
-                    'mora_actual': mora,
-                })
-
-            # Interes primero, despues capital, despues mora -- con lo que sobre
-            monto_restante = monto_pagado
-            interes_a_pagar = min(interes_pendiente, monto_restante)
-            monto_restante -= interes_a_pagar
-            capital_a_pagar = min(prestamo.capital_pendiente, monto_restante)
-            monto_restante -= capital_a_pagar
-            mora_a_pagar = min(mora, monto_restante)
 
             with transaction.atomic():
+                # Mismo fix de concurrencia que pagar_cuota_especifica (ver
+                # su comentario para el detalle): el calculo de
+                # interes_pendiente/total_debido y el reparto
+                # interes->capital->mora tienen que correr DESPUES de
+                # bloquear la fila, con datos recien leidos -- si no, dos
+                # pagos simultaneos sobre el mismo prestamo pueden repartir
+                # los dos contra el mismo capital_pendiente viejo y el
+                # segundo .save() pisa el descuento del primero.
+                cuota = CuotaRapida.objects.select_for_update().get(pk=cuota.pk)
+                prestamo = PrestamoRapido.objects.select_for_update().get(pk=prestamo.pk)
+                mora = Decimal(str(cuota.calcular_mora_diaria()))
+                interes_pendiente = calcular_interes_pendiente_actual(prestamo, cuota)
+                total_debido = prestamo.capital_pendiente + interes_pendiente + mora
+
+                if monto_pagado > total_debido:
+                    form.add_error('monto_pagado', f'El monto no puede ser mayor a {total_debido}')
+                    return render(request, 'mi_app/registrar_pago_rapido.html', {
+                        'form': form,
+                        'prestamo': prestamo,
+                        'cuota': cuota,
+                        'total_debido': total_debido,
+                        'mora_actual': mora,
+                    })
+
+                # Interes primero, despues capital, despues mora -- con lo que sobre
+                monto_restante = monto_pagado
+                interes_a_pagar = min(interes_pendiente, monto_restante)
+                monto_restante -= interes_a_pagar
+                capital_a_pagar = min(prestamo.capital_pendiente, monto_restante)
+                monto_restante -= capital_a_pagar
+                mora_a_pagar = min(mora, monto_restante)
+
                 resumen = aplicar_pago(prestamo, cuota, capital_a_pagar, interes_a_pagar, mora_a_pagar)
 
                 PagoPrestamoRapido.objects.create(
@@ -3353,6 +3418,27 @@ def editar_configuracion(request):
 # ===============================================================================
 # EXPORTAR A EXCEL
 # ===============================================================================
+
+def _excel_valor_seguro(valor):
+    """
+    Neutraliza Formula/CSV Injection (CWE-1236, hallazgo de auditoria
+    2026-10-13): un string de BD (ej. el nombre de un cliente) que empiece
+    con '=', '+', '-' o '@' es interpretado por Excel como formula al abrir
+    el archivo exportado, no como texto. Quien escribe ese dato (cualquier
+    operario, incluido el modal de "cliente rapido") puede no ser quien
+    despues abre el Excel (tipicamente un ADMIN/GERENTE generando reportes).
+    Anteponer una comilla simple fuerza a Excel a tratarlo como texto literal.
+    """
+    if isinstance(valor, str) and valor.startswith(('=', '+', '-', '@')):
+        return "'" + valor
+    return valor
+
+
+def _excel_fila_segura(fila):
+    """Aplica _excel_valor_seguro a cada celda de una fila para ws.append(fila)."""
+    return [_excel_valor_seguro(v) for v in fila]
+
+
 @require_permission('reporte.export')
 @login_required(login_url='login')
 
@@ -3462,7 +3548,7 @@ def exportar_clientes_excel(request):
             # Si no tiene préstamos, solo añadir datos del cliente
             estado_cliente = 'LISTA_NEGRA' if cliente.id in clientes_lista_negra else (cliente.etiqueta_cliente or 'SIN_HISTORIAL')
             mora_total = sum(c.calcular_mora_diaria() for c in Cuota.objects.filter(prestamo__cliente=cliente, pagado=False))
-            ws.append([
+            ws.append(_excel_fila_segura([
                 cliente.nombre,
                 str(cliente.celular),
                 '',  # Monto
@@ -3472,7 +3558,7 @@ def exportar_clientes_excel(request):
                 estado_cliente,
                 'Sí' if cliente.id in clientes_lista_negra else 'No',
                 float(mora_total),
-            ])
+            ]))
             row_num += 1
         else:
             # Para cada préstamo del cliente
@@ -3529,9 +3615,9 @@ def exportar_clientes_excel(request):
                     float(mora_total),
                 ])
                 
-                ws.append(row_data)
+                ws.append(_excel_fila_segura(row_data))
                 row_num += 1
-    
+
     # Aplicar bordes y alineación a datos
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=22):
         for cell in row:
@@ -3707,7 +3793,7 @@ def exportar_prestamos_excel(request):
             prestamo.fecha_creacion.strftime('%d/%m/%Y'),
             fecha_ultimo_pago
         ]
-        ws.append(row_data)
+        ws.append(_excel_fila_segura(row_data))
     
     # Aplicar bordes y alineación
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=14):
@@ -3821,7 +3907,7 @@ def exportar_cuotas_excel(request):
         estado_visual_cliente = 'LISTA_NEGRA' if cuota.prestamo.cliente_id in clientes_lista_negra else (cuota.prestamo.cliente.etiqueta_cliente or 'SIN_HISTORIAL')
         
         row_num = ws.max_row + 1
-        ws.append([
+        ws.append(_excel_fila_segura([
             cliente_nombre,
             estado_visual_cliente,
             'Sí' if cuota.prestamo.cliente_id in clientes_lista_negra else 'No',
@@ -3840,7 +3926,7 @@ def exportar_cuotas_excel(request):
             interes_pendiente_cuota,
             total_pagado,
             'Trasladada' if cuota.estado == 'TRASLADADA' else ('Pagada' if cuota.pagado else 'Pendiente')
-        ])
+        ]))
         
         # Colorear según estado
         fill_color = paid_fill if cuota.pagado else unpaid_fill
@@ -4256,7 +4342,7 @@ def exportar_cuotas_vencidas_excel(request):
         # cuota activa, no en el monto_original informativo por cuota.
         total_cuota = cuota.monto_pendiente + cuota.monto_pendiente_interes + mora
         estado_visual_cliente = 'LISTA_NEGRA' if cuota.prestamo.cliente_id in clientes_lista_negra else (cuota.prestamo.cliente.etiqueta_cliente or 'SIN_HISTORIAL')
-        ws.append([
+        ws.append(_excel_fila_segura([
             cuota.prestamo.cliente.nombre,
             cuota.prestamo.cliente.cedula or "",
             cuota.prestamo.cliente.celular or "",
@@ -4269,7 +4355,7 @@ def exportar_cuotas_vencidas_excel(request):
             float(total_cuota),
             cuota.fecha_pago_esperada.strftime('%d/%m/%Y'),
             dias_vencido,
-        ])
+        ]))
     
     # Ancho de columnas
     for col in ws.columns:
@@ -4389,7 +4475,7 @@ def exportar_prestamos_rapidos_excel(request):
             saldo_pendiente = float(pr.capital_pendiente + interes_pendiente)
         else:
             saldo_pendiente = float(pr.saldo_pendiente)
-        ws.append([
+        ws.append(_excel_fila_segura([
             pr.cliente.nombre,
             pr.cliente.cedula or "",
             pr.cliente.celular or "",
@@ -4401,7 +4487,7 @@ def exportar_prestamos_rapidos_excel(request):
             float(pr.interes_porcentaje) if pr.interes_porcentaje else 0,
             pr.fecha_solicitud.strftime('%d/%m/%Y'),
             pr.fecha_vencimiento.strftime('%d/%m/%Y') if pr.fecha_vencimiento else "",
-        ])
+        ]))
     
     for col in ws.columns:
         ws.column_dimensions[col[0].column_letter].width = 18
@@ -4443,7 +4529,7 @@ def exportar_historico_pagos_excel(request):
     pagos_rapidos = PagoPrestamoRapido.objects.all().select_related('prestamo_rapido__cliente', 'cuota_rapida').order_by('-fecha_pago')
     
     for pago in pagos:
-        ws.append([
+        ws.append(_excel_fila_segura([
             'NORMAL',
             pago.cuota.prestamo.cliente.nombre,
             pago.cuota.prestamo.cliente.cedula or "",
@@ -4453,11 +4539,11 @@ def exportar_historico_pagos_excel(request):
             float(pago.monto_mora),
             float(pago.monto_pagado),
             pago.fecha_pago.strftime('%d/%m/%Y'),
-        ])
+        ]))
 
     for pago in pagos_rapidos:
         numero_cuota = pago.cuota_rapida.numero_cuota if pago.cuota_rapida else '-'
-        ws.append([
+        ws.append(_excel_fila_segura([
             'RÁPIDO',
             pago.prestamo_rapido.cliente.nombre,
             pago.prestamo_rapido.cliente.cedula or "",
@@ -4467,11 +4553,11 @@ def exportar_historico_pagos_excel(request):
             0.0,
             float(pago.monto_pagado),
             pago.fecha_pago.strftime('%d/%m/%Y'),
-        ])
-    
+        ]))
+
     for col in ws.columns:
         ws.column_dimensions[col[0].column_letter].width = 18
-    
+
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename="Historico_Pagos.xlsx"'
     wb.save(response)
@@ -4547,7 +4633,7 @@ def exportar_reporte_general_excel(request):
         prestamos_count = cliente.prestamo_set.count()
         adeudado = cliente.prestamo_set.aggregate(Sum('monto_total'))['monto_total__sum'] or 0
         mora_total = sum(c.calcular_mora_diaria() for c in Cuota.objects.filter(prestamo__cliente=cliente, pagado=False))
-        ws_clientes.append([
+        ws_clientes.append(_excel_fila_segura([
             cliente.id,
             cliente.nombre,
             cliente.cedula or "",
@@ -4558,7 +4644,7 @@ def exportar_reporte_general_excel(request):
             prestamos_count,
             float(adeudado),
             float(mora_total),
-        ])
+        ]))
     
     for col in ws_clientes.columns:
         ws_clientes.column_dimensions[col[0].column_letter].width = 18
@@ -4574,7 +4660,7 @@ def exportar_reporte_general_excel(request):
     
     for prestamo in Prestamo.objects.all().select_related('cliente'):
         mora_acumulada = sum(c.calcular_mora_diaria() for c in prestamo.cuotas.filter(pagado=False))
-        ws_prestamos.append([
+        ws_prestamos.append(_excel_fila_segura([
             prestamo.id,
             prestamo.cliente.nombre,
             'LISTA_NEGRA' if prestamo.cliente_id in clientes_lista_negra else (prestamo.cliente.etiqueta_cliente or 'SIN_HISTORIAL'),
@@ -4585,7 +4671,7 @@ def exportar_reporte_general_excel(request):
             prestamo.estado,
             float(mora_acumulada),
             prestamo.fecha_creacion.strftime('%d/%m/%Y'),
-        ])
+        ]))
     
     for col in ws_prestamos.columns:
         ws_prestamos.column_dimensions[col[0].column_letter].width = 18
@@ -4600,7 +4686,7 @@ def exportar_reporte_general_excel(request):
         cell.font = Font(bold=True, color="000000")
     
     for pr in PrestamoRapido.objects.all().select_related('cliente'):
-        ws_pr.append([
+        ws_pr.append(_excel_fila_segura([
             pr.id,
             pr.cliente.nombre,
             'LISTA_NEGRA' if pr.cliente_id in clientes_lista_negra else (pr.cliente.etiqueta_cliente or 'SIN_HISTORIAL'),
@@ -4609,7 +4695,7 @@ def exportar_reporte_general_excel(request):
             float(pr.saldo_pendiente),
             pr.estado,
             pr.fecha_solicitud.strftime('%d/%m/%Y'),
-        ])
+        ]))
     
     for col in ws_pr.columns:
         ws_pr.column_dimensions[col[0].column_letter].width = 18
@@ -4626,7 +4712,7 @@ def exportar_reporte_general_excel(request):
     for cuota in Cuota.objects.all().select_related('prestamo__cliente'):
         mora = cuota.calcular_mora_diaria()
         total_cuota = cuota.monto_original + cuota.interes_normal + mora
-        ws_cuotas.append([
+        ws_cuotas.append(_excel_fila_segura([
             cuota.prestamo.cliente.nombre,
             'LISTA_NEGRA' if cuota.prestamo.cliente_id in clientes_lista_negra else (cuota.prestamo.cliente.etiqueta_cliente or 'SIN_HISTORIAL'),
             'Sí' if cuota.prestamo.cliente_id in clientes_lista_negra else 'No',
@@ -4638,7 +4724,7 @@ def exportar_reporte_general_excel(request):
             float(total_cuota),
             cuota.fecha_pago_esperada.strftime('%d/%m/%Y') if cuota.fecha_pago_esperada else "",
             cuota.estado,
-        ])
+        ]))
     
     for col in ws_cuotas.columns:
         ws_cuotas.column_dimensions[col[0].column_letter].width = 18
@@ -4664,7 +4750,7 @@ def exportar_reporte_general_excel(request):
         dias_vencido = (hoy - cuota.fecha_pago_esperada).days
         mora = cuota.calcular_mora_diaria()
         total_cuota = cuota.monto_pendiente + cuota.monto_pendiente_interes + mora
-        ws_vencidas.append([
+        ws_vencidas.append(_excel_fila_segura([
             cuota.prestamo.cliente.nombre,
             'LISTA_NEGRA' if cuota.prestamo.cliente_id in clientes_lista_negra else (cuota.prestamo.cliente.etiqueta_cliente or 'SIN_HISTORIAL'),
             'Sí' if cuota.prestamo.cliente_id in clientes_lista_negra else 'No',
@@ -4673,7 +4759,7 @@ def exportar_reporte_general_excel(request):
             float(total_cuota),
             cuota.fecha_pago_esperada.strftime('%d/%m/%Y'),
             dias_vencido,
-        ])
+        ]))
     
     for col in ws_vencidas.columns:
         ws_vencidas.column_dimensions[col[0].column_letter].width = 18
@@ -4688,7 +4774,7 @@ def exportar_reporte_general_excel(request):
         cell.font = Font(bold=True, color="FFFFFF")
     
     for pago in Pago.objects.all().select_related('cuota__prestamo__cliente').order_by('-fecha_pago'):
-        ws_pagos.append([
+        ws_pagos.append(_excel_fila_segura([
             'NORMAL',
             pago.cuota.prestamo.cliente.nombre,
             f"Cuota #{pago.cuota.numero_cuota}",
@@ -4697,11 +4783,11 @@ def exportar_reporte_general_excel(request):
             float(pago.monto_mora),
             float(pago.monto_pagado),
             pago.fecha_pago.strftime('%d/%m/%Y'),
-        ])
+        ]))
 
     for pago in PagoPrestamoRapido.objects.all().select_related('prestamo_rapido__cliente', 'cuota_rapida').order_by('-fecha_pago'):
         numero_cuota = pago.cuota_rapida.numero_cuota if pago.cuota_rapida else '-'
-        ws_pagos.append([
+        ws_pagos.append(_excel_fila_segura([
             'RÁPIDO',
             pago.prestamo_rapido.cliente.nombre,
             f"Rápido #{pago.prestamo_rapido.id} · Cuota {numero_cuota}",
@@ -4710,7 +4796,7 @@ def exportar_reporte_general_excel(request):
             0.0,
             float(pago.monto_pagado),
             pago.fecha_pago.strftime('%d/%m/%Y'),
-        ])
+        ]))
 
     for col in ws_pagos.columns:
         ws_pagos.column_dimensions[col[0].column_letter].width = 20
@@ -4725,7 +4811,7 @@ def exportar_reporte_general_excel(request):
         cell.font = Font(bold=True, color="FFFFFF")
 
     for entry in ListaNegra.objects.select_related('cliente').order_by('-fecha_agregacion'):
-        ws_ln.append([
+        ws_ln.append(_excel_fila_segura([
             entry.cliente.nombre,
             entry.cliente.cedula or '',
             entry.cliente.celular or '',
@@ -4735,7 +4821,7 @@ def exportar_reporte_general_excel(request):
             entry.fecha_hasta.strftime('%d/%m/%Y') if entry.fecha_hasta else 'Indefinido',
             'Sí' if entry.activa else 'No',
             'Sí' if entry.esta_vigente else 'No',
-        ])
+        ]))
     
     for col in ws_ln.columns:
         ws_ln.column_dimensions[col[0].column_letter].width = 18
@@ -5176,14 +5262,14 @@ def exportar_auditoria_excel(request):
         ws.cell(row=row, column=1, value=cambio.id)
         ws.cell(row=row, column=2, value=cambio.fecha_cambio.strftime('%d/%m/%Y'))
         ws.cell(row=row, column=3, value=cambio.fecha_cambio.strftime('%H:%M:%S'))
-        ws.cell(row=row, column=4, value=cambio.usuario.get_full_name() or cambio.usuario.username)
+        ws.cell(row=row, column=4, value=_excel_valor_seguro(cambio.usuario.get_full_name() or cambio.usuario.username))
         ws.cell(row=row, column=5, value=cambio.get_accion_display())
         ws.cell(row=row, column=6, value=cambio.modelo)
-        ws.cell(row=row, column=7, value=cambio.objeto_str)
-        ws.cell(row=row, column=8, value=cambio.campo_modificado)
-        ws.cell(row=row, column=9, value=cambio.valor_anterior)
-        ws.cell(row=row, column=10, value=cambio.valor_nuevo)
-        ws.cell(row=row, column=11, value=cambio.razon)
+        ws.cell(row=row, column=7, value=_excel_valor_seguro(cambio.objeto_str))
+        ws.cell(row=row, column=8, value=_excel_valor_seguro(cambio.campo_modificado))
+        ws.cell(row=row, column=9, value=_excel_valor_seguro(cambio.valor_anterior))
+        ws.cell(row=row, column=10, value=_excel_valor_seguro(cambio.valor_nuevo))
+        ws.cell(row=row, column=11, value=_excel_valor_seguro(cambio.razon))
         ws.cell(row=row, column=12, value=cambio.ip_address or 'N/A')
     
     # Ajustar ancho de columnas
@@ -5464,7 +5550,8 @@ def exportar_lista_negra_excel(request):
                 'Activo' if entry.activa else 'Inactivo',
                 'Sí' if entry.esta_vigente else 'No',
             ]
-            
+            datos = _excel_fila_segura(datos)
+
             for col_num, dato in enumerate(datos, 1):
                 cell = ws.cell(row=row_num, column=col_num)
                 cell.value = dato
@@ -5867,22 +5954,22 @@ def generar_backup_zip():
         raise Exception(f"Error al generar ZIP: {str(e)}")
 
 
-@login_required
+@admin_required
 @require_http_methods(["POST"])
-@ratelimit(key='user', rate='5/m')
+@ratelimit(key='user', rate='5/m', block=True)
 def backup_rapido_generar(request):
     """
     Genera automáticamente un backup ZIP y lo guarda en /backups/.
     Rate limit: 5 backups por minuto máximo (operación CPU/IO intensiva)
     """
     try:
-        print("✅ backup_rapido_generar iniciado")
-        
+        print("backup_rapido_generar iniciado")
+
         # Crear directorio de backups
         PROJECT_ROOT = Path(settings.BASE_DIR)
         BACKUPS_DIR = PROJECT_ROOT / 'backups'
         BACKUPS_DIR.mkdir(exist_ok=True)
-        print(f"📁 BACKUPS_DIR: {BACKUPS_DIR}")
+        print(f"BACKUPS_DIR: {BACKUPS_DIR}")
 
         # Límite diario global: máximo 10 backups por día (Aumentado de 3)
         fecha_hoy_prefijo = dt.datetime.now().strftime('backup_%Y%m%d_')
@@ -5902,7 +5989,7 @@ def backup_rapido_generar(request):
         
         # Ruta a la BD
         DB_PATH = PROJECT_ROOT / 'db.sqlite3'
-        print(f"🗄️  DB_PATH: {DB_PATH}, existe: {DB_PATH.exists()}")
+        print(f"DB_PATH: {DB_PATH}, existe: {DB_PATH.exists()}")
         
         if not DB_PATH.exists():
             raise FileNotFoundError(f"BD no encontrada en {DB_PATH}")
@@ -5910,24 +5997,24 @@ def backup_rapido_generar(request):
         # Generar nombre del ZIP
         timestamp = dt.datetime.now().strftime('%Y%m%d_%H%M%S')
         nombre_archivo = f'backup_{timestamp}.zip'
-        print(f"📦 Nombre archivo: {nombre_archivo}")
-        
+        print(f"Nombre archivo: {nombre_archivo}")
+
         # Crear ZIP
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
             zf.write(str(DB_PATH), arcname='db.sqlite3')
-            print("✅ DB agregada al ZIP")
-        
+            print("DB agregada al ZIP")
+
         zip_buffer.seek(0)
         contenido = zip_buffer.getvalue()
         tamaño_mb = len(contenido) / (1024 * 1024)
-        print(f"📊 Tamaño: {tamaño_mb:.2f} MB")
-        
+        print(f"Tamaño: {tamaño_mb:.2f} MB")
+
         # Guardar archivo
         ruta_guardado = BACKUPS_DIR / nombre_archivo
         with open(ruta_guardado, 'wb') as f:
             f.write(contenido)
-        print(f"✅ Archivo guardado: {ruta_guardado}")
+        print(f"Archivo guardado: {ruta_guardado}")
         
         # Registrar en auditoría
         try:
@@ -5941,11 +6028,11 @@ def backup_rapido_generar(request):
                 ip_address=get_client_ip(request),
                 notas='Backup desde dashboard'
             )
-            print(f"✅ Auditoría registrada: {backup_audit.id}")
+            print(f"Auditoría registrada: {backup_audit.id}")
         except Exception as e:
-            print(f"⚠️  Error al registrar auditoría: {e}")
-        
-        print("✅ Respuesta exitosa")
+            print(f"Error al registrar auditoría: {e}")
+
+        print("Respuesta exitosa")
         return JsonResponse({
             'success': True,
             'nombre_archivo': nombre_archivo,
@@ -5954,7 +6041,7 @@ def backup_rapido_generar(request):
         })
     
     except Exception as e:
-        print(f"❌ ERROR: {str(e)}")
+        print(f"ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         return JsonResponse({
@@ -5963,8 +6050,8 @@ def backup_rapido_generar(request):
         }, status=500)
 
 
-@login_required
-@ratelimit(key='user', rate='10/m', method='GET')
+@admin_required
+@ratelimit(key='user', rate='10/m', method='GET', block=True)
 def backup_rapido_descargar(request, backup_id=None):
     """
     Descarga el backup ZIP al navegador del usuario.
@@ -5972,7 +6059,7 @@ def backup_rapido_descargar(request, backup_id=None):
     Rate limit: 10 descargas por minuto máximo (prevenir abuso de banda ancha)
     """
     try:
-        print("📥 Iniciando descarga de backup")
+        print("Iniciando descarga de backup")
         
         # Obtener backup_id desde URL o POST
         if backup_id is None:
@@ -6000,7 +6087,7 @@ def backup_rapido_descargar(request, backup_id=None):
                 'error': 'Archivo no encontrado en servidor'
             }, status=404)
         
-        print(f"📥 Descargando: {backup.nombre_archivo}")
+        print(f"Descargando: {backup.nombre_archivo}")
         
         # Leer archivo
         with open(ruta_archivo, 'rb') as f:
@@ -6013,7 +6100,7 @@ def backup_rapido_descargar(request, backup_id=None):
         )
         response['Content-Disposition'] = f'attachment; filename="{backup.nombre_archivo}"'
         
-        print("✅ Archivo enviado al navegador")
+        print("Archivo enviado al navegador")
         
         return response
     
@@ -6024,7 +6111,7 @@ def backup_rapido_descargar(request, backup_id=None):
         }, status=404)
     
     except Exception as e:
-        print(f"❌ ERROR descarga: {str(e)}")
+        print(f"ERROR descarga: {str(e)}")
         import traceback
         traceback.print_exc()
         return JsonResponse({
@@ -6033,16 +6120,16 @@ def backup_rapido_descargar(request, backup_id=None):
         }, status=500)
 
 
-@login_required
+@admin_required
 @require_http_methods(["POST"])
-@ratelimit(key='user', rate='3/m')
+@ratelimit(key='user', rate='3/m', block=True)
 def backup_rapido_correo(request):
     """
     Envía el backup ZIP más reciente por correo al cliente.
     Rate limit: 3 correos por minuto máximo (servidor SMTP/API limitado)
     """
     try:
-        print("📧 Iniciando envío de correo")
+        print("Iniciando envío de correo")
         
         # Obtener el backup más reciente que aún exista físicamente
         backup_audits = AuditoriaBackup.objects.filter(
@@ -6078,9 +6165,9 @@ def backup_rapido_correo(request):
                 'error': 'No hay correo destino configurado para enviar el backup'
             }, status=400)
         
-        print(f"📧 De: {settings.DEFAULT_FROM_EMAIL}")
-        print(f"📧 Para: {email_destino}")
-        print(f"📦 Archivo: {backup_audit.nombre_archivo}")
+        print(f"De: {settings.DEFAULT_FROM_EMAIL}")
+        print(f"Para: {email_destino}")
+        print(f"Archivo: {backup_audit.nombre_archivo}")
 
         backend_actual = getattr(settings, 'EMAIL_BACKEND', '')
         if backend_actual == 'django.core.mail.backends.console.EmailBackend':
@@ -6112,7 +6199,7 @@ def backup_rapido_correo(request):
             )
         
         email.send(fail_silently=False)
-        print("✅ Correo enviado")
+        print("Correo enviado")
         
         return JsonResponse({
             'success': True,
@@ -6123,7 +6210,7 @@ def backup_rapido_correo(request):
         })
     
     except Exception as e:
-        print(f"❌ ERROR email: {str(e)}")
+        print(f"ERROR email: {str(e)}")
         import traceback
         traceback.print_exc()
         return JsonResponse({
@@ -6136,7 +6223,7 @@ def backup_rapido_correo(request):
 # ALTO #4: MORA EN TIEMPO REAL - AJAX API
 # ===============================================================================
 
-@login_required
+@require_permission('prestamo.view')
 @require_http_methods(["GET"])
 def api_cuota_mora_actual(request, cuota_id):
     """

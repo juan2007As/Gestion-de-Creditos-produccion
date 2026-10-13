@@ -3,6 +3,7 @@ Middleware personalizado para manejo de errores globales.
 Incluye manejador de rate limiting (429 Too Many Requests).
 """
 
+from django.conf import settings
 from django.http import JsonResponse
 from django_ratelimit.exceptions import Ratelimited
 import logging
@@ -27,9 +28,12 @@ class RateLimitMiddleware:
         try:
             response = self.get_response(request)
         except Ratelimited as e:
-            # 🔒 Rate limit excedido
+            # Rate limit excedido. Hallazgo de seguridad (auditoria 2026-10-13,
+            # DEUDA-TECNICA.md #22ter): el emoji en este log revienta con
+            # UnicodeEncodeError si el handler de logging escribe a una
+            # consola Windows sin UTF-8 -- mismo bug exacto que #39.
             logger.warning(
-                f"🚨 RATE LIMIT EXCEDIDO: {request.user} "
+                f"RATE LIMIT EXCEDIDO: {request.user} "
                 f"en {request.path} - IP: {self.get_client_ip(request)}"
             )
             
@@ -56,3 +60,22 @@ class RateLimitMiddleware:
         else:
             ip = request.META.get('REMOTE_ADDR')
         return ip
+
+
+class ContentSecurityPolicyMiddleware:
+    """
+    Agrega el header Content-Security-Policy definido en
+    settings.CONTENT_SECURITY_POLICY (Tier 2 #20, auditoria de seguridad
+    2026-10-13). Solo activo si esa setting existe (PRODUCTION/STAGING) --
+    ver settings.py para el detalle de la politica y por que es parcial.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        policy = getattr(settings, 'CONTENT_SECURITY_POLICY', None)
+        if policy:
+            response['Content-Security-Policy'] = policy
+        return response

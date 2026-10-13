@@ -57,8 +57,15 @@ if RENDER:
     _render_hosts = [PRODUCTION_HOST, '.onrender.com'] if PRODUCTION_HOST else ['.onrender.com']
     ALLOWED_HOSTS = _render_hosts + _extra_hosts
     CSRF_TRUSTED_ORIGINS = [_csrf_origin_for_host(host) for host in ALLOWED_HOSTS]
-elif PRODUCTION:
-    SECRET_KEY = config('SECRET_KEY')  # Requerida en producción
+elif PRODUCTION or STAGING:
+    # Hallazgo de seguridad (auditoria 2026-10-13): STAGING caia en el `else`
+    # de abajo junto con `local`, heredando el default inseguro y publico de
+    # SECRET_KEY ('django-insecure-dev-key-change-in-production'). Si alguna
+    # vez se despliega staging sin la variable de entorno seteada, firmaria
+    # sesiones/CSRF con una clave conocida de antemano. STAGING ahora exige
+    # SECRET_KEY igual que PRODUCTION -- falla el arranque si falta, no usa
+    # un valor por defecto.
+    SECRET_KEY = config('SECRET_KEY')  # Requerida en producción y staging
     ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='tu-dominio.com').split(',')
     CSRF_TRUSTED_ORIGINS = [_csrf_origin_for_host(host) for host in ALLOWED_HOSTS if host != 'localhost']
 else:
@@ -152,6 +159,19 @@ elif ENVIRONMENT in ['staging', 'production']:
                 'PASSWORD': _url.password or '',
                 'HOST': _url.hostname,
                 'PORT': _url.port or 5432,
+                # Hallazgo de seguridad (auditoria 2026-10-13, Tier 1 #5): este es
+                # el camino real que usa produccion (render.yaml inyecta DATABASE_URL
+                # via `fromDatabase`) y no fijaba sslmode -- quedaba en el default
+                # de libpq ('prefer': intenta SSL pero acepta texto plano si el
+                # servidor no lo exige), exponiendo datos financieros/PII en
+                # transito si algun dia el servidor aceptara una conexion sin
+                # cifrar. Ademas, el parseo manual con urllib.parse descarta
+                # cualquier query string que Render pudiera agregar a la URL (ej.
+                # ?sslmode=...), asi que no bastaba con confiar en la URL misma.
+                # Render documenta que sus bases Postgres soportan/exigen SSL.
+                'OPTIONS': {
+                    'sslmode': 'require',
+                },
             }
         }
     else:
@@ -164,8 +184,8 @@ elif ENVIRONMENT in ['staging', 'production']:
                 'HOST': config('DB_HOST', default='localhost'),
                 'PORT': config('DB_PORT', default='5432'),
                 'OPTIONS': {
-                    'sslmode': 'require' if PRODUCTION else 'prefer',
-                } if PRODUCTION else {},
+                    'sslmode': 'require',
+                },
             }
         }
 
@@ -294,7 +314,14 @@ else:
     }
 
 # Security settings for production
-if PRODUCTION:
+# Hallazgo de seguridad (auditoria 2026-10-13, Tier 1 #7): este bloque
+# solo cubria PRODUCTION. STAGING ya exige SECRET_KEY real (#3, mismo
+# hallazgo) y corre sobre HTTPS igual que produccion, pero hasta ahora
+# se servia sin SECURE_SSL_REDIRECT ni cookies de sesion/CSRF marcadas
+# Secure -- una sesion de staging viajaba en texto plano si alguien
+# forzaba HTTP, exponiendo la cookie de sesion. STAGING nunca se ha
+# desplegado todavia, asi que extender este bloque es de bajo riesgo.
+if PRODUCTION or STAGING:
     # Render usa proxy reverso con SSL termination
     if RENDER:
         SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -304,6 +331,51 @@ if PRODUCTION:
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
+
+    # HSTS (Tier 1 #6, auditoria de seguridad 2026-10-13 -- DEUDA-TECNICA.md #33).
+    # SECURE_SSL_REDIRECT ya fuerza HTTPS, pero no cubre la primera conexion
+    # antes del redirect (ventana real de downgrade/SSL-stripping). Arranque
+    # deliberadamente conservador y acordado explicitamente con la duena:
+    # 1 hora de max-age en vez de 1 anio, para que si algo falla con HTTPS
+    # el bloqueo de navegadores dure poco mientras se confirma estabilidad
+    # en produccion real -- subir gradualmente en despliegues futuros.
+    # Sin include_subdomains (no hay subdominios propios bajo el host de
+    # Render) y sin preload (practicamente irreversible, y sin sentido sin
+    # un dominio propio -- hoy la app vive en un subdominio compartido de
+    # Render, no un dominio propio).
+    SECURE_HSTS_SECONDS = 3600
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
+
+    # Content-Security-Policy (Tier 2 #20, auditoria de seguridad 2026-10-13
+    # -- DEUDA-TECNICA.md #20). Version PARCIAL, acordada explicitamente con
+    # la duena: los templates usan bastante <script>/<style> inline y
+    # atributos onclick/onchange/onsubmit (relevado: 23 bloques <script>
+    # inline, 32 <style> inline, decenas de onclick/onchange/onsubmit en
+    # ~15 templates) -- una politica estricta sin 'unsafe-inline' rompería
+    # reportes, backups y formularios hoy mismo. Esta version SI sirve de
+    # defensa en profundidad real contra una tecnica de XSS muy comun
+    # (cargar un script/imagen/estilo remoto desde el dominio del
+    # atacante), clickjacking, hijack de <base> y envio de formularios a
+    # otro dominio -- pero NO protege contra un <script> inyectado inline
+    # (eso requeriria sacar todo el JS/CSS inline a archivos .js/.css y
+    # usar nonces, un refactor aparte, no de hoy). Dominios externos
+    # permitidos: los 2 que la app ya usa de verdad (Bootstrap via
+    # cdn.jsdelivr.net, Font Awesome via cdnjs.cloudflare.com) -- confirmado
+    # por grep que no hay imagenes/fetch/data-uri a otros dominios.
+    CONTENT_SECURITY_POLICY = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "font-src 'self' https://cdnjs.cloudflare.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none';"
+    )
+    MIDDLEWARE.append('mi_app.utilities.middleware.ContentSecurityPolicyMiddleware')
 
 # ============= CONFIGURACIÓN DE LA APLICACIÓN =============
 

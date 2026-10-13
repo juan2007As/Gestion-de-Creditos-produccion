@@ -484,6 +484,8 @@
 </style>
 
 <!-- ==================== JAVASCRIPT ==================== -->
+{{ clientes_lista_negra_json|json_script:"lista-negra-prestamo-data" }}
+{{ cliente_preseleccionado_json|json_script:"cliente-preseleccionado-data" }}
 <script>
 // ✅ CSS ESTÁNDAR DROPDOWN
 const styleDropdown = document.createElement('style');
@@ -576,8 +578,11 @@ styleDropdown.textContent = `
 document.head.appendChild(styleDropdown);
 
 // ===== ERROR #5: MAPA DE LISTA NEGRA =====
-const listaNegraPrestamo = {{ clientes_lista_negra_json|safe }};
-const clientePreselectionado_json = '{{ cliente_preseleccionado_json|safe }}';
+// Leídos desde <script type="application/json"> via json_script (no interpolación
+// directa en JS): evita XSS si un nombre/cédula de cliente contiene comillas o
+// caracteres que rompan un literal de string o un bloque <script>.
+const listaNegraPrestamo = JSON.parse(document.getElementById('lista-negra-prestamo-data').textContent);
+const clientePreseleccionadoData = JSON.parse(document.getElementById('cliente-preseleccionado-data').textContent);
 console.log('📋 Mapa de lista negra cargado:', listaNegraPrestamo);
 
 // ✅ Cargar clientes
@@ -917,9 +922,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ===== ERROR #5: PRES ELECC CLIENTE PRESELECCIONADO CUANDO LA PÁGINA CARGA =====
 document.addEventListener('DOMContentLoaded', function() {
-    if (clientePreselectionado_json) {
+    if (clientePreseleccionadoData) {
         try {
-            const cliente = JSON.parse(clientePreselectionado_json);
+            const cliente = clientePreseleccionadoData;
             console.log('📌 Cliente preseleccionado:', cliente.nombre);
             
             // Llenar el formulario con el cliente preseleccionado

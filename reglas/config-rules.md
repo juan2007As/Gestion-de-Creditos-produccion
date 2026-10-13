@@ -6,7 +6,7 @@
 
 1. **La configuración se valida al arrancar** — ya está: `SECRET_KEY`, `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` usan `config('X')` sin default en `settings.py`, y Django no arranca si faltan en producción.
 2. Se lee centralizada en `proyecto_john/settings.py` vía `python-decouple` — no leer `os.environ` directo desde otro archivo.
-3. **Ningún valor por defecto inseguro en producción** — ya está (el `SECRET_KEY` de desarrollo con default solo aplica en `ENVIRONMENT=local`).
+3. **Ningún valor por defecto inseguro en producción ni en staging** — el `SECRET_KEY` de desarrollo con default solo aplica en `ENVIRONMENT=local`. **Corrección (auditoría 2026-10-13):** esta línea decía que ya estaba resuelto, pero el código real tenía a `STAGING` cayendo en el mismo `else` que `local` (sin un `elif STAGING:` propio), heredando el default inseguro. Ya corregido en `settings.py` — `STAGING` ahora exige `SECRET_KEY` igual que `PRODUCTION`, sin default. Lección: esta regla se había dado por cerrada sin verificar el código línea por línea.
 4. `.env.example`, `config/local.env.example` y `config/pythonanywhere.env.example` deben actualizarse en el mismo commit que introduce una variable nueva. **Nota**: `config/pythonanywhere.env.example` es legado (genera config de MySQL, ya no aplica con Render+Postgres) — no agregar variables nuevas ahí, considerar retirarlo (`DEUDA-TECNICA.md` cajón 3).
 5. El código no debe preguntar "¿en qué entorno estoy?" para decidir qué calcula (interés, mora) — solo para decidir a qué servicio conectarse. Ya se cumple: `ENVIRONMENT` decide DB/email/logging, no lógica de negocio.
 

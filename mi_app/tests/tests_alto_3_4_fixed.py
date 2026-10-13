@@ -12,7 +12,7 @@ from django.urls import reverse
 from decimal import Decimal
 from datetime import date, timedelta
 import json
-from mi_app.models import Cliente, Prestamo, Cuota
+from mi_app.models import Cliente, Prestamo, Cuota, Rol, Permiso, RolPermiso, UsuarioProfile
 
 # ===============================================================================
 # ALTO #4: REAL-TIME MORA UPDATES TESTS
@@ -28,7 +28,23 @@ class RealTimeMoraAPITests(TestCase):
             username='testuser',
             password='testpass123'  # pragma: allowlist secret
         )
-        
+
+        # api_cuota_mora_actual ahora exige @require_permission('prestamo.view')
+        # (antes solo pedia login); sin esto el usuario de prueba recibe 403.
+        rol, _ = Rol.objects.get_or_create(
+            nombre='OPERARIO',
+            defaults={'descripcion': 'Rol operario para tests', 'activo': True}
+        )
+        perm, _ = Permiso.objects.get_or_create(
+            codigo='prestamo.view',
+            defaults={'descripcion': 'prestamo.view', 'activo': True}
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+        UsuarioProfile.objects.update_or_create(
+            usuario=self.user,
+            defaults={'rol': rol}
+        )
+
         # Crear cliente sin usuario (campo no existe)
         self.cliente = Cliente.objects.create(
             nombre='Test Cliente',

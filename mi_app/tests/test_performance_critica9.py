@@ -124,7 +124,7 @@ class TestPerformanceOptimization(TestCase):
         # Sin optimizar: 1 + (10*3) + (10*2) = ~71 queries
         assert query_count <= 5, f"Esperado ≤5 queries, got {query_count}"
         
-        print(f"✓ Estadísticas ejecutadas con {query_count} queries (optimizado)")
+        print(f"OK: Estadísticas ejecutadas con {query_count} queries (optimizado)")
     
     # ==========================================================================
     # TEST 2: get_clientes_with_stats_optimized
@@ -167,7 +167,7 @@ class TestPerformanceOptimization(TestCase):
         
         # Esperado: 2 queries (1 clientes + 1 lista_negra)
         assert query_count <= 3, f"Esperado ≤3 queries, got {query_count}"
-        print(f"✓ Clientes with stats ejecutados con {query_count} queries")
+        print(f"OK: Clientes with stats ejecutados con {query_count} queries")
     
     # ==========================================================================
     # TEST 3: get_prestamos_with_stats_optimized
@@ -206,7 +206,7 @@ class TestPerformanceOptimization(TestCase):
         
         # Esperado: 2 queries (1 prestamos + 1 cuotas prefetch)
         assert query_count <= 3, f"Esperado ≤3 queries, got {query_count}"
-        print(f"✓ Prestamos with stats ejecutados con {query_count} queries")
+        print(f"OK: Prestamos with stats ejecutados con {query_count} queries")
     
     # ==========================================================================
     # TEST 4: search_clientes_api_optimized
@@ -258,7 +258,7 @@ class TestPerformanceOptimization(TestCase):
         
         # Esperado: 1 query
         assert query_count == 1, f"Esperado 1 query, got {query_count}"
-        print(f"✓ Search API ejecutado con {query_count} queries")
+        print(f"OK: Search API ejecutado con {query_count} queries")
     
     # ==========================================================================
     # TEST 5: get_cliente_stats_optimized
@@ -309,7 +309,7 @@ class TestPerformanceOptimization(TestCase):
         # Esperado: 2 queries (1 cliente + 1 prestamos prefetch)
         # Al acceder a stats en el dict NO hace queries porque está precargado
         assert query_count <= 3, f"Esperado ≤3 queries, got {query_count}"
-        print(f"✓ Cliente stats ejecutados con {query_count} queries")
+        print(f"OK: Cliente stats ejecutados con {query_count} queries")
     
     # ==========================================================================
     # TEST 6: get_clientes_importados_optimized
@@ -340,7 +340,7 @@ class TestPerformanceOptimization(TestCase):
         
         # Esperado: 2-3 queries
         assert query_count <= 4, f"Esperado ≤4 queries, got {query_count}"
-        print(f"✓ Clientes importados ejecutados con {query_count} queries")
+        print(f"OK: Clientes importados ejecutados con {query_count} queries")
 
 
 # ==============================================================================
@@ -399,7 +399,7 @@ class TestPerformanceBenchmark(TestCase):
             stats = obtener_estadisticas_sistema_optimizado()
         
         query_count = len(context.captured_queries)
-        print(f"\n✓ BENCHMARK: Estadísticas sistema = {query_count} queries")
+        print(f"\nOK: BENCHMARK: Estadísticas sistema = {query_count} queries")
         print(f"  (50 clientes, 100 préstamos, 300 cuotas)")
         
         # Con 50 clientes: sin optimizar sería ~250+ queries
@@ -413,7 +413,7 @@ class TestPerformanceBenchmark(TestCase):
             list(clientes)  # Force eval
         
         query_count = len(context.captured_queries)
-        print(f"✓ BENCHMARK: Listar clientes = {query_count} queries")
+        print(f"OK: BENCHMARK: Listar clientes = {query_count} queries")
         
         # Sin optimizar: 50 + (50 * 2 prefetches) = 150 queries
         # Con optimización: 2-3 queries
@@ -428,7 +428,7 @@ class TestPerformanceBenchmark(TestCase):
                 _ = p.total_cuotas
         
         query_count = len(context.captured_queries)
-        print(f"✓ BENCHMARK: Préstamos con stats = {query_count} queries")
+        print(f"OK: BENCHMARK: Préstamos con stats = {query_count} queries")
         
         # Sin optimizar: 100 + (100 * 3 properties) = 400 queries
         # Con optimización: 2 queries
@@ -448,4 +448,4 @@ class TestPerformanceOptimizationPytest(TestCase):
         
         # Debe ejecutarse en <100ms
         assert elapsed < 0.1, f"Demasiado lento: {elapsed}s"
-        print(f"✓ Estadísticas ejecutadas en {elapsed:.3f}s")
+        print(f"OK: Estadísticas ejecutadas en {elapsed:.3f}s")

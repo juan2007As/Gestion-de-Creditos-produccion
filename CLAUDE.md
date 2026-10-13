@@ -8,8 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. **`reglas/01-DISPARADORES.md`** — la tabla de enrutamiento. Se consulta **antes de empezar cada tarea**.
 3. **`CONTEXTO.md`** — qué es este proyecto, qué perfil tiene (P3), y las decisiones ya tomadas con su porqué.
 4. **`DEUDA-TECNICA.md`** — el estado real conocido: qué falta, qué se aceptó conscientemente, y por qué.
+5. **`.agent-flow/START.md`** — protocolo neutral y secuencial de continuidad entre Codex y Claude Code.
 
 Si la conversación se alarga y ya no tenés el núcleo delante, volvé a leerlo antes de seguir.
+
+El protocolo de `.agent-flow/` complementa estas reglas: ninguno de los agentes es principal y solo uno puede editar por turno. Seguirlo antes de iniciar o retomar una tarea; no reemplaza las restricciones P3 ni las autorizaciones humanas de este archivo.
 
 - **Perfil:** P3 — maneja dinero real y datos personales de clientes. Ver `reglas/README.md`.
 - **Nivel de autonomía:** Consultivo. Ver `reglas/ai-rules.md` §9.

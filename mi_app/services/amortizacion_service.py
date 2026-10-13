@@ -70,8 +70,17 @@ def interes_para_cuota(capital_base, tasa_porcentaje, par_index, fecha_anterior,
     sabiendo que un periodo "normal" de 15 dias de diferencia calendario
     tambien cuenta como 15 dias de interes bajo este conteo (14 dias de
     diferencia + 1).
+
+    Piso de 1 dia: si `fecha_cuota` cae ANTES de `fecha_anterior` (pasa al
+    recalcular el cronograma de un abono extraordinario con
+    fecha_desde=hoy, cuando las fechas ya fijadas de las cuotas futuras
+    quedaron en el pasado por un cliente atrasado -- ver auditoria de
+    seguridad 2026-10-08), el conteo de dias daria negativo y el interes
+    tambien, corrompiendo interes_acumulado_sin_pagar. Nunca se permite
+    interes negativo: el minimo es el mismo 1 dia que ya rige el caso
+    "mismo dia" (0 dias de diferencia + 1).
     """
-    dias = (fecha_cuota - fecha_anterior).days + 1
+    dias = max((fecha_cuota - fecha_anterior).days + 1, 1)
     tasa_del_par = tasa_diaria(capital_base, tasa_porcentaje) / (Decimal('2') ** par_index)
     return (tasa_del_par * dias).quantize(UNIDAD_MONETARIA)
 

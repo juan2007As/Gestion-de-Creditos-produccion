@@ -72,6 +72,10 @@ backups/*.zip
 backups/*.db
 backups/*.db.gz
 
+# *_BACKUP* de arriba (case-insensitive en Windows) se come por accidente
+# los tests del propio sistema de backups -- son codigo fuente, no dumps.
+!mi_app/tests/test_backup_rapido_permissions.py
+
 # ==================== OUTPUT DE TESTS ====================
 tests/output/
 tests/*_result.txt

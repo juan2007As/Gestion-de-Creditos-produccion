@@ -4,11 +4,11 @@ API Views para endpoints dinámicos del sistema
 
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from .models import Cliente
+from .utilities.decorators import require_permission
 
-@login_required
+@require_permission('cliente.view')
 @require_http_methods(["GET"])
 def api_clientes_search(request):
     """
@@ -88,7 +88,7 @@ def api_clientes_search(request):
         }, status=500)
 
 
-@login_required
+@require_permission('prestamo.view')
 @require_http_methods(["GET"])
 def api_prestamos_search(request):
     """

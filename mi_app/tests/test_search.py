@@ -1,18 +1,34 @@
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
-from mi_app.models import Cliente
+from mi_app.models import Cliente, Rol, Permiso, RolPermiso, UsuarioProfile
 import json
 
 class ClientSearchAPITests(TestCase):
-    
+
     def setUp(self):
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
             password='testpass123'  # pragma: allowlist secret
         )
-        
+
+        # api_clientes_search ahora exige @require_permission('cliente.view')
+        # (antes solo pedia login); sin esto el usuario de prueba recibe 403.
+        rol, _ = Rol.objects.get_or_create(
+            nombre='OPERARIO',
+            defaults={'descripcion': 'Rol operario para tests', 'activo': True}
+        )
+        perm, _ = Permiso.objects.get_or_create(
+            codigo='cliente.view',
+            defaults={'descripcion': 'cliente.view', 'activo': True}
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=perm)
+        UsuarioProfile.objects.update_or_create(
+            usuario=self.user,
+            defaults={'rol': rol}
+        )
+
         # Crear clientes de prueba
         self.cliente1 = Cliente.objects.create(
             nombre='Juan Pérez',

@@ -49,6 +49,18 @@ jobs:
         pip install coverage pytest pytest-django pytest-cov
     
     - name: Run Django system check
+      # Hallazgo de seguridad (auditoria 2026-10-13, Tier 1 #8): sin ENVIRONMENT
+      # seteado, este paso corria contra el default 'local' (DEBUG=True, sin
+      # SECURE_SSL_REDIRECT/cookies seguras/etc.) -- el checklist de deploy de
+      # Django nunca evaluaba la configuracion real de produccion, por lo que
+      # cualquier regresion en esas settings habria pasado la CI sin ser vista.
+      # Se corre con ENVIRONMENT=staging (mismo bloque de seguridad que
+      # production desde el fix de settings.py de hoy) y un SECRET_KEY dummy
+      # de solo-CI -- staging no requiere EMAIL_HOST/etc. como production,
+      # asi que no hace falta agregar mas secrets ficticios a este job.
+      env:
+        ENVIRONMENT: staging
+        SECRET_KEY: ci-deploy-check-dummy-key-not-used-anywhere-else-1a2b3c4d5e6f
       run: |
         python manage.py check --deploy
     
