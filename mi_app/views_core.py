@@ -13,13 +13,14 @@ from django.core.mail import EmailMessage
 from django.conf import settings
 from django.urls import reverse
 from mi_app.forms import ClienteForm, PrestamoForm, ReporteCuotasVencidasForm
-from .models import Cliente, Prestamo, Cuota, Pago, Configuracion, PrestamoRapido, PagoPrestamoRapido, CuotaRapida, ListaNegra, AuditoriaBackup
+from .models import Cliente, Prestamo, Cuota, Pago, Configuracion, PrestamoRapido, PagoPrestamoRapido, CuotaRapida, ListaNegra, AuditoriaBackup, HistorioCambios
 from mi_app.utilities.decorators import (
     require_rol, require_permission, require_any_permission,
     admin_required, gerente_o_admin, no_operario_solamente,
 )
 from mi_app.utilities.transaction_integrity import registrar_pago_atomico  # ✅ CRÍTICA #7
 from mi_app.utils import determinar_estado_cuota_al_crear  # ✅ OPCIÓN C PASO 2: Import centralizado
+import logging
 import time
 from datetime import date, timedelta
 from decimal import Decimal
@@ -4834,218 +4835,127 @@ def exportar_reporte_general_excel(request):
 
 
 # ===============================================================================
-# BACKUPS - GOOGLE DRIVE
+# BACKUPS - Backup/restauracion JSON completos (2026-10-16)
 # ===============================================================================
+# El sistema anterior copiaba db.sqlite3, que no existe en Render (Postgres),
+# y guardaba en el disco del servidor, que en Render se borra en cada deploy.
+# Ahora el backup se genera en memoria y se descarga directo al navegador.
+# La logica vive en mi_app/services/backup_service.py.
+
+def _respuesta_descarga_backup(request, tipo_backup, notas):
+    """Genera el backup JSON completo y lo devuelve como descarga."""
+    from mi_app.services.backup_service import generar_backup_json
+
+    contenido = generar_backup_json()
+    nombre_archivo = f"backup_creditos_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    tamano_mb = len(contenido) / (1024 * 1024)
+
+    try:
+        AuditoriaBackup.objects.create(
+            usuario=request.user,
+            tipo_backup=tipo_backup,
+            ubicacion='Descarga directa al navegador',
+            nombre_archivo=nombre_archivo,
+            tamano_mb=tamano_mb,
+            estado='SUCCESS',
+            ip_address=get_client_ip(request),
+            notas=notas,
+        )
+    except Exception:
+        logging.getLogger(__name__).exception('No se pudo registrar la auditoria del backup %s', nombre_archivo)
+
+    response = HttpResponse(contenido, content_type='application/json; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
+    return response
+
 
 @admin_required
 @require_http_methods(["GET"])
 def backups_list(request):
-    """
-    Vista para listar y administrar backups
-    Solo accesible por staff/admin
-    """
-    try:
-        from mi_app.utilities.backup_manager import backup_manager
-        
-        # Obtener lista de backups
-        backups = backup_manager.list_backups()
-        
-        # Formatear fechas y tamaños para el template
-        for b in backups:
-            if b.get('fecha'):
-                try:
-                    # Intentar parsear fecha ISO o string simple
-                    if isinstance(b['fecha'], str):
-                        from django.utils.dateparse import parse_datetime
-                        dt = parse_datetime(b['fecha'])
-                        if not dt:
-                            # Fallback para formatos manuales
-                            dt = datetime.fromisoformat(b['fecha'].replace('Z', '+00:00'))
-                    else:
-                        dt = b['fecha']
-                    
-                    b['date_display'] = dt.strftime('%d/%m/%Y')
-                    b['time_display'] = dt.strftime('%H:%M:%S')
-                except Exception as e:
-                    print(f"Error parseando fecha {b.get('fecha')}: {e}")
-                    b['date_display'] = "N/A"
-                    b['time_display'] = "N/A"
-            else:
-                b['date_display'] = "N/A"
-                b['time_display'] = "N/A"
-            
-            size_bytes = b.get('tamaño', 0)
-            b['size_display'] = f"{size_bytes / (1024*1024):.2f}"
-        
-        context = {
-            'backups': backups,
-            'total_backups': len(backups),
-        }
-        
-        return render(request, 'mi_app/auditoria/backups_list.html', context)
-    
-    except Exception as e:
-        messages.error(request, f'Error al acceder a backups: {str(e)}')
-        return redirect('inicio')
+    """Pagina de backups: descargar backup completo y restaurar desde archivo."""
+    historial = AuditoriaBackup.objects.select_related('usuario').order_by('-fecha_inicio')[:15]
+    return render(request, 'mi_app/auditoria/backups_list.html', {'historial': historial})
 
 
 @admin_required
 @require_http_methods(["POST"])
+@ratelimit(key='user', rate='5/m', block=True)
 def backup_create(request):
-    """
-    Vista para crear un backup manual
-    Solo accesible por staff/admin
-    """
+    """Descarga el backup completo de la base (JSON)."""
     try:
-        from mi_app.utilities.backup_manager import backup_manager
-        
-        result = backup_manager.create_backup()
-        
-        if result['success']:
-            messages.success(request, result['mensaje'])
-        else:
-            messages.error(request, f"Error al crear backup: {result.get('error', 'Unknown error')}")
-        
-    except Exception as e:
-        messages.error(request, f'Error al crear backup: {str(e)}')
-    
-    return redirect('backups:list')
-
-
-@admin_required
-def backup_descargar(request, backup_id):
-    """
-    Descarga un backup específico
-    """
-    try:
-        from mi_app.utilities.backup_manager import backup_manager
-        import os
-        from django.http import FileResponse
-        
-        # Buscar el backup
-        backups = backup_manager.list_backups()
-        backup = next((b for b in backups if b['id'] == backup_id), None)
-        
-        if not backup or not os.path.exists(backup['ruta']):
-            messages.error(request, 'Archivo de backup no encontrado')
-            return redirect('backups:list')
-            
-        return FileResponse(open(backup['ruta'], 'rb'), as_attachment=True, filename=backup['nombre'])
-        
-    except Exception as e:
-        messages.error(request, f'Error al descargar: {str(e)}')
+        return _respuesta_descarga_backup(request, 'DESCARGA', 'Backup desde pagina de backups')
+    except Exception:
+        logging.getLogger(__name__).exception('Fallo la generacion del backup')
+        messages.error(request, 'No se pudo generar el backup. El detalle quedo en el log del servidor.')
         return redirect('backups:list')
 
 
 @admin_required
 @require_http_methods(["POST"])
-def backup_delete(request, backup_id):
+@ratelimit(key='user', rate='3/m', block=True)
+def backup_restore(request):
     """
-    Elimina un backup específico
+    Restaura la base completa desde un backup JSON subido por el usuario.
+
+    REEMPLAZA todos los datos. Antes de tocar nada genera un respaldo del
+    estado actual y lo devuelve como descarga (red de seguridad). Todo corre
+    en una transaccion: si falla, no cambia nada. Responde JSON con el error
+    (400/500) o, si salio bien, el archivo del respaldo previo.
     """
+    from mi_app.services.backup_service import (
+        BackupInvalidoError, TAMANO_MAXIMO_BYTES, generar_backup_json,
+        restaurar_backup_json, validar_backup_json,
+    )
+    log = logging.getLogger(__name__)
+
+    if request.POST.get('confirmacion', '').strip() != 'RESTAURAR':
+        return JsonResponse({'success': False, 'error': 'Escribe RESTAURAR para confirmar.'}, status=400)
+
+    archivo = request.FILES.get('backup_file')
+    if archivo is None:
+        return JsonResponse({'success': False, 'error': 'No se selecciono ningun archivo.'}, status=400)
+    if archivo.size > TAMANO_MAXIMO_BYTES:
+        return JsonResponse({'success': False, 'error': 'El archivo es demasiado grande (maximo 50 MB).'}, status=400)
+
+    contenido = archivo.read()
+    username = request.user.username
+    ip = get_client_ip(request)
+
     try:
-        from mi_app.utilities.backup_manager import backup_manager
-        
-        result = backup_manager.delete_backup(backup_id)
-        
-        if result['success']:
-            messages.success(request, 'Backup eliminado correctamente')
-        else:
-            messages.error(request, f"Error al eliminar: {result.get('error')}")
-            
-    except Exception as e:
-        messages.error(request, f'Error al eliminar backup: {str(e)}')
-        
-    return redirect('backups:list')
+        validar_backup_json(contenido)
+        respaldo_previo = generar_backup_json()
+        restaurar_backup_json(contenido)
+    except BackupInvalidoError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+    except Exception:
+        log.exception('Error inesperado restaurando backup')
+        return JsonResponse({
+            'success': False,
+            'error': 'Error inesperado al restaurar. No se cambio nada; el detalle quedo en el log del servidor.',
+        }, status=500)
 
+    # Rastro: el usuario que restauro puede no existir (o tener otro id) en
+    # los datos restaurados, por eso se busca por nombre de usuario.
+    log.warning('Base RESTAURADA desde backup "%s" por %s (IP %s)', archivo.name, username, ip)
+    usuario_restaurado = User.objects.filter(username=username).first()
+    if usuario_restaurado is not None:
+        try:
+            HistorioCambios.objects.create(
+                usuario=usuario_restaurado,
+                accion='OTRO',
+                modelo='BACKUP',
+                objeto_id=0,
+                objeto_str=f'Restauracion completa desde {archivo.name}'[:255],
+                razon='Restauracion de backup desde la pagina de backups',
+                ip_address=ip,
+            )
+        except Exception:
+            log.exception('No se pudo registrar la restauracion en HistorioCambios')
 
-@admin_required
-@require_http_methods(["POST"])
-def backup_restore(request, backup_id):
-    """
-    Restaura un backup específico
-    """
-    try:
-        from mi_app.utilities.backup_manager import backup_manager
-        
-        result = backup_manager.restore_backup(backup_id)
-        
-        if result['success']:
-            messages.success(request, result['mensaje'])
-        else:
-            messages.error(request, f"Error al restaurar: {result.get('error')}")
-            
-    except Exception as e:
-        messages.error(request, f'Error al restaurar backup: {str(e)}')
-        
-    return redirect('backups:list')
-
-
-@admin_required
-@require_http_methods(["POST"])
-def backup_upload(request):
-    """
-    Sube un archivo de backup (.sqlite3 o .zip) al servidor
-    """
-    try:
-        if 'backup_file' not in request.FILES:
-            messages.error(request, 'No se seleccionó ningún archivo')
-            return redirect('backups:list')
-            
-        archivo = request.FILES['backup_file']
-        nombre = archivo.name
-        
-        if not (nombre.endswith('.sqlite3') or nombre.endswith('.zip')):
-            messages.error(request, 'Formato de archivo no válido. Use .sqlite3 o .zip')
-            return redirect('backups:list')
-            
-        from mi_app.utilities.backup_manager import backup_manager
-        ruta_destino = os.path.join(backup_manager.backups_dir, nombre)
-        
-        with open(ruta_destino, 'wb+') as destination:
-            for chunk in archivo.chunks():
-                destination.write(chunk)
-                
-        messages.success(request, f'Backup "{nombre}" subido correctamente')
-        
-    except Exception as e:
-        messages.error(request, f'Error al subir backup: {str(e)}')
-        
-    return redirect('backups:list')
-
-
-@admin_required
-@require_http_methods(["GET", "POST"])
-def backup_details(request, backup_id):
-    """
-    Vista para ver detalles de un backup específico
-    Solo accesible por staff/admin
-    """
-    try:
-        from mi_app.backup_manager import backup_manager
-        
-        # Obtener lista de backups y buscar el solicitado
-        backups = backup_manager.list_backups()
-        backup = None
-        
-        for b in backups:
-            if b['id'] == backup_id:
-                backup = b
-                break
-        
-        if not backup:
-            messages.error(request, 'Backup no encontrado')
-            return redirect('backups_list')
-        
-        context = {
-            'backup': backup,
-        }
-        
-        return render(request, 'mi_app/auditoria/backup_details.html', context)
-    
-    except Exception as e:
-        messages.error(request, f'Error: {str(e)}')
-        return redirect('backups_list')
+    nombre_previo = f"antes_de_restaurar_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    response = HttpResponse(respaldo_previo, content_type='application/json; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{nombre_previo}"'
+    return response
 
 
 # ===============================================================================
@@ -5911,142 +5821,21 @@ def get_client_ip(request):
     return ip
 
 
-def generar_backup_zip():
-    """
-    Genera un archivo ZIP con la base de datos.
-    Retorna: (archivo_zip_bytes, nombre_archivo, tamaño_mb)
-    """
-    PROJECT_ROOT = Path(settings.BASE_DIR)
-    DB_PATH = PROJECT_ROOT / 'db.sqlite3'
-    
-    if not DB_PATH.exists():
-        raise FileNotFoundError(f"Base de datos no encontrada en {DB_PATH}")
-    
-    # Nombre del archivo con timestamp
-    timestamp = dt.datetime.now().strftime('%Y%m%d_%H%M%S')
-    nombre_archivo = f'backup_{timestamp}.zip'
-    
-    # Crear ZIP en memoria
-    zip_buffer = io.BytesIO()
-    
-    try:
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            # Agregar BD principal
-            arcname = 'db.sqlite3'
-            zip_file.write(str(DB_PATH), arcname=arcname)
-            
-            # Agregar carpeta de media si existe
-            media_path = PROJECT_ROOT / 'media'
-            if media_path.exists():
-                for root, dirs, files in os.walk(media_path):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, PROJECT_ROOT)
-                        zip_file.write(file_path, arcname=arcname)
-        
-        zip_buffer.seek(0)
-        contenido = zip_buffer.getvalue()
-        tamaño_mb = len(contenido) / (1024 * 1024)
-        
-        return contenido, nombre_archivo, tamaño_mb
-    
-    except Exception as e:
-        raise Exception(f"Error al generar ZIP: {str(e)}")
-
-
 @admin_required
 @require_http_methods(["POST"])
 @ratelimit(key='user', rate='5/m', block=True)
 def backup_rapido_generar(request):
     """
-    Genera automáticamente un backup ZIP y lo guarda en /backups/.
-    Rate limit: 5 backups por minuto máximo (operación CPU/IO intensiva)
+    Backup rapido desde el inicio: genera el backup completo (JSON) y lo
+    descarga directo al navegador. Rate limit: 5 por minuto.
     """
     try:
-        print("backup_rapido_generar iniciado")
-
-        # Crear directorio de backups
-        PROJECT_ROOT = Path(settings.BASE_DIR)
-        BACKUPS_DIR = PROJECT_ROOT / 'backups'
-        BACKUPS_DIR.mkdir(exist_ok=True)
-        print(f"BACKUPS_DIR: {BACKUPS_DIR}")
-
-        # Límite diario global: máximo 10 backups por día (Aumentado de 3)
-        fecha_hoy_prefijo = dt.datetime.now().strftime('backup_%Y%m%d_')
-        backups_hoy = [
-            f for f in BACKUPS_DIR.iterdir()
-            if f.is_file()
-            and f.name.startswith(fecha_hoy_prefijo)
-            and (f.name.endswith('.zip') or f.name.endswith('.db') or f.name.endswith('.db.gz') or f.name.endswith('.sqlite3'))
-        ]
-        
-        # Permitir a superusuarios saltarse el límite o usar el nuevo límite de 10
-        if len(backups_hoy) >= 10 and not request.user.is_superuser:
-            return JsonResponse({
-                'success': False,
-                'error': 'Límite diario alcanzado: máximo 10 backups por día.'
-            }, status=429)
-        
-        # Ruta a la BD
-        DB_PATH = PROJECT_ROOT / 'db.sqlite3'
-        print(f"DB_PATH: {DB_PATH}, existe: {DB_PATH.exists()}")
-        
-        if not DB_PATH.exists():
-            raise FileNotFoundError(f"BD no encontrada en {DB_PATH}")
-        
-        # Generar nombre del ZIP
-        timestamp = dt.datetime.now().strftime('%Y%m%d_%H%M%S')
-        nombre_archivo = f'backup_{timestamp}.zip'
-        print(f"Nombre archivo: {nombre_archivo}")
-
-        # Crear ZIP
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-            zf.write(str(DB_PATH), arcname='db.sqlite3')
-            print("DB agregada al ZIP")
-
-        zip_buffer.seek(0)
-        contenido = zip_buffer.getvalue()
-        tamaño_mb = len(contenido) / (1024 * 1024)
-        print(f"Tamaño: {tamaño_mb:.2f} MB")
-
-        # Guardar archivo
-        ruta_guardado = BACKUPS_DIR / nombre_archivo
-        with open(ruta_guardado, 'wb') as f:
-            f.write(contenido)
-        print(f"Archivo guardado: {ruta_guardado}")
-        
-        # Registrar en auditoría
-        try:
-            backup_audit = AuditoriaBackup.objects.create(
-                usuario=request.user,
-                tipo_backup='RAPIDO',
-                ubicacion=str(BACKUPS_DIR),
-                nombre_archivo=nombre_archivo,
-                tamano_mb=tamaño_mb,
-                estado='SUCCESS',
-                ip_address=get_client_ip(request),
-                notas='Backup desde dashboard'
-            )
-            print(f"Auditoría registrada: {backup_audit.id}")
-        except Exception as e:
-            print(f"Error al registrar auditoría: {e}")
-
-        print("Respuesta exitosa")
-        return JsonResponse({
-            'success': True,
-            'nombre_archivo': nombre_archivo,
-            'tamano_mb': round(tamaño_mb, 2),
-            'backup_id': backup_audit.id if 'backup_audit' in locals() else 0
-        })
-    
-    except Exception as e:
-        print(f"ERROR: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        return _respuesta_descarga_backup(request, 'DESCARGA', 'Backup rapido desde dashboard')
+    except Exception:
+        logging.getLogger(__name__).exception('Fallo el backup rapido')
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': 'No se pudo generar el backup. El detalle quedo en el log del servidor.',
         }, status=500)
 
 

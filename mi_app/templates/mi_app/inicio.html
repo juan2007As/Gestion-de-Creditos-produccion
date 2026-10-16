@@ -871,6 +871,25 @@ async function generarBackupRapido() {
             'content-length': response.headers.get('content-length')
         });
         
+        // Exito: el servidor devuelve el backup como archivo (no se guarda en
+        // el servidor, que en Render es efimero). Se descarga directo.
+        const disposicion = response.headers.get('content-disposition') || '';
+        if (response.ok && disposicion.includes('attachment')) {
+            const blob = await response.blob();
+            const m = /filename="([^"]+)"/.exec(disposicion);
+            const nombre = m ? m[1] : 'backup_creditos.json';
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = nombre;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+            mostrarOpcionesBackup({ nombre_archivo: nombre, tamano_mb: blob.size / (1024 * 1024) });
+            return;
+        }
+
         console.log('📡 Parseando respuesta...');
         const contentType = response.headers.get('content-type') || '';
         let data = {};
@@ -889,7 +908,7 @@ async function generarBackupRapido() {
 
         if (!response.ok || !data.success) {
             const mensaje = data.error || (response.status === 429
-                ? 'Límite diario alcanzado: máximo 3 backups por día.'
+                ? 'Demasiados backups seguidos: espera un minuto e inténtalo de nuevo.'
                 : 'No se pudo generar el backup en este momento.');
 
             const esLimite = response.status === 429 || /l[ií]mite diario/i.test(mensaje);
@@ -954,20 +973,17 @@ function mostrarOpcionesBackup(data) {
                 </p>
                 <p style="margin: 8px 0; font-size: 13px;">
                     <strong>📍 Ubicación:</strong> <br>
-                    <small style="color: #28a745;">/backups/ (Servidor)</small>
+                    <small style="color: #28a745;">Descargado a tu computador (carpeta de descargas)</small>
                 </p>
             </div>
-            
-            <p style="color: #666; font-size: 14px; margin-bottom: 20px;">
-                ¿Qué deseas hacer con el backup?
+
+            <p style="color: #666; font-size: 13px; margin-bottom: 20px;">
+                Contiene datos personales de clientes: guárdalo en un lugar seguro.
             </p>
         </div>
     `;
-    
+
     const footerHtml = `
-        <button type="button" class="btn btn-success" onclick="descargarBackup(${data.backup_id})">
-            <i class="fas fa-download"></i> Descargar
-        </button>
         <button type="button" class="btn btn-info" onclick="enviarBackupCorreo()">
             <i class="fas fa-envelope"></i> Enviar por Correo
         </button>

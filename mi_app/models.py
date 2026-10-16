@@ -1515,6 +1515,10 @@ def actualizar_total_prestado_cliente(sender, instance, created, **kwargs):
     Signal que se dispara cuando se crea o modifica un Préstamo.
     Actualiza automáticamente el total_prestado del cliente y su etiqueta.
     """
+    # raw=True: Django esta cargando un backup (loaddata). Los totales ya vienen
+    # calculados en el backup; volver a sumarlos duplicaria montos.
+    if kwargs.get('raw'):
+        return
     if created:  # Solo si es nuevo
         cliente = instance.cliente
         cliente.total_prestado += instance.monto_total
@@ -1542,6 +1546,8 @@ def actualizar_cliente_post_pago(sender, instance, created, **kwargs):
     Signal que se dispara al registrar un pago.
     Actualiza automáticamente la etiqueta del cliente y su estado de lista negra.
     """
+    if kwargs.get('raw'):  # cargando backup: ver actualizar_total_prestado_cliente
+        return
     if created:
         cliente = instance.cuota.prestamo.cliente
         # Actualizar etiqueta (Bueno/Medio/Malo) según el nuevo pago
@@ -1553,6 +1559,8 @@ def actualizar_cliente_post_pago(sender, instance, created, **kwargs):
 @receiver(post_save, sender=PagoPrestamoRapido)
 def actualizar_cliente_post_pago_rapido(sender, instance, created, **kwargs):
     """Signal para pagos rápidos"""
+    if kwargs.get('raw'):  # cargando backup: ver actualizar_total_prestado_cliente
+        return
     if created:
         cliente = instance.prestamo_rapido.cliente
         cliente.actualizar_etiqueta()
@@ -1832,6 +1840,8 @@ from django.dispatch import receiver
 @receiver(post_save, sender=User)
 def crear_user_profile(sender, instance, created, **kwargs):
     """Auto-crea UsuarioProfile cuando se crea un User"""
+    if kwargs.get('raw'):  # cargando backup: el perfil real viene en el mismo backup
+        return
     if created:
         # Solo crear si no existe admin user (caso especial)
         rol_operario = Rol.objects.filter(nombre='OPERARIO').first()
